@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@babylonjs/core": "^7.0.0",
-    "ammojs-typed": "^1.0.6"
+    "ammojs-typed": "^1.0.6",
+    "tone": "^15.1.22"
   }
 }
