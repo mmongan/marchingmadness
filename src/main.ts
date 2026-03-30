@@ -1,6 +1,7 @@
-import { Engine, Scene, Vector3, HemisphericLight, MeshBuilder, StandardMaterial, Color3, FreeCamera, AmmoJSPlugin, PhysicsImpostor, WebXRFeatureName, ActionManager, ExecuteCodeAction } from "@babylonjs/core";
+import { Engine, Scene, Vector3, HemisphericLight, MeshBuilder, StandardMaterial, Color3, FreeCamera, AmmoJSPlugin, PhysicsImpostor, WebXRFeatureName, ActionManager, ExecuteCodeAction, DynamicTexture } from "@babylonjs/core";
 import "@babylonjs/core/Physics/physicsEngineComponent";
 import * as Tone from "tone";
+import { Stave, StaveNote, Formatter, Renderer } from "vexflow";
 
 declare var Ammo: any;
 
@@ -53,6 +54,9 @@ class App {
 
         // 3.6 Setup Physical MIDI Keyboard Support
         this.setupMidi();
+
+        // 3.7 Add Music Notation
+        this.createNotationBoard();
 
         try {
             const xr = await this.scene.createDefaultXRExperienceAsync({
@@ -232,6 +236,56 @@ class App {
         if (mat) {
              mat.emissiveColor = new Color3(0, 0, 0); // Turn off flash
         }
+    }
+
+    private createNotationBoard() {
+        // Create an offscreen texture mapping to a plane to act as sheet music
+        const textureWidth = 1024;
+        const textureHeight = 256;
+        const notationTexture = new DynamicTexture("notationTex", { width: textureWidth, height: textureHeight }, this.scene, false);
+        notationTexture.hasAlpha = false;
+
+        const notationMaterial = new StandardMaterial("notationMat", this.scene);
+        notationMaterial.diffuseTexture = notationTexture;
+        notationMaterial.specularColor = new Color3(0, 0, 0);
+        notationMaterial.emissiveColor = new Color3(1, 1, 1); // Make it bright enough to read easily
+
+        const board = MeshBuilder.CreatePlane("notationBoard", { width: 4, height: 1 }, this.scene);
+        board.position = new Vector3(0, 2, 2); // 2 meters high, 2 meters in front
+        board.material = notationMaterial;
+
+        // Use VexFlow to render to the DynamicTexture's canvas
+        const canvas = notationTexture.getContext().canvas as HTMLCanvasElement;
+        
+        // Fill white background
+        const ctx = notationTexture.getContext();
+        ctx.fillStyle = "white";
+        ctx.fillRect(0, 0, textureWidth, textureHeight);
+
+        const renderer = new Renderer(canvas, Renderer.Backends.CANVAS);
+        // Skip renderer.resize() to avoid resizing the internal canvas of DynamicTexture
+        
+        const context = renderer.getContext();
+        context.scale(2, 2); // Scale up for VR readability
+
+        // Create a stave
+        const stave = new Stave(10, 20, 480);
+        stave.addClef("treble").addTimeSignature("4/4");
+        stave.setContext(context).draw();
+
+        // Create some notes (a C-major chord and some melody)
+        const notes = [
+            new StaveNote({ clef: "treble", keys: ["c/4", "e/4", "g/4"], duration: "q" }),
+            new StaveNote({ clef: "treble", keys: ["d/4"], duration: "q" }),
+            new StaveNote({ clef: "treble", keys: ["b/4"], duration: "qr" }), // rest
+            new StaveNote({ clef: "treble", keys: ["c/5"], duration: "q" })
+        ];
+
+        // Format and draw
+        Formatter.FormatAndDraw(context, stave, notes);
+
+        // Tell Babylon to update the texture from its canvas context
+        notationTexture.update();
     }
 }
 
