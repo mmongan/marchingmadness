@@ -1,7 +1,7 @@
 import { Engine, Scene, Vector3, HemisphericLight, MeshBuilder, StandardMaterial, Color3, FreeCamera, AmmoJSPlugin, PhysicsImpostor, WebXRFeatureName, ActionManager, ExecuteCodeAction, DynamicTexture } from "@babylonjs/core";
 import "@babylonjs/core/Physics/physicsEngineComponent";
 import * as Tone from "tone";
-import { Stave, StaveNote, Formatter, Renderer } from "vexflow";
+import { OpenSheetMusicDisplay } from "opensheetmusicdisplay";
 
 declare var Ammo: any;
 
@@ -238,54 +238,81 @@ class App {
         }
     }
 
-    private createNotationBoard() {
+    private async createNotationBoard() {
         // Create an offscreen texture mapping to a plane to act as sheet music
         const textureWidth = 1024;
-        const textureHeight = 256;
+        const textureHeight = 512; // increased height for OSMD standard layouts
         const notationTexture = new DynamicTexture("notationTex", { width: textureWidth, height: textureHeight }, this.scene, false);
         notationTexture.hasAlpha = false;
 
         const notationMaterial = new StandardMaterial("notationMat", this.scene);
         notationMaterial.diffuseTexture = notationTexture;
         notationMaterial.specularColor = new Color3(0, 0, 0);
-        notationMaterial.emissiveColor = new Color3(1, 1, 1); // Make it bright enough to read easily
+        notationMaterial.emissiveColor = new Color3(1, 1, 1);
 
-        const board = MeshBuilder.CreatePlane("notationBoard", { width: 4, height: 1 }, this.scene);
-        board.position = new Vector3(0, 2, 2); // 2 meters high, 2 meters in front
+        // Making the board slightly taller to match the 2:1 aspect ratio of the texture
+        const board = MeshBuilder.CreatePlane("notationBoard", { width: 4, height: 2 }, this.scene);
+        board.position = new Vector3(0, 2, 2); 
         board.material = notationMaterial;
 
-        // Use VexFlow to render to the DynamicTexture's canvas
-        const canvas = notationTexture.getContext().canvas as HTMLCanvasElement;
+        // Create an offscreen container for OSMD
+        const osmdContainer = document.createElement("div");
+        osmdContainer.style.position = "absolute";
+        osmdContainer.style.top = "-9999px"; // hide it
+        osmdContainer.style.width = textureWidth + "px";
+        osmdContainer.style.height = textureHeight + "px";
+        document.body.appendChild(osmdContainer);
+
+        const osmd = new OpenSheetMusicDisplay(osmdContainer, {
+            backend: "canvas",
+            drawTitle: false,
+            drawPartNames: false,
+            autoResize: false
+        });
+
+        const musicXml = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 3.1 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">
+<score-partwise version="3.1">
+  <part-list>
+    <score-part id="P1"><part-name>Music</part-name></score-part>
+  </part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes>
+        <divisions>1</divisions>
+        <key><fifths>0</fifths></key>
+        <time><beats>4</beats><beat-type>4</beat-type></time>
+        <clef><sign>G</sign><line>2</line></clef>
+      </attributes>
+      <note><pitch><step>C</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type></note>
+      <note><pitch><step>E</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type></note>
+      <note><pitch><step>G</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type></note>
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>1</duration><type>quarter</type></note>
+    </measure>
+  </part>
+</score-partwise>`;
+
+        await osmd.load(musicXml);
+        osmd.render();
+
+        // Extract the canvas OSMD just created
+        const osmdCanvas = osmdContainer.querySelector("canvas") as HTMLCanvasElement;
         
-        // Fill white background
-        const ctx = notationTexture.getContext();
-        ctx.fillStyle = "white";
-        ctx.fillRect(0, 0, textureWidth, textureHeight);
-
-        const renderer = new Renderer(canvas, Renderer.Backends.CANVAS);
-        // Skip renderer.resize() to avoid resizing the internal canvas of DynamicTexture
+        if (osmdCanvas) {
+            const ctx = notationTexture.getContext();
+            // Fill white background
+            ctx.fillStyle = "white";
+            ctx.fillRect(0, 0, textureWidth, textureHeight);
+            
+            // Draw OSMD canvas onto Babylon texture canvas
+            ctx.drawImage(osmdCanvas, 0, 0, textureWidth, textureHeight);
+            
+            // Tell Babylon to update the texture from its canvas context
+            notationTexture.update();
+        }
         
-        const context = renderer.getContext();
-        context.scale(2, 2); // Scale up for VR readability
-
-        // Create a stave
-        const stave = new Stave(10, 20, 480);
-        stave.addClef("treble").addTimeSignature("4/4");
-        stave.setContext(context).draw();
-
-        // Create some notes (a C-major chord and some melody)
-        const notes = [
-            new StaveNote({ clef: "treble", keys: ["c/4", "e/4", "g/4"], duration: "q" }),
-            new StaveNote({ clef: "treble", keys: ["d/4"], duration: "q" }),
-            new StaveNote({ clef: "treble", keys: ["b/4"], duration: "qr" }), // rest
-            new StaveNote({ clef: "treble", keys: ["c/5"], duration: "q" })
-        ];
-
-        // Format and draw
-        Formatter.FormatAndDraw(context, stave, notes);
-
-        // Tell Babylon to update the texture from its canvas context
-        notationTexture.update();
+        // Clean up DOM payload
+        document.body.removeChild(osmdContainer);
     }
 }
 
