@@ -273,27 +273,7 @@ class App {
         // Set zoom factor for extremely crisp vector scaling before it hits the canvas
         osmd.zoom = 4.0;
 
-        const musicXml = `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 3.1 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">
-<score-partwise version="3.1">
-  <part-list>
-    <score-part id="P1"><part-name>Music</part-name></score-part>
-  </part-list>
-  <part id="P1">
-    <measure number="1">
-      <attributes>
-        <divisions>1</divisions>
-        <key><fifths>0</fifths></key>
-        <time><beats>4</beats><beat-type>4</beat-type></time>
-        <clef><sign>G</sign><line>2</line></clef>
-      </attributes>
-      <note><pitch><step>C</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type></note>
-      <note><pitch><step>E</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type></note>
-      <note><pitch><step>G</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type></note>
-      <note><pitch><step>C</step><octave>5</octave></pitch><duration>1</duration><type>quarter</type></note>
-    </measure>
-  </part>
-</score-partwise>`;
+        const musicXml = this.generateRandomMusicXML(4); // Generate 4 measures of random music
 
         await osmd.load(musicXml);
         osmd.render();
@@ -316,6 +296,58 @@ class App {
         
         // Clean up DOM payload
         document.body.removeChild(osmdContainer);
+    }
+
+    private generateRandomMusicXML(numMeasures: number): string {
+        const steps = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
+        const octaves = [4, 5];
+        
+        let measuresXml = "";
+
+        for (let m = 1; m <= numMeasures; m++) {
+            let measureContent = `<measure number="${m}">\n`;
+            
+            // Only the first measure needs the standard attributes
+            if (m === 1) {
+                measureContent += `
+                <attributes>
+                    <divisions>1</divisions>
+                    <key><fifths>0</fifths></key>
+                    <time><beats>4</beats><beat-type>4</beat-type></time>
+                    <clef><sign>G</sign><line>2</line></clef>
+                </attributes>\n`;
+            }
+
+            // Generate 4 random quarter notes per measure
+            for (let n = 0; n < 4; n++) {
+                const randomStep = steps[Math.floor(Math.random() * steps.length)];
+                const randomOctave = octaves[Math.floor(Math.random() * octaves.length)];
+                
+                measureContent += `
+                <note>
+                    <pitch>
+                        <step>${randomStep}</step>
+                        <octave>${randomOctave}</octave>
+                    </pitch>
+                    <duration>1</duration>
+                    <type>quarter</type>
+                </note>\n`;
+            }
+
+            measureContent += `</measure>\n`;
+            measuresXml += measureContent;
+        }
+
+        return `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 3.1 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">
+<score-partwise version="3.1">
+  <part-list>
+    <score-part id="P1"><part-name>Random Score</part-name></score-part>
+  </part-list>
+  <part id="P1">
+    ${measuresXml}
+  </part>
+</score-partwise>`;
     }
 }
 
