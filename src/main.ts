@@ -51,6 +51,9 @@ class App {
         // 3.5 Create VR Drum & Synth
         this.createDrum();
 
+        // 3.6 Setup Physical MIDI Keyboard Support
+        this.setupMidi();
+
         try {
             const xr = await this.scene.createDefaultXRExperienceAsync({
                 floorMeshes: [ground],
@@ -154,6 +157,80 @@ class App {
                 mat.emissiveColor = new Color3(0.5, 0.5, 0.5);
                 setTimeout(() => mat.emissiveColor = new Color3(0, 0, 0), 100);
             }
+        }
+    }
+
+    private midiSynth: Tone.PolySynth | null = null;
+
+    private async setupMidi() {
+        // Create a basic polyphonic synth for MIDI input
+        this.midiSynth = new Tone.PolySynth(Tone.Synth).toDestination();
+
+        if (navigator.requestMIDIAccess) {
+            try {
+                const midiAccess = await navigator.requestMIDIAccess();
+                
+                // Connect to all currently available inputs
+                for (const input of midiAccess.inputs.values()) {
+                    input.onmidimessage = this.getMIDIMessage.bind(this);
+                }
+
+                // Listen for new devices being plugged in
+                midiAccess.onstatechange = (e: any) => {
+                    console.log("MIDI state changed:", e.port.name, e.port.state);
+                    if (e.port.type === "input" && e.port.state === "connected") {
+                         e.port.onmidimessage = this.getMIDIMessage.bind(this);
+                    }
+                };
+                console.log("MIDI Support Enabled");
+            } catch (err) {
+                console.warn("MIDI Access failed. You might need to grant browser permissions.", err);
+            }
+        } else {
+            console.warn("Web MIDI API not supported in this browser.");
+        }
+    }
+
+    private getMIDIMessage(message: any) {
+        const command = message.data[0];
+        const note = message.data[1];
+        const velocity = (message.data.length > 2) ? message.data[2] : 0;
+
+        // Command 144 is Note On, 128 is Note Off
+        // Some keyboards send Note On with 0 velocity instead of Note Off
+        if (command >= 144 && command <= 159) { // Note On across any of the 16 channels
+            if (velocity > 0) {
+                this.noteOn(note, velocity);
+            } else {
+                this.noteOff(note);
+            }
+        } else if (command >= 128 && command <= 143) { // Note Off across any of the 16 channels
+            this.noteOff(note);
+        }
+    }
+
+    private noteOn(midiNote: number, velocity: number) {
+        if (!this.midiSynth) return;
+        Tone.start(); // Ensure audio context is alive
+        const freq = Tone.mtof(midiNote as any); // convert MIDI note integer to frequency Hz
+        // Trigger attack with normalized velocity (0-1)
+        this.midiSynth.triggerAttack(freq, Tone.now(), velocity / 127);
+        
+        // Optional: flash the scene light or do something cool visually on MIDI note hit
+        const mat = this.scene.getMeshByName("ground")?.material as StandardMaterial;
+        if (mat) {
+             mat.emissiveColor = new Color3(Math.random() * 0.2, Math.random() * 0.2, Math.random() * 0.2);
+        }
+    }
+
+    private noteOff(midiNote: number) {
+        if (!this.midiSynth) return;
+        const freq = Tone.mtof(midiNote as any);
+        this.midiSynth.triggerRelease(freq, Tone.now());
+        
+        const mat = this.scene.getMeshByName("ground")?.material as StandardMaterial;
+        if (mat) {
+             mat.emissiveColor = new Color3(0, 0, 0); // Turn off flash
         }
     }
 }
