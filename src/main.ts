@@ -239,28 +239,12 @@ class App {
     }
 
     private async createNotationBoard() {
-        // Quadruple the texture resolution for high-definition 4K rendering
-        const textureWidth = 4096;
-        const textureHeight = 2048; 
-        const notationTexture = new DynamicTexture("notationTex", { width: textureWidth, height: textureHeight }, this.scene, false);
-        notationTexture.hasAlpha = false;
-
-        const notationMaterial = new StandardMaterial("notationMat", this.scene);
-        notationMaterial.diffuseTexture = notationTexture;
-        notationMaterial.specularColor = new Color3(0, 0, 0);
-        notationMaterial.emissiveColor = new Color3(1, 1, 1);
-
-        // Keep physical board size the same (4m x 2m) but cram 4K pixels onto it
-        const board = MeshBuilder.CreatePlane("notationBoard", { width: 4, height: 2 }, this.scene);
-        board.position = new Vector3(0, 2, 2); 
-        board.material = notationMaterial;
-
         // Create an offscreen container for OSMD scaled up
         const osmdContainer = document.createElement("div");
         osmdContainer.style.position = "absolute";
         osmdContainer.style.top = "-9999px"; // hide it
-        osmdContainer.style.width = textureWidth + "px";
-        osmdContainer.style.height = textureHeight + "px";
+        // A large width gives OSMD plenty of horizontal room to layout the measures
+        osmdContainer.style.width = "3000px";
         document.body.appendChild(osmdContainer);
 
         const osmd = new OpenSheetMusicDisplay(osmdContainer, {
@@ -271,7 +255,8 @@ class App {
         });
 
         // Set zoom factor for extremely crisp vector scaling before it hits the canvas
-        osmd.zoom = 4.0;
+        // This makes the canvas physically larger with sharper pixels
+        osmd.zoom = 3.0;
 
         const musicXml = this.generateRandomMusicXML(4); // Generate 4 measures of random music
 
@@ -282,13 +267,32 @@ class App {
         const osmdCanvas = osmdContainer.querySelector("canvas") as HTMLCanvasElement;
         
         if (osmdCanvas) {
+            const actualWidth = osmdCanvas.width;
+            const actualHeight = osmdCanvas.height;
+
+            const notationTexture = new DynamicTexture("notationTex", { width: actualWidth, height: actualHeight }, this.scene, false);
+            notationTexture.hasAlpha = false;
+
+            const notationMaterial = new StandardMaterial("notationMat", this.scene);
+            notationMaterial.diffuseTexture = notationTexture;
+            notationMaterial.specularColor = new Color3(0, 0, 0);
+            notationMaterial.emissiveColor = new Color3(1, 1, 1);
+
+            // Compute board height dynamically based on the actual texture aspect ratio
+            const boardWidth = 4; // 4 meters wide
+            const boardHeight = boardWidth * (actualHeight / actualWidth);
+
+            const board = MeshBuilder.CreatePlane("notationBoard", { width: boardWidth, height: boardHeight }, this.scene);
+            board.position = new Vector3(0, 2, 2); 
+            board.material = notationMaterial;
+
             const ctx = notationTexture.getContext();
             // Fill white background
             ctx.fillStyle = "white";
-            ctx.fillRect(0, 0, textureWidth, textureHeight);
+            ctx.fillRect(0, 0, actualWidth, actualHeight);
             
-            // Draw OSMD canvas onto Babylon texture canvas
-            ctx.drawImage(osmdCanvas, 0, 0, textureWidth, textureHeight);
+            // Draw OSMD canvas onto Babylon texture canvas exactly 1:1 without stretching
+            ctx.drawImage(osmdCanvas, 0, 0);
             
             // Tell Babylon to update the texture from its canvas context
             notationTexture.update();
