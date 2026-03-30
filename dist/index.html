@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Marching Madness VR</title>
+    <style>
+      html, body {
+        overflow: hidden;
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        padding: 0;
+      }
+      #renderCanvas {
+        width: 100%;
+        height: 100%;
+        touch-action: none;
+      }
+    </style>
+    <!-- Load Ammo.js script directly as it often works best globally for Babylon -->
+    <script src="https://rawcdn.githack.com/kripken/ammo.js/99d0ec0b1e26d7ccc13e013caba8e8a5c98d953b/builds/ammo.wasm.js"></script>
+    <script type="module" crossorigin src="/assets/index-DJf8XDGa.js"></script>
+  </head>
+  <body>
+    <canvas id="renderCanvas" touch-action="none"></canvas>
+  </body>
+</html>

@@ -23,7 +23,11 @@
 
 ## Architecture
 
-- Bablylonjs WebXR with Ammo Physics
+- Create a bablylonjs typescript WebXR VR basketball court with Ammo Physics
 
 See @README.md for project overview.
 See @package.json for available scripts.
+
+## PROMPT
+
+- Create a bablylonjs typescript WebXR VR basketball court with Ammo Physics
