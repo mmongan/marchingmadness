@@ -17,6 +17,8 @@
 ## Code Style
 
 - Use TypeScript strict mode
+- use @babylonjs WebXR VR/AR for Quest 3
+- include Quest 3 controller profile
 - Prefer functional components in React
 - All API responses must include error handling
 - Never commit .env files
