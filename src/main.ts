@@ -239,9 +239,9 @@ class App {
     }
 
     private async createNotationBoard() {
-        // Create an offscreen texture mapping to a plane to act as sheet music
-        const textureWidth = 1024;
-        const textureHeight = 512; // increased height for OSMD standard layouts
+        // Quadruple the texture resolution for high-definition 4K rendering
+        const textureWidth = 4096;
+        const textureHeight = 2048; 
         const notationTexture = new DynamicTexture("notationTex", { width: textureWidth, height: textureHeight }, this.scene, false);
         notationTexture.hasAlpha = false;
 
@@ -250,12 +250,12 @@ class App {
         notationMaterial.specularColor = new Color3(0, 0, 0);
         notationMaterial.emissiveColor = new Color3(1, 1, 1);
 
-        // Making the board slightly taller to match the 2:1 aspect ratio of the texture
+        // Keep physical board size the same (4m x 2m) but cram 4K pixels onto it
         const board = MeshBuilder.CreatePlane("notationBoard", { width: 4, height: 2 }, this.scene);
         board.position = new Vector3(0, 2, 2); 
         board.material = notationMaterial;
 
-        // Create an offscreen container for OSMD
+        // Create an offscreen container for OSMD scaled up
         const osmdContainer = document.createElement("div");
         osmdContainer.style.position = "absolute";
         osmdContainer.style.top = "-9999px"; // hide it
@@ -269,6 +269,9 @@ class App {
             drawPartNames: false,
             autoResize: false
         });
+
+        // Set zoom factor for extremely crisp vector scaling before it hits the canvas
+        osmd.zoom = 4.0;
 
         const musicXml = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 3.1 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">
