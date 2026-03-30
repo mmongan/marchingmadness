@@ -1,4 +1,4 @@
-import { Engine, Scene, Vector3, HemisphericLight, MeshBuilder, StandardMaterial, Color3, FreeCamera, AmmoJSPlugin, PhysicsImpostor } from "@babylonjs/core";
+import { Engine, Scene, Vector3, HemisphericLight, MeshBuilder, StandardMaterial, Color3, FreeCamera, AmmoJSPlugin, PhysicsImpostor, WebXRFeatureName } from "@babylonjs/core";
 import "@babylonjs/core/Physics/physicsEngineComponent";
 
 // Make sure global Ammo object is available
@@ -55,11 +55,40 @@ class App {
         this.createRoom();
         this.createWhiteboard();
 
-        // 6. Setup WebXR Experience
+        // 6. Setup WebXR Experience (VR/AR optimized for Quest 3)
         try {
-            await this.scene.createDefaultXRExperienceAsync({
-                floorMeshes: [this.scene.getMeshByName("court")!]
+            const xr = await this.scene.createDefaultXRExperienceAsync({
+                floorMeshes: [this.scene.getMeshByName("court")!],
+                uiOptions: {
+                    sessionMode: "immersive-vr", // Start with VR support
+                    referenceSpaceType: "local-floor"
+                }
             });
+
+            // Enable Hand Tracking (Quest 3 default feature)
+            try {
+                xr.baseExperience.featuresManager.enableFeature(WebXRFeatureName.HAND_TRACKING, "latest", {
+                    xrInput: xr.input,
+                });
+            } catch (err) {
+                console.log("Hand tracking feature not supported in this environment.", err);
+            }
+
+            // Enable Physics for VR Controllers (so controllers can hit the basketballs)
+            try {
+                xr.baseExperience.featuresManager.enableFeature(WebXRFeatureName.PHYSICS_CONTROLLERS, "latest", {
+                    xrInput: xr.input,
+                    physicsProperties: {
+                        restitution: 0.5,
+                        impostorSize: 0.1,
+                        impostorType: PhysicsImpostor.BoxImpostor
+                    },
+                    enableHeadsetImpostor: true
+                });
+            } catch (err) {
+                console.log("Physics controllers not supported.", err);
+            }
+
         } catch (e) {
             console.warn("XR not supported in your environment", e);
         }
