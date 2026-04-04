@@ -11,6 +11,10 @@
   },
   "devDependencies": {
     "@types/webmidi": "^2.1.0",
+    "canvas": "^3.2.3",
+    "open": "^11.0.0",
+    "puppeteer": "^24.40.0",
+    "sharp": "^0.34.5",
     "typescript": "^5.2.2",
     "vite": "^5.0.0",
     "vitest": "^4.1.2"

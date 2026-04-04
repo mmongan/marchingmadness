@@ -17,12 +17,26 @@
         height: 100%;
         touch-action: none;
       }
+      #nav {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        z-index: 10;
+        background: rgba(255, 255, 255, 0.8);
+        padding: 5px 10px;
+        border-radius: 5px;
+        font-family: sans-serif;
+      }
     </style>
     <!-- Load Ammo.js script directly as it often works best globally for Babylon -->
     <script src="https://rawcdn.githack.com/kripken/ammo.js/99d0ec0b1e26d7ccc13e013caba8e8a5c98d953b/builds/ammo.wasm.js"></script>
-    <script type="module" crossorigin src="/assets/index-5Y7WX3J-.js"></script>
+    <script type="module" crossorigin src="/assets/main-BDDFy514.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/opensheetmusicdisplay.min-k0WWMnX5.js">
   </head>
   <body>
+    <div id="nav">
+      <a href="notation.html">View Notation Meshes Scene</a>
+    </div>
     <canvas id="renderCanvas" touch-action="none"></canvas>
   </body>
 </html>

@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generate Notation Graphics</title>
+    <!-- Load OSMD from jsDelivr CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/opensheetmusicdisplay@latest/build/opensheetmusicdisplay.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-top: 0;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 0;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        #status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 4px;
+            background: #f0f0f0;
+            min-height: 60px;
+            font-family: monospace;
+            font-size: 14px;
+            word-break: break-word;
+            white-space: pre-wrap;
+            overflow-y: auto;
+            max-height: 400px;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .progress {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        .loading {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeeba;
+        }
+        #container {
+            position: absolute;
+            top: -9999px;
+            width: 8192px;
+            left: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎵 Generate Music Notation Graphics</h1>
+        <p>This utility generates pre-computed PNG textures of music notation for the VR application.</p>
+        
+        <button id="generateBtn" onclick="generateNotation()" disabled>Waiting for library to load...</button>
+        <button id="instructionsBtn" onclick="showInstructions()">Show Instructions</button>
+        
+        <div id="status" class="loading">⏳ Loading OSMD library from CDN...</div>
+    </div>
+
+    <div id="container"></div>
+
+    <script>
+        const statusDiv = document.getElementById('status');
+        const generateBtn = document.getElementById('generateBtn');
+        let osmdReady = false;
+
+        function log(message, type = 'progress') {
+            console.log(message);
+            statusDiv.textContent += message + '\n';
+            statusDiv.scrollTop = statusDiv.scrollHeight;
+            
+            if (type === 'error') {
+                statusDiv.className = 'error';
+            } else if (type === 'success') {
+                statusDiv.className = 'success';
+            } else {
+                statusDiv.className = 'progress';
+            }
+        }
+
+        function showInstructions() {
+            statusDiv.textContent = `INSTRUCTIONS:
+
+1. Click "Generate and Download PNGs"
+   - Browser will download notation_slice_0.png, notation_slice_1.png, etc.
+   - Check your Downloads folder
+
+2. Move the PNG files:
+   - From: Downloads/notation_slice_*.png
+   - To: public/assets/
+
+3. Refresh the main app in your browser
+
+4. The app will now load pre-computed textures!
+
+NOTE: You can regenerate different notation any time by
+clicking "Generate and Download PNGs" again.
+
+The files are typically 1-2 MB each in PNG format.
+`;
+            statusDiv.className = 'progress';
+        }
+
+        async function generateNotation() {
+            generateBtn.disabled = true;
+            statusDiv.textContent = '';
+            statusDiv.className = 'progress';
+
+            try {
+                log('🎵 Generating pre-computed notation graphics...\n');
+
+                // Check if OSMD is loaded (try both export formats)
+                let OpenSheetMusicDisplay = window.OpenSheetMusicDisplay;
+                if (!OpenSheetMusicDisplay && window.OSMD) {
+                    OpenSheetMusicDisplay = window.OSMD.OpenSheetMusicDisplay;
+                }
+                
+                if (!OpenSheetMusicDisplay) {
+                    throw new Error('OSMD library failed to load from CDN');
+                }
+
+                const container = document.getElementById('container');
+                
+                const osmd = new OpenSheetMusicDisplay(container, {
+                    backend: "canvas",
+                    drawTitle: false,
+                    drawPartNames: false,
+                    autoResize: false
+                });
+
+                // Set engraving rules after instantiation
+                osmd.EngravingRules.StaffLineWidth = 5.0;
+                osmd.EngravingRules.StemWidth = 5.5;
+                osmd.EngravingRules.BeamWidth = 3.5;
+                osmd.EngravingRules.LedgerLineWidth = 5.0;
+
+                osmd.zoom = 5.0;
+                log('📐 OSMD configured (zoom: 5.0)\n');
+
+                // Generate random music
+                const steps = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
+                const octaves = [4, 5];
+                let measuresXml = "";
+                
+                for (let m = 1; m <= 32; m++) {
+                    let measureContent = `<measure number="${m}">\n`;
+                    if (m === 1) {
+                        measureContent += `<attributes><divisions>1</divisions><key><fifths>0</fifths></key><time><beats>4</beats><beat-type>4</beat-type></time><clef><sign>G</sign><line>2</line></clef></attributes>\n`;
+                    }
+                    for (let n = 0; n < 4; n++) {
+                        const randomStep = steps[Math.floor(Math.random() * steps.length)];
+                        const randomOctave = octaves[Math.floor(Math.random() * octaves.length)];
+                        measureContent += `<note><pitch><step>${randomStep}</step><octave>${randomOctave}</octave></pitch><duration>1</duration><type>quarter</type></note>\n`;
+                    }
+                    measureContent += `</measure>\n`;
+                    measuresXml += measureContent;
+                }
+
+                const musicXml = `<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 3.1 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd"><score-partwise version="3.1"><part-list><score-part id="P1"><part-name>Notation</part-name></score-part></part-list><part id="P1">${measuresXml}</part></score-partwise>`;
+
+                log('🎼 Loading MusicXML (32 measures)...');
+                await osmd.load(musicXml);
+                
+                log('📝 Rendering notation...');
+                osmd.render();
+                
+                log('✓ Rendering complete\n');
+
+                const osmdCanvas = container.querySelector("canvas");
+                if (!osmdCanvas) {
+                    throw new Error('Canvas not found after rendering');
+                }
+
+                const totalPixelsW = osmdCanvas.width;
+                const totalPixelsH = osmdCanvas.height;
+                const maxTexSize = 4096;
+                const slices = Math.ceil(totalPixelsW / maxTexSize);
+
+                log(`📐 Canvas size: ${totalPixelsW}x${totalPixelsH}px`);
+                log(`🔀 Will create ${slices} slice(s) (${maxTexSize}px wide each)\n`);
+                log('💾 Generating PNG files...\n');
+
+                let downloadCount = 0;
+                for (let i = 0; i < slices; i++) {
+                    const srcX = i * maxTexSize;
+                    const slicePixW = Math.min(maxTexSize, totalPixelsW - srcX);
+
+                    const sliceCanvas = document.createElement("canvas");
+                    sliceCanvas.width = slicePixW;
+                    sliceCanvas.height = totalPixelsH;
+
+                    const ctx = sliceCanvas.getContext("2d");
+                    ctx.fillStyle = "white";
+                    ctx.fillRect(0, 0, slicePixW, totalPixelsH);
+                    ctx.drawImage(osmdCanvas, srcX, 0, slicePixW, totalPixelsH, 0, 0, slicePixW, totalPixelsH);
+
+                    // Download the file
+                    await new Promise((resolve) => {
+                        sliceCanvas.toBlob((blob) => {
+                            const url = URL.createObjectURL(blob);
+                            const link = document.createElement('a');
+                            link.href = url;
+                            link.download = `notation_slice_${i}.png`;
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                            URL.revokeObjectURL(url);
+                            
+                            const sizeKB = (blob.size / 1024).toFixed(1);
+                            log(`   ✓ notation_slice_${i}.png (${sizeKB} KB)`);
+                            downloadCount++;
+                            resolve();
+                        });
+                    });
+
+                    // Small delay between downloads
+                    await new Promise(r => setTimeout(r, 100));
+                }
+
+                log(`\n✅ Successfully generated ${downloadCount} notation slices!`);
+                log('\n📁 NEXT STEPS:');
+                log('1. Check your Downloads folder for notation_slice_*.png files');
+                log('2. Move all PNG files to: public/assets/');
+                log('3. Refresh the main app in your browser');
+                log('4. The app will now load pre-computed textures!\n');
+                
+                statusDiv.className = 'success';
+                generateBtn.disabled = false;
+
+            } catch (error) {
+                log(`\n❌ Error: ${error.message}`, 'error');
+                console.error(error);
+                statusDiv.className = 'error';
+                generateBtn.disabled = false;
+            }
+        }
+
+        // Wait for OSMD library to load
+        async function waitForOSMD() {
+            let attempts = 0;
+            const maxAttempts = 100; // 10 seconds max
+            
+            while (attempts < maxAttempts) {
+                // Try both possible export locations
+                if (window.OpenSheetMusicDisplay) {
+                    statusDiv.textContent = '✅ OSMD library loaded. Ready to generate!';
+                    statusDiv.className = 'progress';
+                    generateBtn.disabled = false;
+                    generateBtn.textContent = 'Generate and Download PNGs';
+                    osmdReady = true;
+                    return;
+                }
+                if (window.OSMD && window.OSMD.OpenSheetMusicDisplay) {
+                    statusDiv.textContent = '✅ OSMD library loaded. Ready to generate!';
+                    statusDiv.className = 'progress';
+                    generateBtn.disabled = false;
+                    generateBtn.textContent = 'Generate and Download PNGs';
+                    osmdReady = true;
+                    return;
+                }
+                await new Promise(r => setTimeout(r, 100));
+                attempts++;
+            }
+            
+            statusDiv.textContent = '❌ Failed to load OSMD library from CDN\n\nDebug info:\n' + 
+                'window.OpenSheetMusicDisplay: ' + (typeof window.OpenSheetMusicDisplay) + '\n' +
+                'window.OSMD: ' + (typeof window.OSMD) + '\n\n' +
+                'Try:\n1. Hard refresh (Ctrl+Shift+R)\n2. Check your internet connection\n3. Check browser console (F12)';
+            statusDiv.className = 'error';
+            generateBtn.disabled = true;
+        }
+
+        // Start waiting when page loads
+        window.addEventListener('load', waitForOSMD);
+        
+        // Also try after a short delay in case load event already fired
+        setTimeout(waitForOSMD, 100);
+    </script>
+</body>
+</html>
