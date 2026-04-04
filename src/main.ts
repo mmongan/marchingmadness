@@ -276,7 +276,7 @@ class App {
             osmd.EngravingRules.StemWidth = 0.3;
             osmd.EngravingRules.LedgerLineWidth = 0.3;
             osmd.EngravingRules.BeamWidth = 0.6;
-            osmd.zoom = 1.5;
+            osmd.zoom = 5.0;
 
             // Generate or load some standard music xml
             const musicXml = this.generateRandomMusicXML(16); // Only 16 measures to fit neatly as standard sheet music
