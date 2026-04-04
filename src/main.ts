@@ -389,15 +389,15 @@ class App {
                             const b = data[k+2] * alpha + 255 * (1 - alpha);
                             const brightness = (r + g + b) / 3;
                             const inverted = 255 - brightness;
-                            data[k] = inverted;
-                            data[k+1] = inverted;
-                            data[k+2] = inverted;
-                            data[k+3] = 255;
+                            data[k] = 255;
+                            data[k+1] = 255;
+                            data[k+2] = 255;
+                            data[k+3] = inverted;
                         }
                         ctx.putImageData(imgData, 0, 0);
                       // Update the texture
                       sliceTexture.update();
-                      sliceTexture.getAlphaFromRGB = true;
+                      
                       
                       mat.diffuseTexture = null;
                       mat.emissiveTexture = null;

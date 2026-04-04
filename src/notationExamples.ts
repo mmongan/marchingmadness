@@ -122,17 +122,17 @@ class NotationExamplesApp {
                 const b = data[i+2] * alpha + 255 * (1 - alpha);
                 const brightness = (r + g + b) / 3;
                 const inverted = 255 - brightness;
-                data[i] = inverted;
-                data[i+1] = inverted;
-                data[i+2] = inverted;
-                data[i+3] = 255;
+                data[i] = 255;
+                data[i+1] = 255;
+                data[i+2] = 255;
+                data[i+3] = inverted;
             }
             ctx2d.putImageData(imgData, 0, 0);
 
             // Create dynamic texture
             const texture = new DynamicTexture(`tex_${name}`, canvas, this.scene, false);
             texture.update();
-            texture.getAlphaFromRGB = true; // Use the red channel for transparency
+             // Use the red channel for transparency
 
             const mat = new StandardMaterial(`mat_${name}`, this.scene);
             // Simply use the inverted texture as purely opacity (shape of the music notation)
