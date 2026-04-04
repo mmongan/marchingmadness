@@ -1,4 +1,4 @@
-import { Engine, Scene, Vector3, HemisphericLight, MeshBuilder, StandardMaterial, Color3, FreeCamera, AmmoJSPlugin, PhysicsImpostor, WebXRFeatureName, ActionManager, ExecuteCodeAction, DynamicTexture, Texture, TransformNode } from "@babylonjs/core";
+import { Engine, Scene, Vector3, HemisphericLight, MeshBuilder, StandardMaterial, Color3, FreeCamera, AmmoJSPlugin, PhysicsImpostor, WebXRFeatureName, ActionManager, ExecuteCodeAction, DynamicTexture, TransformNode } from "@babylonjs/core";
 import "@babylonjs/core/Physics/physicsEngineComponent";
 import * as Tone from "tone";
 import { OpenSheetMusicDisplay } from "opensheetmusicdisplay";
@@ -241,182 +241,87 @@ class App {
     }
 
     private async createNotationBoard() {
-        // Try to load pre-computed assets first, fallback to dynamic generation
-        const boardParent = new TransformNode("notationBoardParent", this.scene);
-        boardParent.position = new Vector3(0, 1.6, 0.85);
+        console.log("Setting up standard OSMD music board for XR...");
+        
+        // 1) Setup a music stand Parent node directly behind the drum
+        const standParent = new TransformNode("musicStand", this.scene);
+        standParent.position = new Vector3(0, 1.4, 1.4); // Eye level, behind drum
+        // Tilt slightly back for reading
+        standParent.rotation.x = -Math.PI / 8;
 
-        const totalBoardWidthMeters = 20;
-        const maxTexSize = 4096;
+        // 2) Standard Sheet Music Dimensions (A4-ish proportions)
+        const pageWidthMeters = 1.0;
+        
+        // A high-res wrap width for the sheet music
+        const texW = 1536;
 
-        // Try loading pre-computed textures
-        const loadedCount = await this.loadPrecomputedNotation(boardParent, totalBoardWidthMeters);
+        // 3) Create an invisible div for OSMD to render the canvas
+        const osmdContainer = document.createElement("div");
+        osmdContainer.style.position = "absolute";
+        osmdContainer.style.top = "-9999px";
+        osmdContainer.style.width = texW + "px"; // Force standard wrap width
+        // no fixed height, let OSMD expand it downwards as needed to fit standard page layouts
+        document.body.appendChild(osmdContainer);
 
-        if (loadedCount === 0) {
-            console.log("Pre-computed assets not found. Generating at runtime... (for Quest 3, run precomputeNotation())");
-            await this.generateNotationAtRuntime(boardParent, totalBoardWidthMeters, maxTexSize);
-        }
-    }
-
-    private async loadPrecomputedNotation(parent: TransformNode, totalBoardWidthMeters: number): Promise<number> {
-        // Try to load pre-computed slice 0 as a quick check
-        const testUrl = `/assets/notation_slice_0.png`;
         try {
-            const response = await fetch(testUrl, { method: "HEAD" });
-            if (!response.ok) {
-                console.log("⚠ Pre-computed assets not found (slice 0 missing) - will generate at runtime");
-                return 0;
-            }
-        } catch (err) {
-            console.log("⚠ Pre-computed assets unavailable - will generate at runtime");
-            return 0;
-        }
-
-        // If we get here, slice 0 exists. Try to load all available slices
-        let sliceIndex = 0;
-        const sliceMetersW = totalBoardWidthMeters / 2;
-        let currentXMeters = -totalBoardWidthMeters / 2;
-
-        while (sliceIndex < 100) {
-            const textureUrl = `/assets/notation_slice_${sliceIndex}.png`;
-            try {
-                const response = await fetch(textureUrl, { method: "HEAD" });
-                if (!response.ok) break;
-            } catch {
-                break;
-            }
-
-            console.log(`Loading pre-computed slice ${sliceIndex}...`);
-            const sliceTexture = new Texture(textureUrl, this.scene);
-              sliceTexture.anisotropicFilteringLevel = 16;
-              sliceTexture.hasAlpha = true;
-
-              const mat = new StandardMaterial(`notationMat_${sliceIndex}`, this.scene);
-              mat.diffuseTexture = sliceTexture; mat.emissiveTexture = sliceTexture;
-              mat.useAlphaFromDiffuseTexture = true; mat.transparencyMode = 2;
-              mat.emissiveColor = new Color3(1, 1, 1);
-              mat.disableLighting = true;
-              mat.backFaceCulling = false;
-              const slicePlane = MeshBuilder.CreatePlane(`notationPlane_${sliceIndex}`, { width: sliceMetersW, height: 3 }, this.scene);
-              slicePlane.parent = parent;
-              slicePlane.position.x = currentXMeters + (sliceMetersW / 2);
-              slicePlane.material = mat;
-
-            currentXMeters += sliceMetersW;
-            sliceIndex++;
-        }
-
-        if (sliceIndex > 0) {
-            console.log(`✓ Loaded ${sliceIndex} pre-computed notation slices`);
-        }
-        return sliceIndex;
-    }
-
-    private async generateNotationAtRuntime(parent: TransformNode, totalBoardWidthMeters: number, maxTexSize: number) {
-        try {
-            const osmdContainer = document.createElement("div");
-            osmdContainer.style.position = "absolute";
-            osmdContainer.style.top = "-9999px";
-            osmdContainer.style.width = "8192px";
-            document.body.appendChild(osmdContainer);
-
             const osmd = new OpenSheetMusicDisplay(osmdContainer, {
                 backend: "canvas",
-                drawTitle: false,
+                drawTitle: true,
                 drawPartNames: false,
-                autoResize: false
+                autoResize: false, // Freeze layout so it doesn't break texture sizes
             });
 
-            // Set engraving rules after instantiation
-            osmd.EngravingRules.StaffLineWidth = 5.0;
-            osmd.EngravingRules.StemWidth = 5.5;
-            osmd.EngravingRules.BeamWidth = 3.5;
-            osmd.EngravingRules.LedgerLineWidth = 5.0;
+            // Adjust sizing lines for great VR readability
+            osmd.EngravingRules.StaffLineWidth = 2.0;
+            osmd.EngravingRules.StemWidth = 3.0;
+            osmd.EngravingRules.BeamWidth = 2.5;
+            osmd.zoom = 1.5;
 
-            osmd.zoom = 5.0;
-            const musicXml = this.generateRandomMusicXML(32);
+            // Generate or load some standard music xml
+            const musicXml = this.generateRandomMusicXML(16); // Only 16 measures to fit neatly as standard sheet music
             await osmd.load(musicXml);
             osmd.render();
 
             const osmdCanvas = osmdContainer.querySelector("canvas") as HTMLCanvasElement;
-            console.log(`OSMD canvas size: ${osmdCanvas?.width}x${osmdCanvas?.height}`);
+            if (osmdCanvas) {
+                console.log(`Rendered OSMD to ${osmdCanvas.width}x${osmdCanvas.height}`);
+                
+                // We use the actual height rendered by OSMD to scale the 3D mesh perfectly
+                const actualRatio = osmdCanvas.height / osmdCanvas.width;
+                const actualHeightMeters = pageWidthMeters * actualRatio;
 
-            if (osmdCanvas && osmdCanvas.width > 0 && osmdCanvas.height > 0) {
-                const totalPixelsW = osmdCanvas.width;
-                const totalPixelsH = osmdCanvas.height;
-                const slices = Math.ceil(totalPixelsW / maxTexSize);
-                const meterPerPixel = totalBoardWidthMeters / totalPixelsW;
-                const boardHeightMeters = totalPixelsH * meterPerPixel;
+                const texture = new DynamicTexture("sheetMusicTex", {width: osmdCanvas.width, height: osmdCanvas.height}, this.scene, false);
+                const ctx = texture.getContext() as CanvasRenderingContext2D;
 
-                console.log(`Creating ${slices} slices, each max ${maxTexSize}px wide`);
-                let currentXMeters = -totalBoardWidthMeters / 2;
+                // Fill with standard solid white background
+                ctx.fillStyle = "white";
+                ctx.fillRect(0, 0, osmdCanvas.width, osmdCanvas.height);
+                // Draw notation
+                ctx.drawImage(osmdCanvas, 0, 0);
+                texture.update();
+                
+                // Nice crisp text mapping without alpha blending issues
+                texture.anisotropicFilteringLevel = 16;
+                
+                const mat = new StandardMaterial("sheetMusicMat", this.scene);
+                mat.diffuseTexture = texture;
+                mat.emissiveTexture = texture; // Make it pop in VR implicitly via texture
+                mat.emissiveColor = new Color3(1, 1, 1);
+                mat.disableLighting = true; // Prevents shadows from making paper look gray
 
-                for (let i = 0; i < slices; i++) {
-                    const srcX = i * maxTexSize;
-                    const slicePixW = Math.min(maxTexSize, totalPixelsW - srcX);
-                    const sliceMetersW = slicePixW * meterPerPixel;
-
-                    // Create texture with explicit size
-                    const sliceTexture = new DynamicTexture(`notationTex_${i}`, { width: slicePixW, height: totalPixelsH }, this.scene, true);
-                    sliceTexture.anisotropicFilteringLevel = 16;
-                    sliceTexture.hasAlpha = true;
-
-                    const mat = new StandardMaterial(`notationMat_${i}`, this.scene);
-                    mat.diffuseTexture = sliceTexture; mat.emissiveTexture = sliceTexture;
-                    mat.useAlphaFromDiffuseTexture = true; mat.transparencyMode = 2;
-                    mat.emissiveColor = new Color3(1, 1, 1);
-                    mat.disableLighting = true;
-                    mat.backFaceCulling = false;
-
-                      const slicePlane = MeshBuilder.CreatePlane(`notationPlane_${i}`, { width: sliceMetersW, height: boardHeightMeters }, this.scene);
-                      slicePlane.parent = parent;
-                      slicePlane.position.x = currentXMeters + (sliceMetersW / 2);
-                      slicePlane.position.z = 0; // Maintain center
-                      slicePlane.material = mat;
-
-                    currentXMeters += sliceMetersW;
-
-                    const ctx = sliceTexture.getContext() as CanvasRenderingContext2D;
-
-                    // Ensure clear background before drawing
-                      ctx.clearRect(0, 0, slicePixW, totalPixelsH);
-                      ctx.drawImage(osmdCanvas, srcX, 0, slicePixW, totalPixelsH, 0, 0, slicePixW, totalPixelsH);
-                        const imgData = ctx.getImageData(0, 0, slicePixW, totalPixelsH);
-                        const data = imgData.data;
-                        for (let k = 0; k < data.length; k += 4) {
-                            const alpha = data[k+3] / 255;
-                            const r = data[k] * alpha + 255 * (1 - alpha);
-                            const g = data[k+1] * alpha + 255 * (1 - alpha);
-                            const b = data[k+2] * alpha + 255 * (1 - alpha);
-                            const brightness = (r + g + b) / 3;
-                            const inverted = 255 - brightness;
-                            data[k] = 0; // Black RGB
-                            data[k+1] = 0; // Black RGB
-                            data[k+2] = 0; // Black RGB
-                            data[k+3] = inverted; // Alpha directly tied to darkness
-                        }
-                        ctx.putImageData(imgData, 0, 0);
-                      // Update the texture
-                      sliceTexture.update();
-                      sliceTexture.hasAlpha = true;
-                      
-                      mat.diffuseTexture = sliceTexture;
-                      mat.emissiveTexture = sliceTexture;
-                      mat.useAlphaFromDiffuseTexture = true;
-                      mat.transparencyMode = 2; // ALPHABLEND
-                      mat.emissiveColor = new Color3(1, 1, 1); // Pass through perfectly
-                      mat.disableLighting = true;
-                      mat.backFaceCulling = false;
-                    console.log(`  Slice ${i}: drawn ${slicePixW}x${totalPixelsH}px`);
-                }
-
-                console.log(`✓ Generated ${slices} notation slices at runtime`);
-            } else {
-                console.error("OSMD canvas failed to render");
+                // A single standard reading plane, sized optimally
+                const sheetPlane = MeshBuilder.CreatePlane("sheetMusic", { width: pageWidthMeters, height: actualHeightMeters }, this.scene);
+                sheetPlane.parent = standParent;
+                sheetPlane.material = mat;
+                
+                console.log("✓ Fully initialized standard sheet music view.");
             }
-
-            document.body.removeChild(osmdContainer);
-        } catch (err) {
-            console.error("Error generating notation:", err);
+        } catch (e) {
+            console.error("OSMD Failed to load score: ", e);
+        } finally {
+            if (document.body.contains(osmdContainer)) {
+                // document.body.removeChild(osmdContainer);
+            }
         }
     }
 
