@@ -95,38 +95,48 @@ class NotationExamplesApp {
 
         const canvas = osmdContainer.querySelector("canvas") as HTMLCanvasElement;
         
-        if (canvas) {
-            // Apply the actual 2D graphic to a THICK solid block mesh via extrusion
-            // Block dimensions match real-world aspect ratio
-            const blockWidth = 3;
-            const blockHeight = blockWidth * (canvas.height / canvas.width);
-            const blockDepth = 0.2; // Extrusion depth - solid slab!
+        if (canvas && canvas.width > 0 && canvas.height > 0) {
+            const canvasW = canvas.width;
+            const canvasH = canvas.height;
+            // Display the OSMD image directly on a plane
+            const planeWidth = 3;
+            const planeHeight = planeWidth * (canvasH / canvasW);
 
-            // Create solid thick box
-            const block = MeshBuilder.CreateBox(name, {
-                width: blockWidth, 
-                height: blockHeight, 
-                depth: blockDepth 
+            // Create flat 2D plane
+            const plane = MeshBuilder.CreatePlane(name, {
+                width: planeWidth, 
+                height: planeHeight
             }, this.scene);
 
-            block.position = position;
+            plane.position = position;
 
             // Apply texture
-            const texture = new DynamicTexture(`tex_${name}`, canvas, this.scene, false);
+            const texture = new DynamicTexture(`tex_${name}`, { width: canvasW, height: canvasH }, this.scene, false);
+            texture.hasAlpha = true;
+            
+            const ctx = texture.getContext() as CanvasRenderingContext2D;
+            ctx.clearRect(0, 0, canvasW, canvasH);
+            ctx.drawImage(canvas, 0, 0);
+            texture.update();
+            
             const mat = new StandardMaterial(`mat_${name}`, this.scene);
             mat.diffuseTexture = texture;
+            mat.useAlphaFromDiffuseTexture = true;
             mat.specularColor = new Color3(0, 0, 0);
             mat.emissiveColor = new Color3(0.9, 0.9, 0.9); // Make it bright
-            
-            // Optional: transparent edges to only render ink on a thick clear block
-            // mat.diffuseTexture.hasAlpha = true;
-            // mat.useAlphaFromDiffuseTexture = true;
-            // mat.useObjectSpaceLighting = true;
 
-            block.material = mat;
+            plane.material = mat;
+            console.log(`OSMD image created directly on plane: ${name} (${canvasW}x${canvasH})`);
+        } else {
+            console.warn(`Failed to grab canvas for plane: ${name}`);
         }
 
-        document.body.removeChild(osmdContainer);
+        // Delaying removal of container slightly to ensure drawing finishes if asynchronous
+        setTimeout(() => {
+            if (document.body.contains(osmdContainer)) {
+                document.body.removeChild(osmdContainer);
+            }
+        }, 100);
     }
 }
 

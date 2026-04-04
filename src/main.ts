@@ -288,19 +288,20 @@ class App {
             console.log(`Loading pre-computed slice ${sliceIndex}...`);
             const sliceTexture = new Texture(textureUrl, this.scene);
             sliceTexture.anisotropicFilteringLevel = 16;
+            sliceTexture.hasAlpha = true;
 
             const mat = new StandardMaterial(`notationMat_${sliceIndex}`, this.scene);
             mat.diffuseTexture = sliceTexture;
+            mat.useAlphaFromDiffuseTexture = true;
             mat.specularColor = new Color3(0, 0, 0);
             mat.emissiveColor = new Color3(1, 1, 1);
             mat.disableLighting = true;
 
-// Extrude into a solid block instead of a 2D plane
-              const blockDepth = 0.2; // 20cm thick block
-              const sliceBlock = MeshBuilder.CreateBox(`notationBlock_${sliceIndex}`, { width: sliceMetersW, height: 3, depth: blockDepth }, this.scene);
-              sliceBlock.parent = parent;
-              sliceBlock.position.x = currentXMeters + (sliceMetersW / 2);
-              sliceBlock.material = mat;
+// Use a 2D plane to display the OSMD image directly
+              const slicePlane = MeshBuilder.CreatePlane(`notationPlane_${sliceIndex}`, { width: sliceMetersW, height: 3 }, this.scene);
+              slicePlane.parent = parent;
+              slicePlane.position.x = currentXMeters + (sliceMetersW / 2);
+              slicePlane.material = mat;
 
             currentXMeters += sliceMetersW;
             sliceIndex++;
@@ -359,28 +360,27 @@ class App {
                     // Create texture with explicit size
                     const sliceTexture = new DynamicTexture(`notationTex_${i}`, { width: slicePixW, height: totalPixelsH }, this.scene, true);
                     sliceTexture.anisotropicFilteringLevel = 16;
+                    sliceTexture.hasAlpha = true;
 
                     const mat = new StandardMaterial(`notationMat_${i}`, this.scene);
                     mat.diffuseTexture = sliceTexture;
+                    mat.useAlphaFromDiffuseTexture = true;
                     mat.specularColor = new Color3(0, 0, 0);
                     mat.emissiveColor = new Color3(1, 1, 1);
                     mat.disableLighting = true;
 
-const sliceBlock = MeshBuilder.CreateBox(`notationBlock_${i}`, { width: sliceMetersW, height: boardHeightMeters, depth: 0.2 }, this.scene);
-                      sliceBlock.parent = parent;
-                      sliceBlock.position.x = currentXMeters + (sliceMetersW / 2);
-                      sliceBlock.position.z = 0; // Maintain center
-                      sliceBlock.material = mat;
+                      const slicePlane = MeshBuilder.CreatePlane(`notationPlane_${i}`, { width: sliceMetersW, height: boardHeightMeters }, this.scene);
+                      slicePlane.parent = parent;
+                      slicePlane.position.x = currentXMeters + (sliceMetersW / 2);
+                      slicePlane.position.z = 0; // Maintain center
+                      slicePlane.material = mat;
 
                     currentXMeters += sliceMetersW;
 
                     const ctx = sliceTexture.getContext() as CanvasRenderingContext2D;
                     
-                    // Clear with white
-                    ctx.fillStyle = "white";
-                    ctx.fillRect(0, 0, slicePixW, totalPixelsH);
-                    
-                    // Draw the music
+                    // Clear with transparency
+                    ctx.clearRect(0, 0, slicePixW, totalPixelsH);
                     ctx.drawImage(osmdCanvas, srcX, 0, slicePixW, totalPixelsH, 0, 0, slicePixW, totalPixelsH);
                     
                     // Update the texture
@@ -517,8 +517,7 @@ const sliceBlock = MeshBuilder.CreateBox(`notationBlock_${i}`, { width: sliceMet
             sliceCanvas.height = totalPixelsH;
 
             const ctx = sliceCanvas.getContext("2d") as CanvasRenderingContext2D;
-            ctx.fillStyle = "white";
-            ctx.fillRect(0, 0, slicePixW, totalPixelsH);
+            ctx.clearRect(0, 0, slicePixW, totalPixelsH);
             ctx.drawImage(osmdCanvas, srcX, 0, slicePixW, totalPixelsH, 0, 0, slicePixW, totalPixelsH);
 
             sliceCanvas.toBlob((blob) => {
