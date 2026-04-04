@@ -389,21 +389,23 @@ class App {
                             const b = data[k+2] * alpha + 255 * (1 - alpha);
                             const brightness = (r + g + b) / 3;
                             const inverted = 255 - brightness;
-                            data[k] = 255;
-                            data[k+1] = 255;
-                            data[k+2] = 255;
-                            data[k+3] = inverted;
+                            data[k] = 0; // Black RGB
+                            data[k+1] = 0; // Black RGB
+                            data[k+2] = 0; // Black RGB
+                            data[k+3] = inverted; // Alpha directly tied to darkness
                         }
                         ctx.putImageData(imgData, 0, 0);
                       // Update the texture
                       sliceTexture.update();
+                      sliceTexture.hasAlpha = true;
                       
-                      
-                      mat.diffuseTexture = null;
-                      mat.emissiveTexture = null;
-                      mat.opacityTexture = sliceTexture;
+                      mat.diffuseTexture = sliceTexture;
+                      mat.emissiveTexture = sliceTexture;
+                      mat.useAlphaFromDiffuseTexture = true;
                       mat.transparencyMode = 2; // ALPHABLEND
-                      mat.emissiveColor = new Color3(0, 0, 0); // Solid black color masked by opacity map
+                      mat.emissiveColor = new Color3(1, 1, 1); // Pass through perfectly
+                      mat.disableLighting = true;
+                      mat.backFaceCulling = false;
                     console.log(`  Slice ${i}: drawn ${slicePixW}x${totalPixelsH}px`);
                 }
 

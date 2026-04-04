@@ -122,28 +122,28 @@ class NotationExamplesApp {
                 const b = data[i+2] * alpha + 255 * (1 - alpha);
                 const brightness = (r + g + b) / 3;
                 const inverted = 255 - brightness;
-                data[i] = 255;
-                data[i+1] = 255;
-                data[i+2] = 255;
-                data[i+3] = inverted;
+                data[i] = 0; // Black RGB
+                data[i+1] = 0; // Black RGB
+                data[i+2] = 0; // Black RGB
+                data[i+3] = inverted; // Alpha directly tied to darkness
             }
             ctx2d.putImageData(imgData, 0, 0);
 
             // Create dynamic texture
-            const texture = new DynamicTexture(`tex_${name}`, canvas, this.scene, false);
-            texture.update();
-             // Use the red channel for transparency
+              const texture = new DynamicTexture(`tex_${name}`, canvas, this.scene, false);
+              texture.update();
+              texture.hasAlpha = true;
 
-            const mat = new StandardMaterial(`mat_${name}`, this.scene);
-            // Simply use the inverted texture as purely opacity (shape of the music notation)
-            mat.opacityTexture = texture;
-            mat.transparencyMode = 2; // ALPHABLEND
-            // And render the geometry in pure black
-            mat.emissiveColor = new Color3(0, 0, 0); 
-            mat.disableLighting = true;
-            mat.backFaceCulling = false;
+              const mat = new StandardMaterial(`mat_${name}`, this.scene);
+              mat.diffuseTexture = texture;
+              mat.emissiveTexture = texture;
+              mat.useAlphaFromDiffuseTexture = true;
+              mat.transparencyMode = 2; // ALPHABLEND
+              mat.emissiveColor = new Color3(1, 1, 1);
+              mat.disableLighting = true;
+              mat.backFaceCulling = false;
 
-            plane.material = mat;
+              plane.material = mat;
             console.log(`OSMD image created directly on plane: ${name} (${canvasW}x${canvasH})`);
         } else {
             console.warn(`Failed to grab canvas for plane: ${name}`);
