@@ -383,7 +383,11 @@ class App {
                         const imgData = ctx.getImageData(0, 0, slicePixW, totalPixelsH);
                         const data = imgData.data;
                         for (let k = 0; k < data.length; k += 4) {
-                            const brightness = (data[k] + data[k+1] + data[k+2]) / 3;
+                            const alpha = data[k+3] / 255;
+                            const r = data[k] * alpha + 255 * (1 - alpha);
+                            const g = data[k+1] * alpha + 255 * (1 - alpha);
+                            const b = data[k+2] * alpha + 255 * (1 - alpha);
+                            const brightness = (r + g + b) / 3;
                             const inverted = 255 - brightness;
                             data[k] = inverted;
                             data[k+1] = inverted;
