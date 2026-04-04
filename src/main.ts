@@ -291,7 +291,7 @@ class App {
               sliceTexture.hasAlpha = true;
 
               const mat = new StandardMaterial(`notationMat_${sliceIndex}`, this.scene);
-              mat.diffuseTexture = sliceTexture;
+              mat.diffuseTexture = sliceTexture; mat.emissiveTexture = sliceTexture;
               mat.useAlphaFromDiffuseTexture = true;
               mat.emissiveColor = new Color3(1, 1, 1);
               mat.disableLighting = true;
@@ -361,7 +361,7 @@ class App {
                     sliceTexture.hasAlpha = true;
 
                     const mat = new StandardMaterial(`notationMat_${i}`, this.scene);
-                    mat.diffuseTexture = sliceTexture;
+                    mat.diffuseTexture = sliceTexture; mat.emissiveTexture = sliceTexture;
                     mat.useAlphaFromDiffuseTexture = true;
                     mat.emissiveColor = new Color3(1, 1, 1);
                     mat.disableLighting = true;
@@ -380,7 +380,20 @@ class App {
                     // Ensure clear background before drawing
                     ctx.clearRect(0, 0, slicePixW, totalPixelsH);
                     ctx.drawImage(osmdCanvas, srcX, 0, slicePixW, totalPixelsH, 0, 0, slicePixW, totalPixelsH);
-
+                      const imgData = ctx.getImageData(0, 0, slicePixW, totalPixelsH);
+                      const data = imgData.data;
+                      for (let k = 0; k < data.length; k += 4) {
+                          if (data[k] >= 200 && data[k+1] >= 200 && data[k+2] >= 200) {
+                              data[k] = 0; data[k+1] = 0; data[k+2] = 0; data[k+3] = 0;
+                          } else {
+                              const brightness = (data[k] + data[k+1] + data[k+2]) / 3;
+                              data[k] = 0;
+                              data[k+1] = 0;
+                              data[k+2] = 0;
+                              data[k+3] = 255 - brightness;
+                          }
+                      }
+                      ctx.putImageData(imgData, 0, 0);
                     // Update the texture
                     sliceTexture.update();
                     console.log(`  Slice ${i}: drawn ${slicePixW}x${totalPixelsH}px`);

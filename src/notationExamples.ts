@@ -111,12 +111,37 @@ class NotationExamplesApp {
             plane.position = position;
 
             // Apply texture with manual opacity inversion to guarantee transparency for black notes
+            // Process canvas data to convert white background to transparent and retain dark pixels
+            const ctx2d = canvas.getContext('2d') as CanvasRenderingContext2D;
+            const imgData = ctx2d.getImageData(0, 0, canvas.width, canvas.height);
+            const data = imgData.data;
+            for (let i = 0; i < data.length; i += 4) {
+                // If it's very white/bright, make it transparent
+                if (data[i] >= 200 && data[i+1] >= 200 && data[i+2] >= 200) {
+                    data[i] = 0;   // R
+                    data[i+1] = 0; // G
+                    data[i+2] = 0; // B
+                    data[i+3] = 0; // A
+                } else {
+                    // Turn everything else pure black but keep its anti-aliasing via Alpha
+                    const brightness = (data[i] + data[i+1] + data[i+2]) / 3;
+                    data[i] = 0;
+                    data[i+1] = 0;
+                    data[i+2] = 0;
+                    data[i+3] = 255 - brightness; // The darker the original, the more opaque it is
+                }
+            }
+            ctx2d.putImageData(imgData, 0, 0);
+
             // Create dynamic texture directly from canvas, respecting OSMD's natural transparency
             const texture = new DynamicTexture(`tex_${name}`, canvas, this.scene, false);
+            // Must explicitly call update to send the canvas pixels to the GPU
+            texture.update();
             texture.hasAlpha = true;
 
             const mat = new StandardMaterial(`mat_${name}`, this.scene);
-            mat.diffuseTexture = texture;
+            mat.diffuseTexture = texture; 
+            mat.emissiveTexture = texture;
             mat.useAlphaFromDiffuseTexture = true;
             mat.backFaceCulling = false;
             mat.disableLighting = true;
