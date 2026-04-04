@@ -147,54 +147,7 @@ export class ExtrudedNotationMeshLibrary {
         return staffGroup;
     }
 
-    /**
-     * Create a measure (staff with notes)
-     */
-    createMeasureShape(measureNumber: number, noteCountPerMeasure: number = 4): Mesh {
-        const name = `measure_${measureNumber}`;
-        const measureGroup = new Mesh(name, this.scene);
-        
-        // Create staff
-        const staff = this.createStaffShape(3, 2);
-        staff.parent = measureGroup;
-        staff.position.z = 0;
-        
-        // Create notes
-        const noteSpacing = 3 / (noteCountPerMeasure + 1);
-        for (let n = 0; n < noteCountPerMeasure; n++) {
-            const noteX = -1.5 + (n + 1) * noteSpacing;
-            const noteY = (Math.random() - 0.5) * 1.5; // Random vertical position
-            const isQuarter = Math.random() > 0.3; // 70% quarter notes
-            
-            const note = this.createCompleteNoteShape(new Vector3(noteX, noteY, 0.1), isQuarter);
-            note.parent = measureGroup;
-            note.position.x = noteX;
-            note.position.y = noteY;
-        }
-        
-        this.meshLibrary.set(name, { name, mesh: measureGroup });
-        return measureGroup;
-    }
-
-    /**
-     * Create a full score visualization (multiple measures)
-     */
-    createScoreShape(numMeasures: number = 4): Mesh {
-        const name = `score_${this.meshLibrary.size}`;
-        const scoreGroup = new Mesh(name, this.scene);
-        
-        const measureWidth = 4;
-        const measureGap = 0.5;
-        
-        for (let m = 0; m < numMeasures; m++) {
-            const measure = this.createMeasureShape(m);
-            measure.parent = scoreGroup;
-            measure.position.x = m * (measureWidth + measureGap);
-        }
-        
-        this.meshLibrary.set(name, { name, mesh: scoreGroup });
-        return scoreGroup;
-    }
+    
 
     /**
      * Create extruded 3D meshes from actual OSMD notation data
@@ -209,84 +162,63 @@ export class ExtrudedNotationMeshLibrary {
         try {
             const scoreGroup = new Mesh(`osmd_score_${this.meshLibrary.size}`, this.scene);
             
-            // Get the sheet music object
-            const sheet = this.osmd.Sheet;
-            if (!sheet || !sheet.SourceMeasures) {
-                console.warn("No measures found in OSMD sheet");
+            // Generate exact 3D note meshes overlaid on the exact OSMD graphical positions
+            const graphicSheet = this.osmd.GraphicSheet;
+            if (!graphicSheet || !graphicSheet.MeasureList) {
+                console.warn("No graphical measures found in OSMD sheet");
                 return scoreGroup;
             }
 
-            let measureXPos = 0;
-            const measureSpacing = 4;
+            // Iterate through OSMD's pre-calculated graphical layout
+            for (let m = 0; m < graphicSheet.MeasureList.length; m++) {
+                const measureRow = graphicSheet.MeasureList[m];
+                
+                for (let s = 0; s < measureRow.length; s++) {
+                    const graphicalMeasure = measureRow[s];
+                    if (!graphicalMeasure) continue;
+                    
+                    const measureGroup = new Mesh(`measure_osmd_${m}_${s}`, this.scene);
+                    measureGroup.parent = scoreGroup;
+                    
+                    // Note: We DO NOT draw custom staff lines here because "two different kinds of notes/lines" 
+                    // means the user already maps the OSMD canvas texture in 3D.
+                    // The 3D meshes simply overlay the texture for physics/interaction.
 
-            // Iterate through all measures
-            for (let m = 0; m < sheet.SourceMeasures.length; m++) {
-                const sourceMeasure = sheet.SourceMeasures[m];
-                const measureGroup = new Mesh(`measure_osmd_${m}`, this.scene);
-                measureGroup.parent = scoreGroup;
-                measureGroup.position.x = measureXPos;
-
-                // Add staff lines
-                const staff = this.createStaffShape(2.5, 1.8);
-                staff.parent = measureGroup;
-                staff.position.z = 0;
-
-                if (sourceMeasure.VerticalSourceStaffEntryContainers) {
-                    for (let containerIdx = 0; containerIdx < sourceMeasure.VerticalSourceStaffEntryContainers.length; containerIdx++) {
-                        const container = sourceMeasure.VerticalSourceStaffEntryContainers[containerIdx];
+                    for (let entryIdx = 0; entryIdx < graphicalMeasure.staffEntries.length; entryIdx++) {
+                        const staffEntry = graphicalMeasure.staffEntries[entryIdx];
                         
-                        if (container && container.StaffEntries) {
-                            for (let staffIdx = 0; staffIdx < container.StaffEntries.length; staffIdx++) {
-                                const staffEntry = container.StaffEntries[staffIdx];
+                        for (let voiceIdx = 0; voiceIdx < staffEntry.graphicalVoiceEntries.length; voiceIdx++) {
+                            const voiceEntry = staffEntry.graphicalVoiceEntries[voiceIdx];
+                            
+                            for (let noteIdx = 0; noteIdx < voiceEntry.notes.length; noteIdx++) {
+                                const graphicalNote = voiceEntry.notes[noteIdx];
+                                const sourceNote = graphicalNote.sourceNote;
                                 
-                                if (staffEntry && staffEntry.VoiceEntries) {
-                                    // Generate note position based on container timestamp or index
-                                    let noteXPos = -1.2 + (containerIdx * 0.4); 
-                                    
-                                    // Iterate through voice entries (notes in measure)
-                                    for (let voiceIdx = 0; voiceIdx < staffEntry.VoiceEntries.length; voiceIdx++) {
-                                        const voiceEntry = staffEntry.VoiceEntries[voiceIdx];
-                                        
-                                        if (voiceEntry.Notes) {
-                                            // For each note in the voice entry
-                                            for (let noteIdx = 0; noteIdx < voiceEntry.Notes.length; noteIdx++) {
-                                                const note = voiceEntry.Notes[noteIdx];
-                                                
-                                                // Map MIDI pitch to vertical position on staff
-                                                // Access the halfTone property from the pitch if it exists
-                                                const pitch = note.Pitch as any;
-                                                const midiPitch = pitch ? (pitch.halfTone + 60) : 60;
-                                                const noteYPos = (midiPitch - 60) * 0.15; // 0.15 units per semitone
-                                                
-                                                // Determine note type based on length
-                                                const duration = note.Length ? note.Length.RealValue : 0.25;
-                                                const isQuarterNote = Math.abs(duration - 0.25) < 0.01;
-                                                
-                                                // Create note mesh
-                                                const noteMesh = this.createCompleteNoteShape(
-                                                    new Vector3(noteXPos, noteYPos, 0.1),
-                                                    isQuarterNote
-                                                );
-                                                noteMesh.parent = measureGroup;
-                                                noteMesh.position.x = noteXPos;
-                                                noteMesh.position.y = noteYPos;
-                                                
-                                                // Add slight offset for chord notes
-                                                noteXPos += 0.15;
-                                            }
-                                        }
-                                    }
-                                }
+                                // Get OSMD's exact calculated absolute position
+                                // Note: OSMD Canvas positions have Y increasing downwards.
+                                // In Babylon Y increases upwards.
+                                const absX = graphicalNote.PositionAndShape.AbsolutePosition.x;
+                                const absY = -graphicalNote.PositionAndShape.AbsolutePosition.y; 
+                                
+                                const duration = sourceNote && sourceNote.Length ? sourceNote.Length.RealValue : 0.25;
+                                const isQuarterNote = Math.abs(duration - 0.25) < 0.01;
+                                
+                                // Create 3D note mesh exactly where OSMD rendered it in 2D
+                                const noteMesh = this.createCompleteNoteShape(
+                                    new Vector3(absX, absY, 0.1),
+                                    isQuarterNote
+                                );
+                                noteMesh.parent = measureGroup;
+                                noteMesh.position.x = absX;
+                                noteMesh.position.y = absY;
                             }
                         }
                     }
                 }
-
-                measureXPos += measureSpacing;
             }
 
             this.meshLibrary.set(scoreGroup.name, { name: scoreGroup.name, mesh: scoreGroup });
-            console.log(`✓ Created 3D meshes from OSMD notation (${sheet.SourceMeasures.length} measures)`);
+            console.log(`✓ Created exact 3D notation meshes mapped to OSMD layout`);
             
             return scoreGroup;
         } catch (err) {
