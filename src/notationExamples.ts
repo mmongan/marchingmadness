@@ -142,7 +142,7 @@ class NotationExamplesApp {
             const mat = new StandardMaterial(`mat_${name}`, this.scene);
             mat.diffuseTexture = texture; 
             mat.emissiveTexture = texture;
-            mat.useAlphaFromDiffuseTexture = true;
+            mat.useAlphaFromDiffuseTexture = true; mat.transparencyMode = 2;
             mat.backFaceCulling = false;
             mat.disableLighting = true;
             mat.emissiveColor = new Color3(1, 1, 1);

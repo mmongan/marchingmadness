@@ -292,7 +292,7 @@ class App {
 
               const mat = new StandardMaterial(`notationMat_${sliceIndex}`, this.scene);
               mat.diffuseTexture = sliceTexture; mat.emissiveTexture = sliceTexture;
-              mat.useAlphaFromDiffuseTexture = true;
+              mat.useAlphaFromDiffuseTexture = true; mat.transparencyMode = 2;
               mat.emissiveColor = new Color3(1, 1, 1);
               mat.disableLighting = true;
               mat.backFaceCulling = false;
@@ -362,7 +362,7 @@ class App {
 
                     const mat = new StandardMaterial(`notationMat_${i}`, this.scene);
                     mat.diffuseTexture = sliceTexture; mat.emissiveTexture = sliceTexture;
-                    mat.useAlphaFromDiffuseTexture = true;
+                    mat.useAlphaFromDiffuseTexture = true; mat.transparencyMode = 2;
                     mat.emissiveColor = new Color3(1, 1, 1);
                     mat.disableLighting = true;
                     mat.backFaceCulling = false;
