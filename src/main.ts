@@ -3,6 +3,9 @@ import "@babylonjs/core/Physics/physicsEngineComponent";
 import * as Tone from "tone";
 import { OpenSheetMusicDisplay } from "opensheetmusicdisplay";
 
+// @ts-ignore
+import scoreUrl from "../public/assets/score.xml?url";
+
 declare var Ammo: any;
 
 class App {
@@ -278,8 +281,9 @@ class App {
             osmd.EngravingRules.BeamWidth = 0.6;
             osmd.zoom = 5.0;
 
-            // Generate or load some standard music xml
-            const musicXml = this.generateRandomMusicXML(16); // Only 16 measures to fit neatly as standard sheet music
+            // Load standard music xml from assets
+            const xmlResponse = await fetch(scoreUrl as string);
+            const musicXml = await xmlResponse.text();
             await osmd.load(musicXml);
             osmd.render();
 
@@ -327,6 +331,7 @@ class App {
         }
     }
 
+    // @ts-ignore: Keep around for future testing
     private generateRandomMusicXML(numMeasures: number): string {
         const steps = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
         const octaves = [4, 5];
