@@ -111,34 +111,16 @@ class NotationExamplesApp {
             plane.position = position;
 
             // Apply texture with manual opacity inversion to guarantee transparency for black notes
-            const texture = new DynamicTexture(`tex_${name}`, { width: canvasW, height: canvasH }, this.scene, false);
+            // Create dynamic texture directly from canvas, respecting OSMD's natural transparency
+            const texture = new DynamicTexture(`tex_${name}`, canvas, this.scene, false);
             texture.hasAlpha = true;
-            
-            const ctx = texture.getContext() as CanvasRenderingContext2D;
-            ctx.fillStyle = "white";
-            ctx.fillRect(0, 0, canvasW, canvasH);
-            ctx.drawImage(canvas, 0, 0);
-            
-            // Make notes black with proper alpha, background transparent
-            const imgData = ctx.getImageData(0, 0, canvasW, canvasH);
-            for (let i = 0; i < imgData.data.length; i += 4) {
-                const brightness = (imgData.data[i] + imgData.data[i+1] + imgData.data[i+2]) / 3;
-                
-                imgData.data[i] = 0;     // R -> Black
-                imgData.data[i+1] = 0;   // G -> Black
-                imgData.data[i+2] = 0;   // B -> Black
-                // Alpha (A) is opacity. Dark notes = opaque (255), white background = transparent (0)
-                imgData.data[i+3] = 255 - brightness;
-            }
-            ctx.putImageData(imgData, 0, 0);
-            texture.update();
-            
+
             const mat = new StandardMaterial(`mat_${name}`, this.scene);
             mat.diffuseTexture = texture;
             mat.useAlphaFromDiffuseTexture = true;
-            mat.emissiveColor = new Color3(1, 1, 1); 
-            mat.disableLighting = true; 
             mat.backFaceCulling = false;
+            mat.disableLighting = true;
+            mat.emissiveColor = new Color3(1, 1, 1);
 
             plane.material = mat;
             console.log(`OSMD image created directly on plane: ${name} (${canvasW}x${canvasH})`);

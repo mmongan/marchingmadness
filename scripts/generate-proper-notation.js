@@ -124,7 +124,7 @@ function createTempHTML(musicXml) {
 <html>
 <head>
     <meta charset="UTF-8">
-    <script src="https://unpkg.com/opensheetmusicdisplay@1.8.8/build/opensheetmusicdisplay.min.js"></script>
+    <script src="file://${path.resolve(__dirname, '../node_modules/opensheetmusicdisplay/build/opensheetmusicdisplay.min.js')}"></script>
     <style>
         body { margin: 0; padding: 0; background: white; }
         #container { width: 8192px; }

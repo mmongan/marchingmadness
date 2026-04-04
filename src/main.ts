@@ -377,22 +377,9 @@ class App {
 
                     const ctx = sliceTexture.getContext() as CanvasRenderingContext2D;
 
-                    // Opaque white background
-                    ctx.fillStyle = "white";
-                    ctx.fillRect(0, 0, slicePixW, totalPixelsH);
+                    // Ensure clear background before drawing
+                    ctx.clearRect(0, 0, slicePixW, totalPixelsH);
                     ctx.drawImage(osmdCanvas, srcX, 0, slicePixW, totalPixelsH, 0, 0, slicePixW, totalPixelsH);
-
-                    // Make notes black with proper alpha, background transparent
-                    const imgData = ctx.getImageData(0, 0, slicePixW, totalPixelsH);
-                    for (let p = 0; p < imgData.data.length; p += 4) {
-                        const brightness = (imgData.data[p] + imgData.data[p+1] + imgData.data[p+2]) / 3;
-                        
-                        imgData.data[p]   = 0;
-                        imgData.data[p+1] = 0;
-                        imgData.data[p+2] = 0;
-                        imgData.data[p+3] = 255 - brightness;
-                    }
-                    ctx.putImageData(imgData, 0, 0);
 
                     // Update the texture
                     sliceTexture.update();
