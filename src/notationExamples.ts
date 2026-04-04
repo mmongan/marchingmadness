@@ -112,30 +112,32 @@ class NotationExamplesApp {
 
             // Apply texture with manual opacity inversion to guarantee transparency for black notes
             const texture = new DynamicTexture(`tex_${name}`, { width: canvasW, height: canvasH }, this.scene, false);
+            texture.hasAlpha = true;
             
             const ctx = texture.getContext() as CanvasRenderingContext2D;
             ctx.fillStyle = "white";
             ctx.fillRect(0, 0, canvasW, canvasH);
             ctx.drawImage(canvas, 0, 0);
             
-            // Invert colors: Black notes become White (Opaque), White bg becomes Black (Transparent)
+            // Make notes black with proper alpha, background transparent
             const imgData = ctx.getImageData(0, 0, canvasW, canvasH);
             for (let i = 0; i < imgData.data.length; i += 4) {
-                imgData.data[i] = 255 - imgData.data[i];
-                imgData.data[i+1] = 255 - imgData.data[i+1];
-                imgData.data[i+2] = 255 - imgData.data[i+2];
+                const brightness = (imgData.data[i] + imgData.data[i+1] + imgData.data[i+2]) / 3;
+                
+                imgData.data[i] = 0;     // R -> Black
+                imgData.data[i+1] = 0;   // G -> Black
+                imgData.data[i+2] = 0;   // B -> Black
+                // Alpha (A) is opacity. Dark notes = opaque (255), white background = transparent (0)
+                imgData.data[i+3] = 255 - brightness;
             }
             ctx.putImageData(imgData, 0, 0);
             texture.update();
             
             const mat = new StandardMaterial(`mat_${name}`, this.scene);
-            mat.diffuseColor = new Color3(0, 0, 0);   // Black notes
-            mat.emissiveColor = new Color3(0.0, 0.0, 0.0);
-            mat.specularColor = new Color3(0, 0, 0);
-
-            // Use RGB channels of the texture for the alpha mask
-            mat.opacityTexture = texture;
-            mat.opacityTexture.getAlphaFromRGB = true;
+            mat.diffuseTexture = texture;
+            mat.useAlphaFromDiffuseTexture = true;
+            mat.emissiveColor = new Color3(1, 1, 1); 
+            mat.disableLighting = true; 
             mat.backFaceCulling = false;
 
             plane.material = mat;

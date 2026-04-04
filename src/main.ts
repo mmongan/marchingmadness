@@ -287,16 +287,14 @@ class App {
 
             console.log(`Loading pre-computed slice ${sliceIndex}...`);
             const sliceTexture = new Texture(textureUrl, this.scene);
-            sliceTexture.anisotropicFilteringLevel = 16;
+              sliceTexture.anisotropicFilteringLevel = 16;
+              sliceTexture.hasAlpha = true;
 
               const mat = new StandardMaterial(`notationMat_${sliceIndex}`, this.scene);
-              mat.diffuseColor = new Color3(0, 0, 0);     // Black notes
-              mat.emissiveColor = new Color3(0, 0, 0);
-              mat.specularColor = new Color3(0, 0, 0);
+              mat.diffuseTexture = sliceTexture;
+              mat.useAlphaFromDiffuseTexture = true;
+              mat.emissiveColor = new Color3(1, 1, 1);
               mat.disableLighting = true;
-              
-              mat.opacityTexture = sliceTexture;          // Uses inverted mask
-              mat.opacityTexture.getAlphaFromRGB = true; 
               mat.backFaceCulling = false;
               const slicePlane = MeshBuilder.CreatePlane(`notationPlane_${sliceIndex}`, { width: sliceMetersW, height: 3 }, this.scene);
               slicePlane.parent = parent;
@@ -360,15 +358,13 @@ class App {
                     // Create texture with explicit size
                     const sliceTexture = new DynamicTexture(`notationTex_${i}`, { width: slicePixW, height: totalPixelsH }, this.scene, true);
                     sliceTexture.anisotropicFilteringLevel = 16;
+                    sliceTexture.hasAlpha = true;
 
                     const mat = new StandardMaterial(`notationMat_${i}`, this.scene);
-                    mat.diffuseColor = new Color3(0, 0, 0);     // Black notes
-                    mat.emissiveColor = new Color3(0, 0, 0);
-                    mat.specularColor = new Color3(0, 0, 0);
+                    mat.diffuseTexture = sliceTexture;
+                    mat.useAlphaFromDiffuseTexture = true;
+                    mat.emissiveColor = new Color3(1, 1, 1);
                     mat.disableLighting = true;
-                    
-                    mat.opacityTexture = sliceTexture;          // Uses inverted mask below
-                    mat.opacityTexture.getAlphaFromRGB = true; 
                     mat.backFaceCulling = false;
 
                       const slicePlane = MeshBuilder.CreatePlane(`notationPlane_${i}`, { width: sliceMetersW, height: boardHeightMeters }, this.scene);
@@ -386,12 +382,15 @@ class App {
                     ctx.fillRect(0, 0, slicePixW, totalPixelsH);
                     ctx.drawImage(osmdCanvas, srcX, 0, slicePixW, totalPixelsH, 0, 0, slicePixW, totalPixelsH);
 
-                    // Extract and Invert: Black notes -> White (alpha=1), White bg -> Black (alpha=0)
+                    // Make notes black with proper alpha, background transparent
                     const imgData = ctx.getImageData(0, 0, slicePixW, totalPixelsH);
                     for (let p = 0; p < imgData.data.length; p += 4) {
-                        imgData.data[p]   = 255 - imgData.data[p];
-                        imgData.data[p+1] = 255 - imgData.data[p+1];
-                        imgData.data[p+2] = 255 - imgData.data[p+2];
+                        const brightness = (imgData.data[p] + imgData.data[p+1] + imgData.data[p+2]) / 3;
+                        
+                        imgData.data[p]   = 0;
+                        imgData.data[p+1] = 0;
+                        imgData.data[p+2] = 0;
+                        imgData.data[p+3] = 255 - brightness;
                     }
                     ctx.putImageData(imgData, 0, 0);
 
@@ -533,14 +532,17 @@ class App {
             ctx.fillRect(0, 0, slicePixW, totalPixelsH);
             ctx.drawImage(osmdCanvas, srcX, 0, slicePixW, totalPixelsH, 0, 0, slicePixW, totalPixelsH);
 
-            // Extract and Invert: Black notes -> White (alpha=1), White bg -> Black (alpha=0)
-            const imgData = ctx.getImageData(0, 0, slicePixW, totalPixelsH);
-            for (let p = 0; p < imgData.data.length; p += 4) {
-                imgData.data[p]   = 255 - imgData.data[p];
-                imgData.data[p+1] = 255 - imgData.data[p+1];
-                imgData.data[p+2] = 255 - imgData.data[p+2];
-            }
-            ctx.putImageData(imgData, 0, 0);
+            // Make notes black with proper alpha, background transparent
+                    const imgData = ctx.getImageData(0, 0, slicePixW, totalPixelsH);
+                    for (let p = 0; p < imgData.data.length; p += 4) {
+                        const brightness = (imgData.data[p] + imgData.data[p+1] + imgData.data[p+2]) / 3;
+                        
+                        imgData.data[p]   = 0;
+                        imgData.data[p+1] = 0;
+                        imgData.data[p+2] = 0;
+                        imgData.data[p+3] = 255 - brightness;
+                    }
+                    ctx.putImageData(imgData, 0, 0);
 
             sliceCanvas.toBlob((blob) => {
                 if (blob) {
