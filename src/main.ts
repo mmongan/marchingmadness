@@ -52,13 +52,13 @@ class App {
         );
 
         // 3.5 Create VR Drum & Synth
-        // this.createDrum();
+        this.createDrum();
 
         // 3.6 Setup Physical MIDI Keyboard Support
-        // this.setupMidi();
+        this.setupMidi();
 
         // 3.7 Add Music Notation
-        // this.createNotationBoard();
+        this.createNotationBoard();
 
         try {
             const xr = await this.scene.createDefaultXRExperienceAsync({
@@ -101,7 +101,6 @@ class App {
     private drumSynth: Tone.MembraneSynth | null = null;
     private drumLastHit = 0;
 
-    // @ts-ignore
     private createDrum() {
         // Setup Tone.js Synth
         this.drumSynth = new Tone.MembraneSynth().toDestination();
@@ -169,7 +168,6 @@ class App {
 
     private midiSynth: Tone.PolySynth | null = null;
 
-    // @ts-ignore
     private async setupMidi() {
         // Create a basic polyphonic synth for MIDI input
         this.midiSynth = new Tone.PolySynth(Tone.Synth).toDestination();
@@ -242,7 +240,6 @@ class App {
         }
     }
 
-    // @ts-ignore
     private async createNotationBoard() {
         console.log("Setting up standard OSMD music board for XR...");
         
