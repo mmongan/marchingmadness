@@ -272,9 +272,6 @@ class App {
             });
 
             // Adjust sizing lines for great VR readability
-            osmd.EngravingRules.StaffLineWidth = 2.0;
-            osmd.EngravingRules.StemWidth = 3.0;
-            osmd.EngravingRules.BeamWidth = 2.5;
             osmd.zoom = 1.5;
 
             // Generate or load some standard music xml
