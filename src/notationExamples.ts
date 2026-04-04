@@ -110,20 +110,33 @@ class NotationExamplesApp {
 
             plane.position = position;
 
-            // Apply texture
+            // Apply texture with manual opacity inversion to guarantee transparency for black notes
             const texture = new DynamicTexture(`tex_${name}`, { width: canvasW, height: canvasH }, this.scene, false);
-            texture.hasAlpha = true;
             
             const ctx = texture.getContext() as CanvasRenderingContext2D;
-            ctx.clearRect(0, 0, canvasW, canvasH);
+            ctx.fillStyle = "white";
+            ctx.fillRect(0, 0, canvasW, canvasH);
             ctx.drawImage(canvas, 0, 0);
+            
+            // Invert colors: Black notes become White (Opaque), White bg becomes Black (Transparent)
+            const imgData = ctx.getImageData(0, 0, canvasW, canvasH);
+            for (let i = 0; i < imgData.data.length; i += 4) {
+                imgData.data[i] = 255 - imgData.data[i];
+                imgData.data[i+1] = 255 - imgData.data[i+1];
+                imgData.data[i+2] = 255 - imgData.data[i+2];
+            }
+            ctx.putImageData(imgData, 0, 0);
             texture.update();
             
             const mat = new StandardMaterial(`mat_${name}`, this.scene);
-            mat.diffuseTexture = texture;
-            mat.useAlphaFromDiffuseTexture = true;
+            mat.diffuseColor = new Color3(0, 0, 0);   // Black notes
+            mat.emissiveColor = new Color3(0.0, 0.0, 0.0);
             mat.specularColor = new Color3(0, 0, 0);
-            mat.emissiveColor = new Color3(0.9, 0.9, 0.9); // Make it bright
+
+            // Use RGB channels of the texture for the alpha mask
+            mat.opacityTexture = texture;
+            mat.opacityTexture.getAlphaFromRGB = true;
+            mat.backFaceCulling = false;
 
             plane.material = mat;
             console.log(`OSMD image created directly on plane: ${name} (${canvasW}x${canvasH})`);

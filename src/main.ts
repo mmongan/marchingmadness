@@ -288,16 +288,16 @@ class App {
             console.log(`Loading pre-computed slice ${sliceIndex}...`);
             const sliceTexture = new Texture(textureUrl, this.scene);
             sliceTexture.anisotropicFilteringLevel = 16;
-            sliceTexture.hasAlpha = true;
 
-            const mat = new StandardMaterial(`notationMat_${sliceIndex}`, this.scene);
-            mat.diffuseTexture = sliceTexture;
-            mat.useAlphaFromDiffuseTexture = true;
-            mat.specularColor = new Color3(0, 0, 0);
-            mat.emissiveColor = new Color3(1, 1, 1);
-            mat.disableLighting = true;
-
-// Use a 2D plane to display the OSMD image directly
+              const mat = new StandardMaterial(`notationMat_${sliceIndex}`, this.scene);
+              mat.diffuseColor = new Color3(0, 0, 0);     // Black notes
+              mat.emissiveColor = new Color3(0, 0, 0);
+              mat.specularColor = new Color3(0, 0, 0);
+              mat.disableLighting = true;
+              
+              mat.opacityTexture = sliceTexture;          // Uses inverted mask
+              mat.opacityTexture.getAlphaFromRGB = true; 
+              mat.backFaceCulling = false;
               const slicePlane = MeshBuilder.CreatePlane(`notationPlane_${sliceIndex}`, { width: sliceMetersW, height: 3 }, this.scene);
               slicePlane.parent = parent;
               slicePlane.position.x = currentXMeters + (sliceMetersW / 2);
@@ -360,14 +360,16 @@ class App {
                     // Create texture with explicit size
                     const sliceTexture = new DynamicTexture(`notationTex_${i}`, { width: slicePixW, height: totalPixelsH }, this.scene, true);
                     sliceTexture.anisotropicFilteringLevel = 16;
-                    sliceTexture.hasAlpha = true;
 
                     const mat = new StandardMaterial(`notationMat_${i}`, this.scene);
-                    mat.diffuseTexture = sliceTexture;
-                    mat.useAlphaFromDiffuseTexture = true;
+                    mat.diffuseColor = new Color3(0, 0, 0);     // Black notes
+                    mat.emissiveColor = new Color3(0, 0, 0);
                     mat.specularColor = new Color3(0, 0, 0);
-                    mat.emissiveColor = new Color3(1, 1, 1);
                     mat.disableLighting = true;
+                    
+                    mat.opacityTexture = sliceTexture;          // Uses inverted mask below
+                    mat.opacityTexture.getAlphaFromRGB = true; 
+                    mat.backFaceCulling = false;
 
                       const slicePlane = MeshBuilder.CreatePlane(`notationPlane_${i}`, { width: sliceMetersW, height: boardHeightMeters }, this.scene);
                       slicePlane.parent = parent;
@@ -378,11 +380,21 @@ class App {
                     currentXMeters += sliceMetersW;
 
                     const ctx = sliceTexture.getContext() as CanvasRenderingContext2D;
-                    
-                    // Clear with transparency
-                    ctx.clearRect(0, 0, slicePixW, totalPixelsH);
+
+                    // Opaque white background
+                    ctx.fillStyle = "white";
+                    ctx.fillRect(0, 0, slicePixW, totalPixelsH);
                     ctx.drawImage(osmdCanvas, srcX, 0, slicePixW, totalPixelsH, 0, 0, slicePixW, totalPixelsH);
-                    
+
+                    // Extract and Invert: Black notes -> White (alpha=1), White bg -> Black (alpha=0)
+                    const imgData = ctx.getImageData(0, 0, slicePixW, totalPixelsH);
+                    for (let p = 0; p < imgData.data.length; p += 4) {
+                        imgData.data[p]   = 255 - imgData.data[p];
+                        imgData.data[p+1] = 255 - imgData.data[p+1];
+                        imgData.data[p+2] = 255 - imgData.data[p+2];
+                    }
+                    ctx.putImageData(imgData, 0, 0);
+
                     // Update the texture
                     sliceTexture.update();
                     console.log(`  Slice ${i}: drawn ${slicePixW}x${totalPixelsH}px`);
@@ -517,8 +529,18 @@ class App {
             sliceCanvas.height = totalPixelsH;
 
             const ctx = sliceCanvas.getContext("2d") as CanvasRenderingContext2D;
-            ctx.clearRect(0, 0, slicePixW, totalPixelsH);
+            ctx.fillStyle = "white"; // Draw opaque white background
+            ctx.fillRect(0, 0, slicePixW, totalPixelsH);
             ctx.drawImage(osmdCanvas, srcX, 0, slicePixW, totalPixelsH, 0, 0, slicePixW, totalPixelsH);
+
+            // Extract and Invert: Black notes -> White (alpha=1), White bg -> Black (alpha=0)
+            const imgData = ctx.getImageData(0, 0, slicePixW, totalPixelsH);
+            for (let p = 0; p < imgData.data.length; p += 4) {
+                imgData.data[p]   = 255 - imgData.data[p];
+                imgData.data[p+1] = 255 - imgData.data[p+1];
+                imgData.data[p+2] = 255 - imgData.data[p+2];
+            }
+            ctx.putImageData(imgData, 0, 0);
 
             sliceCanvas.toBlob((blob) => {
                 if (blob) {
