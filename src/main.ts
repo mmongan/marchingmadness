@@ -290,7 +290,7 @@ class App {
                 const actualRatio = osmdCanvas.height / osmdCanvas.width;
                 const actualHeightMeters = pageWidthMeters * actualRatio;
 
-                const texture = new DynamicTexture("sheetMusicTex", {width: osmdCanvas.width, height: osmdCanvas.height}, this.scene, false);
+                const texture = new DynamicTexture("sheetMusicTex", {width: osmdCanvas.width, height: osmdCanvas.height}, this.scene, true);
                 const ctx = texture.getContext() as CanvasRenderingContext2D;
 
                 // Fill with standard solid white background
@@ -308,6 +308,7 @@ class App {
                 mat.emissiveTexture = texture; // Make it pop in VR implicitly via texture
                 mat.emissiveColor = new Color3(1, 1, 1);
                 mat.disableLighting = true; // Prevents shadows from making paper look gray
+                mat.backFaceCulling = false; // Allow reading from both sides
 
                 // A single standard reading plane, sized optimally
                 const sheetPlane = MeshBuilder.CreatePlane("sheetMusic", { width: pageWidthMeters, height: actualHeightMeters }, this.scene);
