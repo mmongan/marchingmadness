@@ -272,6 +272,10 @@ class App {
             });
 
             // Adjust sizing lines for great VR readability
+            osmd.EngravingRules.StaffLineWidth = 0.25; // Prevent VR mipmap vanishing
+            osmd.EngravingRules.StemWidth = 0.3;
+            osmd.EngravingRules.LedgerLineWidth = 0.3;
+            osmd.EngravingRules.BeamWidth = 0.6;
             osmd.zoom = 1.5;
 
             // Generate or load some standard music xml
