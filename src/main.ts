@@ -250,8 +250,8 @@ class App {
         standParent.rotation.x = -Math.PI / 8;
 
         // 2) Standard Sheet Music Dimensions (A4-ish proportions)
-        const pageWidthMeters = 1.0;
-        
+        const pageWidthMeters = 2.0; // Increased from 1.0 to make the page larger in VR
+
         // A high-res wrap width for the sheet music
         const texW = 1536;
 
