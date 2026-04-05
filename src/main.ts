@@ -1,4 +1,4 @@
-import { Engine, Scene, Vector3, HemisphericLight, MeshBuilder, StandardMaterial, Color3, FreeCamera, AmmoJSPlugin, PhysicsImpostor, WebXRFeatureName, ActionManager, ExecuteCodeAction, DynamicTexture, TransformNode } from "@babylonjs/core";
+import { Engine, Scene, Vector3, Vector4, HemisphericLight, MeshBuilder, StandardMaterial, Color3, FreeCamera, AmmoJSPlugin, PhysicsImpostor, WebXRFeatureName, ActionManager, ExecuteCodeAction, DynamicTexture, TransformNode } from "@babylonjs/core";
 import "@babylonjs/core/Physics/physicsEngineComponent";
 import * as Tone from "tone";
 import { OpenSheetMusicDisplay } from "opensheetmusicdisplay";
@@ -56,6 +56,8 @@ class App {
 
         // 3.5 Create VR Drum & Synth
         this.createDrum();
+        
+        this.createRhythmCubes();
 
         // 3.6 Setup Physical MIDI Keyboard Support
         this.setupMidi();
@@ -241,6 +243,103 @@ class App {
         const mat = this.scene.getMeshByName("ground")?.material as StandardMaterial;
         if (mat) {
              mat.emissiveColor = new Color3(0, 0, 0); // Turn off flash
+        }
+    }
+
+    private async createRhythmCubes() {
+        console.log("Generating rhythm cubes...");
+
+        const osmdContainer = document.createElement("div");
+        osmdContainer.style.position = "absolute";
+        osmdContainer.style.top = "-9999px";
+        osmdContainer.style.width = "400px";
+        document.body.appendChild(osmdContainer);
+
+        const osmd = new OpenSheetMusicDisplay(osmdContainer, {
+            backend: "canvas",
+            drawTitle: false,
+            drawPartNames: false,
+            drawMeasureNumbers: false,
+            autoResize: false
+        });
+        osmd.EngravingRules.RenderClefsAtBeginningOfStaffline = false;
+        osmd.EngravingRules.RenderTimeSignatures = false;
+        osmd.EngravingRules.RenderKeySignatures = false;
+        osmd.EngravingRules.StaffLineWidth = 2.0;
+        osmd.EngravingRules.StemWidth = 2.5;
+        osmd.EngravingRules.LedgerLineWidth = 2.0;
+        osmd.EngravingRules.BeamWidth = 2.5;
+        osmd.zoom = 3.0;
+
+        const rhythms = [
+            `<note><pitch><step>B</step><octave>4</octave></pitch><duration>4</duration><type>quarter</type><stem>down</stem></note>`,
+            `<note><pitch><step>B</step><octave>4</octave></pitch><duration>4</duration><type>quarter</type><stem>down</stem></note>`,
+            `<note><pitch><step>B</step><octave>4</octave></pitch><duration>4</duration><type>quarter</type><stem>down</stem></note>`,
+            `<note><pitch><step>B</step><octave>4</octave></pitch><duration>4</duration><type>quarter</type><stem>down</stem></note>`,
+            `<note><pitch><step>B</step><octave>4</octave></pitch><duration>4</duration><type>quarter</type><stem>down</stem></note>`,
+            `<note><pitch><step>B</step><octave>4</octave></pitch><duration>4</duration><type>quarter</type><stem>down</stem></note>`
+        ];
+
+        const tileSize = 512;
+        const atlasW = 4096; // Use Power-of-Two width (512 * 8 = 4096)
+        const atlasH = 512; // Power-of-Two height
+
+        const texture = new DynamicTexture("rhythmAtlas", {width: atlasW, height: atlasH}, this.scene, true);
+        const ctx = texture.getContext() as CanvasRenderingContext2D;
+        
+        ctx.fillStyle = "white";
+        ctx.fillRect(0, 0, atlasW, atlasH);
+
+        for (let i = 0; i < 6; i++) {
+            const xml = `<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 3.1 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd"><score-partwise version="3.1"><part-list><score-part id="P1"><part-name></part-name></score-part></part-list><part id="P1"><measure number="1"><attributes><divisions>4</divisions><key><fifths>0</fifths></key><time><beats>1</beats><beat-type>4</beat-type></time><clef><sign>percussion</sign><line>2</line></clef></attributes>${rhythms[i]}</measure></part></score-partwise>`;
+            await osmd.load(xml);
+            osmd.render();
+
+            const canvas = osmdContainer.querySelector("canvas");
+            if (canvas) {
+                const margin = 20;
+                const scaleW = (tileSize - margin) / canvas.width;
+                const scaleH = (tileSize - margin) / canvas.height;
+                const scale = Math.min(scaleW, scaleH, 1.0); // Don't scale up if smaller
+
+                const drawW = canvas.width * scale;
+                const drawH = canvas.height * scale;
+                
+                const dx = (i * tileSize) + (tileSize - drawW) / 2;
+                const dy = (tileSize - drawH) / 2;
+                
+                ctx.drawImage(canvas, 0, 0, canvas.width, canvas.height, dx, dy, drawW, drawH);
+            }
+        }
+
+        texture.update();
+        texture.anisotropicFilteringLevel = 16;
+        
+        if (document.body.contains(osmdContainer)) {
+            document.body.removeChild(osmdContainer);
+        }
+
+        const mat = new StandardMaterial("rhythmCubeMat", this.scene);
+        mat.diffuseTexture = texture;
+        mat.emissiveTexture = texture;
+        mat.emissiveColor = new Color3(1, 1, 1);
+        mat.disableLighting = true;
+
+        const faceUV = new Array(6);
+        for (let i = 0; i < 6; i++) {
+            // Map 512x512 blocks out of the 4096x512 atlas
+            const uMin = (i * 512) / 4096;
+            const uMax = ((i + 1) * 512) / 4096;
+            faceUV[i] = new Vector4(uMin, 0, uMax, 1);
+        }
+
+        for (let j = 0; j < 3; j++) {
+            const box = MeshBuilder.CreateBox(`rhythmCube_${j}`, { size: 0.3, faceUV: faceUV }, this.scene);
+            box.material = mat;
+            box.position = new Vector3(-0.5 + (j * 0.5), 1.5 + (j * 0.4), 0.8);
+            try {
+                box.physicsImpostor = new PhysicsImpostor(box, PhysicsImpostor.BoxImpostor, { mass: 0.5, restitution: 0.4, friction: 0.5 }, this.scene);
+            } catch (err) {}
         }
     }
 
