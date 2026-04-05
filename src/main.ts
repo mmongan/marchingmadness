@@ -351,7 +351,8 @@ class App {
             console.error("OSMD Failed to load score: ", e);
         } finally {
             if (document.body.contains(osmdContainer)) {
-                // document.body.removeChild(osmdContainer);
+                // Must remove from DOM to prevent it bleeding over the 3D canvas!
+                document.body.removeChild(osmdContainer);
             }
         }
     }
