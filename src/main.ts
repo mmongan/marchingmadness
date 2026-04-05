@@ -252,7 +252,7 @@ class App {
         const osmdContainer = document.createElement("div");
         osmdContainer.style.position = "absolute";
         osmdContainer.style.top = "-9999px";
-        osmdContainer.style.width = "400px";
+        osmdContainer.style.width = "120px"; // Make very narrow so the single note fills the staff horizontally
         document.body.appendChild(osmdContainer);
 
         const osmd = new OpenSheetMusicDisplay(osmdContainer, {
@@ -265,6 +265,10 @@ class App {
         osmd.EngravingRules.RenderClefsAtBeginningOfStaffline = false;
         osmd.EngravingRules.RenderTimeSignatures = false;
         osmd.EngravingRules.RenderKeySignatures = false;
+        osmd.EngravingRules.PageTopMargin = 0;
+        osmd.EngravingRules.PageBottomMargin = 0;
+        osmd.EngravingRules.PageLeftMargin = 0;
+        osmd.EngravingRules.PageRightMargin = 0;
         osmd.EngravingRules.StaffLineWidth = 2.0;
         osmd.EngravingRules.StemWidth = 2.5;
         osmd.EngravingRules.LedgerLineWidth = 2.0;
@@ -292,7 +296,7 @@ class App {
         ctx.fillRect(0, 0, atlasW, atlasH);
 
         for (let i = 0; i < 6; i++) {
-            const xml = `<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 3.1 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd"><score-partwise version="3.1"><part-list><score-part id="P1"><part-name></part-name></score-part></part-list><part id="P1"><measure number="1"><attributes><divisions>4</divisions><key><fifths>0</fifths></key><time><beats>1</beats><beat-type>4</beat-type></time><clef><sign>percussion</sign><line>2</line></clef></attributes>${rhythms[i]}</measure></part></score-partwise>`;
+            const xml = `<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 3.1 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd"><score-partwise version="3.1"><part-list><score-part id="P1"><part-name></part-name></score-part></part-list><part id="P1"><measure number="1"><attributes><divisions>4</divisions><key><fifths>0</fifths></key><time><beats>1</beats><beat-type>4</beat-type></time><clef><sign>percussion</sign><line>2</line></clef><staff-details><staff-lines>1</staff-lines></staff-details></attributes>${rhythms[i]}</measure></part></score-partwise>`;
             await osmd.load(xml);
             osmd.render();
 
@@ -301,7 +305,7 @@ class App {
                 const margin = 20;
                 const scaleW = (tileSize - margin) / canvas.width;
                 const scaleH = (tileSize - margin) / canvas.height;
-                const scale = Math.min(scaleW, scaleH, 1.0); // Don't scale up if smaller
+                const scale = Math.min(scaleW, scaleH);
 
                 const drawW = canvas.width * scale;
                 const drawH = canvas.height * scale;
