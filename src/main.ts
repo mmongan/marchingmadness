@@ -292,34 +292,55 @@ class App {
                 console.log(`Rendered OSMD to ${osmdCanvas.width}x${osmdCanvas.height}`);
                 
                 // We use the actual height rendered by OSMD to scale the 3D mesh perfectly
-                const actualRatio = osmdCanvas.height / osmdCanvas.width;
+                const totalW = osmdCanvas.width;
+                const totalH = osmdCanvas.height;
+                const actualRatio = totalH / totalW;
                 const actualHeightMeters = pageWidthMeters * actualRatio;
 
-                const texture = new DynamicTexture("sheetMusicTex", {width: osmdCanvas.width, height: osmdCanvas.height}, this.scene, true);
-                const ctx = texture.getContext() as CanvasRenderingContext2D;
+                // WebGL max texture sizes typically limit at 4096 or 8192
+                const maxTexSize = 4096;
+                const numSlices = Math.ceil(totalH / maxTexSize);
+                
+                let currentYOffset = actualHeightMeters / 2; // Start from top half
 
-                // Fill with standard solid white background
-                ctx.fillStyle = "white";
-                ctx.fillRect(0, 0, osmdCanvas.width, osmdCanvas.height);
-                // Draw notation
-                ctx.drawImage(osmdCanvas, 0, 0);
-                texture.update();
-                
-                // Nice crisp text mapping without alpha blending issues
-                texture.anisotropicFilteringLevel = 16;
-                
-                const mat = new StandardMaterial("sheetMusicMat", this.scene);
-                mat.diffuseTexture = texture;
-                mat.emissiveTexture = texture; // Make it pop in VR implicitly via texture
-                mat.emissiveColor = new Color3(1, 1, 1);
-                mat.disableLighting = true; // Prevents shadows from making paper look gray
-                mat.backFaceCulling = false; // Allow reading from both sides
+                for (let i = 0; i < numSlices; i++) {
+                    const sliceH = Math.min(maxTexSize, totalH - (i * maxTexSize));
+                    const sliceRatio = sliceH / totalW;
+                    const sliceHeightMeters = pageWidthMeters * sliceRatio;
 
-                // A single standard reading plane, sized optimally
-                const sheetPlane = MeshBuilder.CreatePlane("sheetMusic", { width: pageWidthMeters, height: actualHeightMeters }, this.scene);
-                sheetPlane.parent = standParent;
-                sheetPlane.material = mat;
-                
+                    // Create dynamic texture matching the chunk
+                    const texture = new DynamicTexture(`sheetMusicTex_${i}`, {width: totalW, height: sliceH}, this.scene, true);
+                    const ctx = texture.getContext() as CanvasRenderingContext2D;
+
+                    // Fill with standard solid white background
+                    ctx.fillStyle = "white";
+                    ctx.fillRect(0, 0, totalW, sliceH);
+                    // Draw sliced notation piece
+                    ctx.drawImage(osmdCanvas, 0, i * maxTexSize, totalW, sliceH, 0, 0, totalW, sliceH);
+                    texture.update();
+
+                    // Nice crisp text mapping without alpha blending issues
+                    texture.anisotropicFilteringLevel = 16;
+
+                    const mat = new StandardMaterial(`sheetMusicMat_${i}`, this.scene);
+                    mat.diffuseTexture = texture;
+                    mat.emissiveTexture = texture; // Make it pop in VR implicitly via texture
+                    mat.emissiveColor = new Color3(1, 1, 1);
+                    mat.disableLighting = true; // Prevents shadows from making paper look gray
+                    mat.backFaceCulling = false; // Allow reading from both sides
+
+                    // A segment reading plane, sized optimally
+                    const sheetPlane = MeshBuilder.CreatePlane(`sheetMusicPlane_${i}`, { width: pageWidthMeters, height: sliceHeightMeters }, this.scene);
+                    sheetPlane.parent = standParent;
+                    sheetPlane.material = mat;
+                    
+                    // Position slice seamlessly below the previous one
+                    sheetPlane.position.y = currentYOffset - (sliceHeightMeters / 2);
+                    sheetPlane.position.z = 0;
+                    
+                    currentYOffset -= sliceHeightMeters;
+                }
+
                 console.log("✓ Fully initialized standard sheet music view.");
             }
         } catch (e) {
