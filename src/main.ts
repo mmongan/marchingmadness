@@ -279,7 +279,11 @@ class App {
             osmd.EngravingRules.StemWidth = 0.3;
             osmd.EngravingRules.LedgerLineWidth = 0.3;
             osmd.EngravingRules.BeamWidth = 0.6;
-            osmd.zoom = 5.0;
+            
+            // At zoom=5.0, OSMD's layout engine collapses vertical spacing to fit 1536px width.
+            // We revert to 2.0 to prevent staff overlap, but add StaffDistance to pad lines.
+            osmd.EngravingRules.StaffDistance = 12.0;
+            osmd.zoom = 2.0;
 
             // Load standard music xml from assets
             const xmlResponse = await fetch(scoreUrl as string);
