@@ -281,10 +281,11 @@ class App {
         ];
 
         const tileSize = 512;
-        const atlasW = 4096; // Use Power-of-Two width (512 * 8 = 4096)
-        const atlasH = 512; // Power-of-Two height
+        const atlasW = tileSize * 6; // 3072
+        const atlasH = tileSize; // 512
 
-        const texture = new DynamicTexture("rhythmAtlas", {width: atlasW, height: atlasH}, this.scene, true);
+        // Set generateMipMaps to false to prevent WebGL dropping NPOT textures to black
+        const texture = new DynamicTexture("rhythmAtlas", {width: atlasW, height: atlasH}, this.scene, false);
         const ctx = texture.getContext() as CanvasRenderingContext2D;
         
         ctx.fillStyle = "white";
@@ -327,10 +328,7 @@ class App {
 
         const faceUV = new Array(6);
         for (let i = 0; i < 6; i++) {
-            // Map 512x512 blocks out of the 4096x512 atlas
-            const uMin = (i * 512) / 4096;
-            const uMax = ((i + 1) * 512) / 4096;
-            faceUV[i] = new Vector4(uMin, 0, uMax, 1);
+            faceUV[i] = new Vector4(i / 6, 0, (i + 1) / 6, 1);
         }
 
         for (let j = 0; j < 3; j++) {
