@@ -252,7 +252,7 @@ class App {
         const osmdContainer = document.createElement("div");
         osmdContainer.style.position = "absolute";
         osmdContainer.style.top = "-9999px";
-        osmdContainer.style.width = "120px"; // Make very narrow so the single note fills the staff horizontally
+        osmdContainer.style.width = "150px"; // Wide enough to render without compressing
         document.body.appendChild(osmdContainer);
 
         const osmd = new OpenSheetMusicDisplay(osmdContainer, {
@@ -296,24 +296,49 @@ class App {
         ctx.fillRect(0, 0, atlasW, atlasH);
 
         for (let i = 0; i < 6; i++) {
-            const xml = `<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 3.1 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd"><score-partwise version="3.1"><part-list><score-part id="P1"><part-name></part-name></score-part></part-list><part id="P1"><measure number="1"><attributes><divisions>4</divisions><key><fifths>0</fifths></key><time><beats>1</beats><beat-type>4</beat-type></time><clef><sign>percussion</sign><line>2</line></clef><staff-details><staff-lines>1</staff-lines></staff-details></attributes>${rhythms[i]}</measure></part></score-partwise>`;
+            const xml = `<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 3.1 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd"><score-partwise version="3.1"><part-list><score-part id="P1"><part-name></part-name></score-part></part-list><part id="P1"><measure number="1"><attributes><divisions>4</divisions><key><fifths>0</fifths></key><time><beats>1</beats><beat-type>4</beat-type></time><clef><sign>percussion</sign><line>2</line></clef></attributes>${rhythms[i]}</measure></part></score-partwise>`;
             await osmd.load(xml);
             osmd.render();
 
             const canvas = osmdContainer.querySelector("canvas");
             if (canvas) {
-                const margin = 20;
-                const scaleW = (tileSize - margin) / canvas.width;
-                const scaleH = (tileSize - margin) / canvas.height;
-                const scale = Math.min(scaleW, scaleH);
+                const ctx2 = canvas.getContext('2d', { willReadFrequently: true });
+                if (ctx2) {
+                    const imgData = ctx2.getImageData(0, 0, canvas.width, canvas.height);
+                    let minX = canvas.width, minY = canvas.height, maxX = 0, maxY = 0;
+                    for (let py = 0; py < canvas.height; py++) {
+                        for (let px = 0; px < canvas.width; px++) {
+                            const idx = (py * canvas.width + px) * 4;
+                            if (imgData.data[idx+3] > 10) { // Visible pixel
+                                if (px < minX) minX = px;
+                                if (px > maxX) maxX = px;
+                                if (py < minY) minY = py;
+                                if (py > maxY) maxY = py;
+                            }
+                        }
+                    }
+                    
+                    if (minX <= maxX && minY <= maxY) {
+                        const cropW = maxX - minX;
+                        const cropH = maxY - minY;
+                        
+                        const margin = 50; // Leave visual padding around the note
+                        const targetW = tileSize - (margin * 2);
+                        const targetH = tileSize - (margin * 2);
+                        
+                        const scaleW = targetW / cropW;
+                        const scaleH = targetH / cropH;
+                        const scale = Math.min(scaleW, scaleH);
 
-                const drawW = canvas.width * scale;
-                const drawH = canvas.height * scale;
-                
-                const dx = (i * tileSize) + (tileSize - drawW) / 2;
-                const dy = (tileSize - drawH) / 2;
-                
-                ctx.drawImage(canvas, 0, 0, canvas.width, canvas.height, dx, dy, drawW, drawH);
+                        const drawW = cropW * scale;
+                        const drawH = cropH * scale;
+                        
+                        const dx = (i * tileSize) + (tileSize - drawW) / 2;
+                        const dy = (tileSize - drawH) / 2;
+                        
+                        ctx.drawImage(canvas, minX, minY, cropW, cropH, dx, dy, drawW, drawH);
+                    }
+                }
             }
         }
 
