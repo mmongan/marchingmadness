@@ -285,11 +285,10 @@ class App {
         ];
 
         const tileSize = 512;
-        const atlasW = tileSize * 6; // 3072
-        const atlasH = tileSize; // 512
+        const atlasW = 4096; // Strictly Power-of-Two width (512 * 8 = 4096)
+        const atlasH = 512; // Strictly Power-of-Two height
 
-        // Set generateMipMaps to false to prevent WebGL dropping NPOT textures to black
-        const texture = new DynamicTexture("rhythmAtlas", {width: atlasW, height: atlasH}, this.scene, false);
+        const texture = new DynamicTexture("rhythmAtlas", {width: atlasW, height: atlasH}, this.scene, true);
         const ctx = texture.getContext() as CanvasRenderingContext2D;
         
         ctx.fillStyle = "white";
@@ -302,43 +301,21 @@ class App {
 
             const canvas = osmdContainer.querySelector("canvas");
             if (canvas) {
-                const ctx2 = canvas.getContext('2d', { willReadFrequently: true });
-                if (ctx2) {
-                    const imgData = ctx2.getImageData(0, 0, canvas.width, canvas.height);
-                    let minX = canvas.width, minY = canvas.height, maxX = 0, maxY = 0;
-                    for (let py = 0; py < canvas.height; py++) {
-                        for (let px = 0; px < canvas.width; px++) {
-                            const idx = (py * canvas.width + px) * 4;
-                            if (imgData.data[idx+3] > 10) { // Visible pixel
-                                if (px < minX) minX = px;
-                                if (px > maxX) maxX = px;
-                                if (py < minY) minY = py;
-                                if (py > maxY) maxY = py;
-                            }
-                        }
-                    }
-                    
-                    if (minX <= maxX && minY <= maxY) {
-                        const cropW = maxX - minX;
-                        const cropH = maxY - minY;
-                        
-                        const margin = 50; // Leave visual padding around the note
-                        const targetW = tileSize - (margin * 2);
-                        const targetH = tileSize - (margin * 2);
-                        
-                        const scaleW = targetW / cropW;
-                        const scaleH = targetH / cropH;
-                        const scale = Math.min(scaleW, scaleH);
+                // Just use the OSMD canvas bounds directly without arbitrary pixel scraping
+                const padding = 20; 
+                const drawArea = Math.min(tileSize, tileSize) - (padding * 2);
+                
+                const scaleW = drawArea / canvas.width;
+                const scaleH = drawArea / canvas.height;
+                const scale = Math.min(scaleW, scaleH);
 
-                        const drawW = cropW * scale;
-                        const drawH = cropH * scale;
-                        
-                        const dx = (i * tileSize) + (tileSize - drawW) / 2;
-                        const dy = (tileSize - drawH) / 2;
-                        
-                        ctx.drawImage(canvas, minX, minY, cropW, cropH, dx, dy, drawW, drawH);
-                    }
-                }
+                const drawW = canvas.width * scale;
+                const drawH = canvas.height * scale;
+                
+                const dx = (i * tileSize) + (tileSize - drawW) / 2;
+                const dy = (tileSize - drawH) / 2;
+                
+                ctx.drawImage(canvas, 0, 0, canvas.width, canvas.height, dx, dy, drawW, drawH);
             }
         }
 
@@ -357,7 +334,8 @@ class App {
 
         const faceUV = new Array(6);
         for (let i = 0; i < 6; i++) {
-            faceUV[i] = new Vector4(i / 6, 0, (i + 1) / 6, 1);
+            // Map the exactly drawn 512x512 tile out of the 4096 layout
+            faceUV[i] = new Vector4((i * 512) / 4096, 0, ((i + 1) * 512) / 4096, 1);
         }
 
         for (let j = 0; j < 3; j++) {
