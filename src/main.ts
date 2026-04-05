@@ -110,6 +110,7 @@ class App {
 
         // Visual Drum Mesh
         const drum = MeshBuilder.CreateCylinder("drum", { diameter: 0.6, height: 0.3 }, this.scene);
+        drum.isVisible = false; // Hidden per user request
         drum.position = new Vector3(0, 1, 1); // 1m high, 1m in front of starting position
         
         const drumMat = new StandardMaterial("drumMat", this.scene);
