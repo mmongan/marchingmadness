@@ -45,7 +45,12 @@ const light = new HemisphericLight("light", new Vector3(0, 1, 0), scene);
 light.intensity = 0.8;
 
 // Enable WebXR/VR
-scene.createDefaultXRExperienceAsync();
+scene.createDefaultXRExperienceAsync().then((xr) => {
+    // Increase base viewing height to make the player taller
+    xr.baseExperience.onInitialXRPoseSetObservable.add((xrCamera) => {
+        xrCamera.position.y += 1.5; // Add 1.5 meters to baseline height
+    });
+});
 
 // Stadium Skybox
 function buildSkybox(scene: Scene) {
