@@ -1,619 +1,576 @@
-import { Engine, Scene, Vector3, Vector4, HemisphericLight, MeshBuilder, StandardMaterial, Color3, FreeCamera, AmmoJSPlugin, PhysicsImpostor, WebXRFeatureName, ActionManager, ExecuteCodeAction, DynamicTexture, TransformNode } from "@babylonjs/core";
-import "@babylonjs/core/Physics/physicsEngineComponent";
-import * as Tone from "tone";
+import { Engine, Scene, FreeCamera, Vector3, Vector4, HemisphericLight, MeshBuilder, StandardMaterial, DynamicTexture, Color3, Texture, ActionManager, ExecuteCodeAction } from "@babylonjs/core";
 import { OpenSheetMusicDisplay } from "opensheetmusicdisplay";
+import * as Tone from "tone";
 
-// @ts-ignore
-import scoreUrl from "../public/assets/score.xml?url";
-
-declare var Ammo: any;
-
-class App {
-    private engine: Engine;
-    private scene: Scene;
-
-    constructor() {
-        const canvas = document.getElementById("renderCanvas") as HTMLCanvasElement;
-        this.engine = new Engine(canvas, true);
-        this.scene = new Scene(this.engine);
+let synth: Tone.PolySynth | null = null;
+function getTrumpetSynth() {
+    if (!synth) {
+        synth = new Tone.PolySynth(Tone.Synth, {
+            oscillator: { type: "sawtooth" },
+            envelope: { attack: 0.1, decay: 0.1, sustain: 0.6, release: 0.2 },
+        }).toDestination();
         
-        this.init().then(() => {
-            this.engine.runRenderLoop(() => {
-                this.scene.render();
-            });
-            window.addEventListener("resize", () => {
-                this.engine.resize();
-            });
-        });
+        // Add a slight lowpass filter to mimic a brass instrument
+        const filter = new Tone.Filter(800, "lowpass").toDestination();
+        synth.connect(filter);
+    }
+    return synth;
+}
+
+let metronomeSynth: Tone.MembraneSynth | null = null;
+function getMetronomeSynth() {
+    if (!metronomeSynth) {
+        metronomeSynth = new Tone.MembraneSynth({
+            pitchDecay: 0.01,
+            octaves: 2,
+            envelope: { attack: 0.001, decay: 0.1, sustain: 0, release: 0.1 }
+        }).toDestination();
+        metronomeSynth.volume.value = -10;
+    }
+    return metronomeSynth;
+}
+
+const canvas = document.getElementById("renderCanvas") as HTMLCanvasElement;
+const engine = new Engine(canvas, true, { audioEngine: false });
+
+// Create the scene
+const scene = new Scene(engine);
+scene.clearColor = new Color3(0.9, 0.9, 0.9).toColor4();
+
+const camera = new FreeCamera("camera1", new Vector3(0, 0, 0), scene);
+camera.setTarget(new Vector3(0, 0, 1));
+camera.attachControl(canvas, true);
+
+const light = new HemisphericLight("light", new Vector3(0, 1, 0), scene);
+light.intensity = 0.8;
+
+// Enable WebXR/VR
+scene.createDefaultXRExperienceAsync();
+
+// Stadium Skybox
+function buildSkybox(scene: Scene) {
+    const stadium = MeshBuilder.CreateCylinder("stadium", { diameter: 300, height: 100, sideOrientation: 0, faceUV: [new Vector4(0,0,1,1), new Vector4(0,0,1,1), new Vector4(0,0,1,1)] }, scene);
+    stadium.position.y = 40; // Lift it up slightly
+
+    // Apply stadium wrap material
+    const stadiumMat = new StandardMaterial("stadiumMat", scene);
+    stadiumMat.backFaceCulling = false; // So we see it from inside
+    stadiumMat.disableLighting = true;
+
+    // Draw obvious seats and lights
+    const texExt = 2048;
+    const texHeight = 512;
+    const stadiumTex = new DynamicTexture("stadiumTex", { width: texExt, height: texHeight }, scene, true);
+    const ctx = stadiumTex.getContext() as CanvasRenderingContext2D;
+
+    // Background gradient for upper sky
+    const skyGrad = ctx.createLinearGradient(0, 0, 0, texHeight);
+    skyGrad.addColorStop(0, "#00081a"); // night sky
+    skyGrad.addColorStop(0.5, "#112244");
+    skyGrad.addColorStop(1, "#334466"); // stadium interior base
+    ctx.fillStyle = skyGrad;
+    ctx.fillRect(0, 0, texExt, texHeight);
+
+    // Draw tiers of stadium seats (red/blue pixel rows)
+    const seatStartY = texHeight * 0.4;
+    for (let row = 0; row < 15; row++) {
+        const y = seatStartY + (row * 15);
+        ctx.fillStyle = (row % 2 === 0) ? "#881111" : "#112266";
+        // Draw dashed patterned seats
+        ctx.save();
+        ctx.setLineDash([8, 4]);
+        ctx.lineWidth = 10;
+        ctx.strokeStyle = ctx.fillStyle;
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(texExt, y);
+        ctx.stroke();
+        ctx.restore();
     }
 
-    private async init() {
-        await Ammo();
-
-        const camera = new FreeCamera("camera", new Vector3(0, 1.6, 0), this.scene);
-        camera.setTarget(new Vector3(0, 1.6, 1)); // Look forward at the drum
-        camera.attachControl(document.getElementById("renderCanvas"), true);
-        camera.speed = 0.15; // Slow down desktop WASD/Arrow key movement significantly
-        camera.minZ = 0.1;   // Prevent clipping when getting very close to objects
+    // Draw bright stadium light banks around the top edge
+    for (let i = 0; i < 20; i++) {
+        const lx = (i * texExt / 20) + 20;
+        const ly = texHeight * 0.1; // High up on the wall
         
-        const light = new HemisphericLight("light", new Vector3(0, 1, 0), this.scene);
-        light.intensity = 0.8;
-
-        const ammoPlugin = new AmmoJSPlugin(true, Ammo);
-        this.scene.enablePhysics(new Vector3(0, -9.81, 0), ammoPlugin);
-
-        const ground = MeshBuilder.CreateGround("ground", { width: 50, height: 50 }, this.scene);
-        const groundMaterial = new StandardMaterial("groundMat", this.scene);
-        groundMaterial.diffuseColor = new Color3(0.3, 0.3, 0.3); // Simple gray floor
-        ground.material = groundMaterial;
-
-        ground.physicsImpostor = new PhysicsImpostor(
-            ground,
-            PhysicsImpostor.BoxImpostor,
-            { mass: 0, restitution: 0.9, friction: 0.5 },
-            this.scene
-        );
-
-        // 3.5 Create VR Drum & Synth
-        this.createDrum();
+        ctx.fillStyle = "#ffffff";
+        ctx.shadowColor = "#ffffff";
+        ctx.shadowBlur = 20;
         
-        this.createRhythmCubes();
-
-        // 3.6 Setup Physical MIDI Keyboard Support
-        this.setupMidi();
-
-        // 3.7 Add Music Notation
-        this.createNotationBoard();
-
-        try {
-            const xr = await this.scene.createDefaultXRExperienceAsync({
-                floorMeshes: [ground],
-                uiOptions: {
-                    sessionMode: "immersive-vr",
-                    referenceSpaceType: "local-floor"
-                }
-            });
-
-            try {
-                xr.baseExperience.featuresManager.enableFeature(WebXRFeatureName.HAND_TRACKING, "latest", {
-                    xrInput: xr.input,
-                });
-            } catch (err) {}
-
-            try {
-                xr.baseExperience.featuresManager.enableFeature(WebXRFeatureName.PHYSICS_CONTROLLERS, "latest", {
-                    xrInput: xr.input,
-                    physicsProperties: {
-                        restitution: 0.5,
-                        impostorSize: 0.1,
-                        impostorType: PhysicsImpostor.BoxImpostor
-                    },
-                    enableHeadsetImpostor: true
-                });
-            } catch (err) {}
-
-            // Ensure Tone starts upon entering VR
-            xr.baseExperience.sessionManager.onXRSessionInit.add(async () => {
-                await Tone.start();
-                console.log("Audio ready");
-            });
-
-        } catch (e) {
-            console.warn("XR not supported in your environment", e);
-        }
+        // Rectangular light housing
+        ctx.fillRect(lx, ly, 40, 20);
+        
+        // Pillars holding them
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = "#444444";
+        ctx.fillRect(lx + 15, ly + 20, 10, texHeight * 0.3); // pole down to the seats
     }
 
-    private drumSynth: Tone.MembraneSynth | null = null;
-    private drumLastHit = 0;
+    stadiumTex.update();
+    stadiumMat.emissiveTexture = stadiumTex;
+    stadiumMat.emissiveColor = new Color3(1, 1, 1);
+    stadium.material = stadiumMat;
+    
+    // Add a dark dome above everything for the night sky top
+    const skyDome = MeshBuilder.CreateSphere("skyDome", { diameter: 400 }, scene);
+    const domeMat = new StandardMaterial("domeMat", scene);
+    domeMat.backFaceCulling = false;
+    domeMat.disableLighting = true;
+    domeMat.emissiveColor = new Color3(0, 0.05, 0.1); // Extremely dark blue almost black
+    skyDome.material = domeMat;
+}
+buildSkybox(scene);
 
-    private createDrum() {
-        // Setup Tone.js Synth
-        this.drumSynth = new Tone.MembraneSynth().toDestination();
+// Create an American Football Field (Player sitting on 50 yard line looking across)
+function buildFootballField(scene: Scene) {
+    const lengthX = 109.7; // 120 yards long mathematically
+    const depthZ = 48.8; // 53.3 yards depth
+    
+    const ground = MeshBuilder.CreateGround("footballField", { width: lengthX, height: depthZ }, scene);
+    // Position field so camera (at X=0, Z=0) drops right into the middle of the field on the 50-yard line
+    ground.position = new Vector3(0, -0.01, 0); 
+    
+    const texWidth = 2048;
+    const texHeight = 1024;
+    const fieldTex = new DynamicTexture("fieldTex", { width: texWidth, height: texHeight }, scene, true);
+    const ctx = fieldTex.getContext() as CanvasRenderingContext2D;
+    
+    // Fill grass
+    ctx.fillStyle = "#2e7d32";
+    ctx.fillRect(0, 0, texWidth, texHeight);
+    
+    // Draw lines
+    ctx.strokeStyle = "white";
+    ctx.fillStyle = "white";
+    
+    const yardsX = 120;
+    const pixelsPerYardX = texWidth / yardsX;
+    
+    // Draw Endzone backgrounds First
+    ctx.fillStyle = "#1b5e20";
+    ctx.fillRect(0, 0, 10 * pixelsPerYardX, texHeight); // Left endzone
+    ctx.fillRect(110 * pixelsPerYardX, 0, 10 * pixelsPerYardX, texHeight); // Right endzone
+    
+    ctx.fillStyle = "white";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
 
-        // Visual Drum Mesh
-        const drum = MeshBuilder.CreateCylinder("drum", { diameter: 0.6, height: 0.3 }, this.scene);
-        drum.isVisible = false; // Hidden per user request
-        drum.position = new Vector3(0, 1, 1); // 1m high, 1m in front of starting position
+    for (let yard = 0; yard <= yardsX; yard += 1) {
+        const x = yard * pixelsPerYardX;
         
-        const drumMat = new StandardMaterial("drumMat", this.scene);
-        drumMat.diffuseColor = new Color3(0.8, 0.2, 0.2); // Red drum
-        drum.material = drumMat;
-
-        // Physics so it feels solid
-        drum.physicsImpostor = new PhysicsImpostor(
-            drum, 
-            PhysicsImpostor.CylinderImpostor, 
-            { mass: 0, restitution: 0.1 }, 
-            this.scene
-        );
-
-        // Interaction via XR Pointers or Mouse Clicks
-        drum.actionManager = new ActionManager(this.scene);
-        drum.actionManager.registerAction(
-            new ExecuteCodeAction(ActionManager.OnPickDownTrigger, async () => {
-                await Tone.start(); // Ensure context is running if clicked before VR
-                this.hitDrum();
-            })
-        );
-
-        // Setup a collision check loop directly vs controller/hand physics meshes
-        // This simulates a physical "thwack" if the controller bumps it
-        this.scene.onBeforeRenderObservable.add(() => {
-            const now = Date.now();
-            if (now - this.drumLastHit < 200) return; // Basic debounce (200ms)
-
-            // Very basic distance check for controllers (approximated)
-            // A more rigorous approach involves registering onCollide physics events, but WebXR dynamically adds impostors.
-            // This grabs XR controllers if they are close enough
-            this.scene.meshes.forEach(mesh => {
-                // If it's a headset or a controller mesh (added by physics/hand tracking)
-                if (mesh.name.indexOf("controller") !== -1 || mesh.name.indexOf("hand") !== -1 || mesh.name.indexOf("handTracker") !== -1) {
-                    if (Vector3.Distance(mesh.absolutePosition, drum.position) < 0.4) {
-                        this.hitDrum();
-                    }
-                }
-            });
-        });
-    }
-
-    private hitDrum() {
-        const now = Date.now();
-        if (this.drumSynth && (now - this.drumLastHit) > 100) {
-            this.drumLastHit = now;
-            // Play a punchy C2 note
-            this.drumSynth.triggerAttackRelease("C2", "8n");
-            
-            // Brief visual flash
-            const mat = this.scene.getMeshByName("drum")?.material as StandardMaterial;
-            if (mat) {
-                mat.emissiveColor = new Color3(0.5, 0.5, 0.5);
-                setTimeout(() => mat.emissiveColor = new Color3(0, 0, 0), 100);
-            }
-        }
-    }
-
-    private midiSynth: Tone.PolySynth | null = null;
-
-    private async setupMidi() {
-        // Create a basic polyphonic synth for MIDI input
-        this.midiSynth = new Tone.PolySynth(Tone.Synth).toDestination();
-
-        if (navigator.requestMIDIAccess) {
-            try {
-                const midiAccess = await navigator.requestMIDIAccess();
+        ctx.beginPath();
+        if (yard >= 10 && yard <= 110) {
+            if (yard % 5 === 0) {
+                // Line all the way across
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, texHeight);
+                ctx.lineWidth = (yard % 10 === 0 || yard === 10 || yard === 110) ? 8 : 4;
+                ctx.stroke();
                 
-                // Connect to all currently available inputs
-                for (const input of midiAccess.inputs.values()) {
-                    input.onmidimessage = this.getMIDIMessage.bind(this);
-                }
-
-                // Listen for new devices being plugged in
-                midiAccess.onstatechange = (e: any) => {
-                    console.log("MIDI state changed:", e.port.name, e.port.state);
-                    if (e.port.type === "input" && e.port.state === "connected") {
-                         e.port.onmidimessage = this.getMIDIMessage.bind(this);
-                    }
-                };
-                console.log("MIDI Support Enabled");
-            } catch (err) {
-                console.warn("MIDI Access failed. You might need to grant browser permissions.", err);
-            }
-        } else {
-            console.warn("Web MIDI API not supported in this browser.");
-        }
-    }
-
-    private getMIDIMessage(message: any) {
-        const command = message.data[0];
-        const note = message.data[1];
-        const velocity = (message.data.length > 2) ? message.data[2] : 0;
-
-        // Command 144 is Note On, 128 is Note Off
-        // Some keyboards send Note On with 0 velocity instead of Note Off
-        if (command >= 144 && command <= 159) { // Note On across any of the 16 channels
-            if (velocity > 0) {
-                this.noteOn(note, velocity);
-            } else {
-                this.noteOff(note);
-            }
-        } else if (command >= 128 && command <= 143) { // Note Off across any of the 16 channels
-            this.noteOff(note);
-        }
-    }
-
-    private noteOn(midiNote: number, velocity: number) {
-        if (!this.midiSynth) return;
-        Tone.start(); // Ensure audio context is alive
-        const freq = Tone.mtof(midiNote as any); // convert MIDI note integer to frequency Hz
-        // Trigger attack with normalized velocity (0-1)
-        this.midiSynth.triggerAttack(freq, Tone.now(), velocity / 127);
-        
-        // Optional: flash the scene light or do something cool visually on MIDI note hit
-        const mat = this.scene.getMeshByName("ground")?.material as StandardMaterial;
-        if (mat) {
-             mat.emissiveColor = new Color3(Math.random() * 0.2, Math.random() * 0.2, Math.random() * 0.2);
-        }
-    }
-
-    private noteOff(midiNote: number) {
-        if (!this.midiSynth) return;
-        const freq = Tone.mtof(midiNote as any);
-        this.midiSynth.triggerRelease(freq, Tone.now());
-        
-        const mat = this.scene.getMeshByName("ground")?.material as StandardMaterial;
-        if (mat) {
-             mat.emissiveColor = new Color3(0, 0, 0); // Turn off flash
-        }
-    }
-
-    private async createRhythmCubes() {
-        console.log("Generating rhythm cubes...");
-
-        const osmdContainer = document.createElement("div");
-        osmdContainer.style.position = "absolute";
-        osmdContainer.style.top = "-9999px";
-        osmdContainer.style.width = "150px"; // Wide enough to render without compressing
-        document.body.appendChild(osmdContainer);
-
-        const osmd = new OpenSheetMusicDisplay(osmdContainer, {
-            backend: "canvas",
-            drawTitle: false,
-            drawPartNames: false,
-            drawMeasureNumbers: false,
-            autoResize: false
-        });
-        osmd.EngravingRules.RenderClefsAtBeginningOfStaffline = false;
-        osmd.EngravingRules.RenderTimeSignatures = false;
-        osmd.EngravingRules.RenderKeySignatures = false;
-        osmd.EngravingRules.PageTopMargin = 0;
-        osmd.EngravingRules.PageBottomMargin = 0;
-        osmd.EngravingRules.PageLeftMargin = 0;
-        osmd.EngravingRules.PageRightMargin = 0;
-        osmd.EngravingRules.StaffLineWidth = 2.0;
-        osmd.EngravingRules.StemWidth = 2.5;
-        osmd.EngravingRules.LedgerLineWidth = 2.0;
-        osmd.EngravingRules.BeamWidth = 2.5;
-        osmd.zoom = 3.0;
-
-        const rhythms = [
-            `<note><pitch><step>B</step><octave>4</octave></pitch><duration>4</duration><type>quarter</type><stem>down</stem></note>`,
-            `<note><pitch><step>B</step><octave>4</octave></pitch><duration>4</duration><type>quarter</type><stem>down</stem></note>`,
-            `<note><pitch><step>B</step><octave>4</octave></pitch><duration>4</duration><type>quarter</type><stem>down</stem></note>`,
-            `<note><pitch><step>B</step><octave>4</octave></pitch><duration>4</duration><type>quarter</type><stem>down</stem></note>`,
-            `<note><pitch><step>B</step><octave>4</octave></pitch><duration>4</duration><type>quarter</type><stem>down</stem></note>`,
-            `<note><pitch><step>B</step><octave>4</octave></pitch><duration>4</duration><type>quarter</type><stem>down</stem></note>`
-        ];
-
-        const tileSize = 512;
-        const atlasW = 4096; // Strictly Power-of-Two width (512 * 8 = 4096)
-        const atlasH = 512; // Strictly Power-of-Two height
-
-        const texture = new DynamicTexture("rhythmAtlas", {width: atlasW, height: atlasH}, this.scene, true);
-        const ctx = texture.getContext() as CanvasRenderingContext2D;
-        
-        ctx.fillStyle = "white";
-        ctx.fillRect(0, 0, atlasW, atlasH);
-
-        for (let i = 0; i < 6; i++) {
-            const xml = `<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 3.1 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd"><score-partwise version="3.1"><part-list><score-part id="P1"><part-name></part-name></score-part></part-list><part id="P1"><measure number="1"><attributes><divisions>4</divisions><key><fifths>0</fifths></key><time><beats>1</beats><beat-type>4</beat-type></time><clef><sign>percussion</sign><line>2</line></clef></attributes>${rhythms[i]}</measure></part></score-partwise>`;
-            await osmd.load(xml);
-            osmd.render();
-
-            const canvas = osmdContainer.querySelector("canvas");
-            if (canvas) {
-                // Just use the OSMD canvas bounds directly without arbitrary pixel scraping
-                const padding = 20; 
-                const drawArea = Math.min(tileSize, tileSize) - (padding * 2);
-                
-                const scaleW = drawArea / canvas.width;
-                const scaleH = drawArea / canvas.height;
-                const scale = Math.min(scaleW, scaleH);
-
-                const drawW = canvas.width * scale;
-                const drawH = canvas.height * scale;
-                
-                const dx = (i * tileSize) + (tileSize - drawW) / 2;
-                const dy = (tileSize - drawH) / 2;
-                
-                ctx.drawImage(canvas, 0, 0, canvas.width, canvas.height, dx, dy, drawW, drawH);
-            }
-        }
-
-        texture.update();
-        texture.anisotropicFilteringLevel = 16;
-        
-        if (document.body.contains(osmdContainer)) {
-            document.body.removeChild(osmdContainer);
-        }
-
-        const mat = new StandardMaterial("rhythmCubeMat", this.scene);
-        mat.diffuseTexture = texture;
-        mat.emissiveTexture = texture;
-        mat.emissiveColor = new Color3(1, 1, 1);
-        mat.disableLighting = true;
-
-        const faceUV = new Array(6);
-        for (let i = 0; i < 6; i++) {
-            // Map the exactly drawn 512x512 tile out of the 4096 layout
-            faceUV[i] = new Vector4((i * 512) / 4096, 0, ((i + 1) * 512) / 4096, 1);
-        }
-
-        for (let j = 0; j < 3; j++) {
-            const box = MeshBuilder.CreateBox(`rhythmCube_${j}`, { size: 0.3, faceUV: faceUV }, this.scene);
-            box.material = mat;
-            box.position = new Vector3(-0.5 + (j * 0.5), 1.5 + (j * 0.4), 0.8);
-            try {
-                box.physicsImpostor = new PhysicsImpostor(box, PhysicsImpostor.BoxImpostor, { mass: 0.5, restitution: 0.4, friction: 0.5 }, this.scene);
-            } catch (err) {}
-        }
-    }
-
-    private async createNotationBoard() {
-        console.log("Setting up standard OSMD music board for XR...");
-        
-        // 1) Setup a music stand Parent node directly behind the drum
-        const standParent = new TransformNode("musicStand", this.scene);
-        standParent.position = new Vector3(0, 1.4, 1.4); // Eye level, behind drum
-        // Tilt slightly back for reading
-        standParent.rotation.x = -Math.PI / 8;
-
-        // 2) Standard Sheet Music Dimensions (A4-ish proportions)
-        const pageWidthMeters = 2.0; // Increased from 1.0 to make the page larger in VR
-
-        // A high-res wrap width for the sheet music
-        const texW = 1536;
-
-        // 3) Create an invisible div for OSMD to render the canvas
-        const osmdContainer = document.createElement("div");
-        osmdContainer.style.position = "absolute";
-        osmdContainer.style.top = "-9999px";
-        osmdContainer.style.width = texW + "px"; // Force standard wrap width
-        // no fixed height, let OSMD expand it downwards as needed to fit standard page layouts
-        document.body.appendChild(osmdContainer);
-
-        try {
-            const osmd = new OpenSheetMusicDisplay(osmdContainer, {
-                backend: "canvas",
-                drawTitle: true,
-                drawPartNames: false,
-                autoResize: false, // Freeze layout so it doesn't break texture sizes
-                pageFormat: "A4_P",
-            });
-
-            // Adjust sizing lines for great VR readability
-            osmd.EngravingRules.StaffLineWidth = 0.25; // Prevent VR mipmap vanishing
-            osmd.EngravingRules.StemWidth = 0.3;
-            osmd.EngravingRules.LedgerLineWidth = 0.3;
-            osmd.EngravingRules.BeamWidth = 0.6;
-            
-            // At zoom=5.0, OSMD's layout engine collapses vertical spacing to fit 1536px width.
-            // We revert to 2.0 to prevent staff overlap, but add StaffDistance to pad lines.
-            osmd.EngravingRules.StaffDistance = 12.0;
-            osmd.zoom = 2.0;
-
-            // Load standard music xml from assets
-            const xmlResponse = await fetch(scoreUrl as string);
-            const musicXml = await xmlResponse.text();
-            await osmd.load(musicXml);
-            osmd.render();
-
-            const allCanvases = Array.from(osmdContainer.querySelectorAll("canvas")) as HTMLCanvasElement[];
-            console.log(`OSMD generated ${allCanvases.length} individual pages`);
-
-            if (allCanvases.length > 0) {
-                const baseCanvas = allCanvases[0];
-                const actualRatio = baseCanvas.height / baseCanvas.width;
-                const actualHeightMeters = pageWidthMeters * actualRatio;
-
-                const materials: StandardMaterial[] = [];
-
-                for (let i = 0; i < allCanvases.length; i++) {
-                    const canvas = allCanvases[i];
+                if (yard > 10 && yard < 110 && yard % 10 === 0) {
+                    let dispYard = yard - 10;
+                    if (dispYard > 50) dispYard = 100 - dispYard;
                     
-                    const texture = new DynamicTexture(`sheetMusicTex_${i}`, {width: canvas.width, height: canvas.height}, this.scene, true);
-                    const ctx = texture.getContext() as CanvasRenderingContext2D;
-
-                    // Fill white background natively, then draw the specific OSMD canvas
-                    ctx.fillStyle = "white";
-                    ctx.fillRect(0, 0, canvas.width, canvas.height);
-                    ctx.drawImage(canvas, 0, 0);
-                    texture.update();
-
-                    texture.anisotropicFilteringLevel = 16;
-
-                    const mat = new StandardMaterial(`sheetMusicMat_${i}`, this.scene);
-                    mat.diffuseTexture = texture;
-                    mat.emissiveTexture = texture; 
-                    mat.emissiveColor = new Color3(1, 1, 1);
-                    mat.disableLighting = true; 
-                    mat.backFaceCulling = false; 
-
-                    materials.push(mat);
+                    ctx.font = "bold 60px Arial";
+                    // Bottom numbers (closest to player on sideline)
+                    ctx.save();
+                    ctx.translate(x, texHeight * 0.85); // 1024 height, player is at bottom
+                    ctx.fillText(dispYard.toString(), 0, 0);
+                    ctx.restore();
+                    
+                    // Top numbers (far sideline)
+                    ctx.save();
+                    ctx.translate(x, texHeight * 0.15);
+                    ctx.rotate(Math.PI);
+                    ctx.fillText(dispYard.toString(), 0, 0);
+                    ctx.restore();
                 }
-
-                // Create a single plane representing the Music Stand's focused "Page"
-                const sheetPlane = MeshBuilder.CreatePlane(`sheetMusicPlane`, { width: pageWidthMeters, height: actualHeightMeters }, this.scene);
-                sheetPlane.parent = standParent;
-                
-                let currentPageIndex = 0;
-                sheetPlane.material = materials[currentPageIndex];
-
-                // Register an interaction that swaps the material to the next page when clicked
-                sheetPlane.actionManager = new ActionManager(this.scene);
-                sheetPlane.actionManager.registerAction(
-                    new ExecuteCodeAction(ActionManager.OnPickTrigger, () => {
-                        currentPageIndex = (currentPageIndex + 1) % materials.length;
-                        sheetPlane.material = materials[currentPageIndex];
-                        console.log(`Flipped to page ${currentPageIndex + 1}`);
-                    })
-                );
-
-                console.log(`✓ Fully initialized music board with ${materials.length} flippable pages.`);
-            }
-        } catch (e) {
-            console.error("OSMD Failed to load score: ", e);
-        } finally {
-            if (document.body.contains(osmdContainer)) {
-                // Must remove from DOM to prevent it bleeding over the 3D canvas!
-                document.body.removeChild(osmdContainer);
+            } else {
+                // Short Hash marks every 1 yard
+                ctx.lineWidth = 2;
+                ctx.moveTo(x, 0); ctx.lineTo(x, 15); ctx.stroke();
+                ctx.moveTo(x, texHeight); ctx.lineTo(x, texHeight - 15); ctx.stroke();
+                // inner hashes (College/HS spacing usually ~1/3rd from sidelines, close enough)
+                ctx.moveTo(x, texHeight * 0.35); ctx.lineTo(x, texHeight * 0.35 + 15); ctx.stroke();
+                ctx.moveTo(x, texHeight * 0.65); ctx.lineTo(x, texHeight * 0.65 - 15); ctx.stroke();
             }
         }
     }
+    
+    // Draw boundary line around playable 100 yards
+    ctx.lineWidth = 8;
+    ctx.strokeRect(10 * pixelsPerYardX, 0, 100 * pixelsPerYardX, texHeight); 
+    
+    // Endzone text
+    ctx.font = "bold 100px Arial";
+    ctx.save();
+    ctx.translate(5 * pixelsPerYardX, texHeight / 2);
+    ctx.rotate(Math.PI / 2);
+    ctx.fillText("MARCHING", 0, 0);
+    ctx.restore();
+    
+    ctx.save();
+    ctx.translate(115 * pixelsPerYardX, texHeight / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText("MADNESS", 0, 0);
+    ctx.restore();
+    
+    fieldTex.update();
+    
+    const mat = new StandardMaterial("fieldMat", scene);
+    mat.diffuseTexture = fieldTex;
+    mat.specularColor = new Color3(0.05, 0.05, 0.05); // low shine grass
+    ground.material = mat;
+}
+buildFootballField(scene);
 
-    // @ts-ignore: Keep around for future testing
-    private generateRandomMusicXML(numMeasures: number): string {
-        const steps = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
-        const octaves = [4, 5];
+// Keep reference to blocks
+const measureBlocks: any[] = [];
+const gameBlocks: { mesh: any, arrivalTime: number, startX: number, startY: number, boxHeight: number, noteFractions: number[], firstT: number }[] = [];
+let gameStartTime: number | null = null;
+const BPM = 80;
+const WHOLE_NOTE_DURATION = (60 / BPM) * 4;
+const FLY_SPEED = 2; // units per second (slower for readability)
+
+// 3D VR Start Button
+const startBtnMesh = MeshBuilder.CreatePlane("startBtnMesh", { width: 2, height: 1 }, scene);
+startBtnMesh.position = new Vector3(0, 1.5, 2);
+
+const btnTex = new DynamicTexture("btnTex", { width: 512, height: 256 }, scene, false);
+const btnCtx = btnTex.getContext() as CanvasRenderingContext2D;
+btnCtx.fillStyle = "#228822";
+btnCtx.fillRect(0, 0, 512, 256);
+btnCtx.fillStyle = "white";
+btnCtx.font = "bold 60px Arial";
+btnCtx.textAlign = "center";
+btnCtx.fillText("START GAME", 256, 150);
+btnTex.update();
+
+const btnMat = new StandardMaterial("btnMat", scene);
+btnMat.diffuseTexture = btnTex;
+btnMat.emissiveColor = new Color3(1, 1, 1);
+startBtnMesh.material = btnMat;
+
+startBtnMesh.actionManager = new ActionManager(scene);
+startBtnMesh.actionManager.registerAction(
+    new ExecuteCodeAction(
+        ActionManager.OnPickTrigger,
+        async () => {
+            await Tone.start();
+const synth = getTrumpetSynth(); // pre-initialize
+        getMetronomeSynth(); // pre-initialize
         
-        let measuresXml = "";
+        // Sync Tone.Transport to our 80 BPM and start a repeating metronome click
+        Tone.Transport.bpm.value = BPM;
+        // Delay metronome by exactly 2 whole notes so it starts right when the first block arrives
+        Tone.Transport.scheduleRepeat((time) => {
+            getMetronomeSynth().triggerAttackRelease("C5", "32n", time);
+        }, "4n");
+        
+        // Schedule all generated sheet music notes onto the Transport timeline instantly
+        if (osmd && osmd.Sheet) {
+            osmd.Sheet.SourceMeasures.forEach((sourceMeasure, mIndex) => {
+                let measureFirstT = 0;
+                if (sourceMeasure.VerticalSourceStaffEntryContainers.length > 0 && sourceMeasure.VerticalSourceStaffEntryContainers[0].Timestamp) {
+                    measureFirstT = sourceMeasure.VerticalSourceStaffEntryContainers[0].Timestamp.RealValue;
+                }
 
-        for (let m = 1; m <= numMeasures; m++) {
-            let measureContent = `<measure number="${m}">\n`;
-            
-            // Only the first measure needs the standard attributes
-            if (m === 1) {
-                measureContent += `
-                <attributes>
-                    <divisions>1</divisions>
-                    <key><fifths>0</fifths></key>
-                    <time><beats>4</beats><beat-type>4</beat-type></time>
-                    <clef><sign>G</sign><line>2</line></clef>
-                </attributes>\n`;
-            }
+                sourceMeasure.VerticalSourceStaffEntryContainers.forEach(container => {
+                    if (!container.Timestamp) return;
+                    const timeInMeasure = (container.Timestamp.RealValue - measureFirstT) * WHOLE_NOTE_DURATION;
+                    
+                    container.StaffEntries.forEach(entry => {
+                        // Only play the Trumpet 1 instrument (index 0)
+                        if (entry.ParentStaff.ParentInstrument.Id === osmd!.Sheet!.Instruments[0].Id) {
+                            entry.VoiceEntries.forEach(ve => {
+                                ve.Notes.forEach(note => {
+                                    // OSMD's halfTone property matches valid MIDI note numbers
+                                    if (note.halfTone) {
+                                        const frequency = Tone.Frequency(note.halfTone, "midi").toFrequency();
+                                        const duration = note.Length.RealValue * WHOLE_NOTE_DURATION;
+                                        const scheduleTime = (mIndex * WHOLE_NOTE_DURATION) + timeInMeasure;
+                                        Tone.Transport.schedule((time) => {
+                                            synth.triggerAttackRelease(frequency, duration, time);
+                                    }, scheduleTime);
+                                }
+                            });
+                        });
+                    }
+                });
+            });
+        });
+    }
+    
+    gameStartTime = Tone.now();
+    // Start the metronome and music specifically delayed by 2 whole notes
+    Tone.Transport.start(gameStartTime + 2 * WHOLE_NOTE_DURATION);
+    startBtnMesh.dispose(); // Remove the button after starting
+        }
+    )
+);
 
-            // Generate 4 random quarter notes per measure
-            for (let n = 0; n < 4; n++) {
-                const randomStep = steps[Math.floor(Math.random() * steps.length)];
-                const randomOctave = octaves[Math.floor(Math.random() * octaves.length)];
-                
-                measureContent += `
-                <note>
-                    <pitch>
-                        <step>${randomStep}</step>
-                        <octave>${randomOctave}</octave>
-                    </pitch>
-                    <duration>1</duration>
-                    <type>quarter</type>
-                </note>\n`;
-            }
+let osmdContainer: HTMLDivElement | null = null;
+let osmd: OpenSheetMusicDisplay | null = null;
+let measureCount = 0;
+let nextMeasureToGenerate = 1;
+let isGenerating = false;
 
-            measureContent += `</measure>\n`;
-            measuresXml += measureContent;
+async function initSheetMusic() {
+    osmdContainer = document.createElement("div");
+    osmdContainer.style.width = "4000px";
+    osmdContainer.style.position = "absolute";
+    osmdContainer.style.top = "-9999px";
+    document.body.appendChild(osmdContainer);
+
+    osmd = new OpenSheetMusicDisplay(osmdContainer, {
+        backend: "canvas",
+        drawTitle: false,
+        drawSubtitle: false,
+        drawComposer: false,
+        drawLyricist: false,
+        drawCredits: false,
+        drawPartNames: false,
+        drawFromMeasureNumber: 1,
+        drawUpToMeasureNumber: 1
+    });
+
+    try {
+        await osmd.load("assets/score.xml");
+
+        // Only show the 1st instrument (Trumpet 1) part
+        if (osmd.Sheet && osmd.Sheet.Instruments) {
+            osmd.Sheet.Instruments.forEach((instrument, index) => {
+                instrument.Visible = (index === 0);
+            });
         }
 
-        return `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 3.1 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">
-<score-partwise version="3.1">
-  <part-list>
-    <score-part id="P1"><part-name>Random Score</part-name></score-part>
-  </part-list>
-  <part id="P1">
-    ${measuresXml}
-  </part>
-</score-partwise>`;
+        measureCount = osmd.Sheet?.SourceMeasures.length || 10;
+        console.log(`Found ${measureCount} measures. Starting dynamic generation...`);
+        checkAndGenerateMeasures();
+    } catch (err) {
+        console.error("Failed to load and render Music XML:", err);
     }
 }
 
-// Expose precomputation helper to global scope for convenience
-(window as any).precomputeNotation = async () => {
-    console.log("Starting pre-computation. Check browser downloads folder...");
-    
-    const osmdContainer = document.createElement("div");
-    osmdContainer.style.position = "absolute";
-    osmdContainer.style.top = "-9999px";
-    osmdContainer.style.width = "8192px";
-    document.body.appendChild(osmdContainer);
+async function generateSingleMeasure(i: number) {
+    if (!osmd || !osmdContainer || !osmd.Sheet) return;
 
-    const osmd = new OpenSheetMusicDisplay(osmdContainer, {
-        backend: "canvas",
-        drawTitle: false,
-        drawPartNames: false,
-        autoResize: false
+    // Set OSMD to only render this specific measure
+    osmd.setOptions({
+        drawFromMeasureNumber: i,
+        drawUpToMeasureNumber: i
+    });
+    osmd.render();
+    
+    // Get the resulting canvas created by OSMD
+    const generatedCanvas = osmdContainer.querySelector('canvas') as HTMLCanvasElement;
+    if (!generatedCanvas) return;
+
+    const tmpCtx = generatedCanvas.getContext("2d", { willReadFrequently: true });
+    let minX = generatedCanvas.width, minY = generatedCanvas.height, maxX = 0, maxY = 0;
+    if (tmpCtx) {
+        const imgData = tmpCtx.getImageData(0, 0, generatedCanvas.width, generatedCanvas.height);
+        const data = imgData.data;
+        for (let y = 0; y < generatedCanvas.height; y++) {
+            for (let x = 0; x < generatedCanvas.width; x++) {
+                const idx = (y * generatedCanvas.width + x) * 4;
+                if (data[idx + 3] > 0 && (data[idx] < 250 || data[idx+1] < 250 || data[idx+2] < 250)) {
+                    if (x < minX) minX = x;
+                    if (x > maxX) maxX = x;
+                    if (y < minY) minY = y;
+                    if (y > maxY) maxY = y;
+                }
+            }
+        }
+    }
+
+    // Defaults if canvas was blank
+    if (maxX < minX || maxY < minY) {
+        minX = 0; minY = 0; maxX = generatedCanvas.width; maxY = generatedCanvas.height;
+    }
+
+    const padding = 20;
+    minX = Math.max(0, minX - padding);
+    minY = Math.max(0, minY - padding);
+    maxX = Math.min(generatedCanvas.width, maxX + padding);
+    maxY = Math.min(generatedCanvas.height, maxY + padding);
+    
+    const cropWidth = Math.max(1, maxX - minX);
+    const cropHeight = Math.max(1, maxY - minY);
+
+    const dynamicTexture = new DynamicTexture(`texture_m${i}`, { width: cropWidth, height: cropHeight }, scene, true, Texture.TRILINEAR_SAMPLINGMODE);
+    
+    const context = dynamicTexture.getContext() as CanvasRenderingContext2D;
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = "high";
+    context.fillStyle = "white"; // Add a white background for the score
+    context.fillRect(0, 0, cropWidth, cropHeight);
+    context.drawImage(generatedCanvas, minX, minY, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
+    dynamicTexture.update(true);
+
+    // Calculate height proportional to width
+    const boxHeight = 4 * (cropHeight / cropWidth);
+    
+    // Extract note fractions for exact temporal and visual alignment
+    const sourceMeasure = osmd.Sheet.SourceMeasures[i - 1];
+    
+    // Always use the first container's timestamp as the true zero-point for this measure
+    let firstT = 0;
+    if (sourceMeasure.VerticalSourceStaffEntryContainers.length > 0 && sourceMeasure.VerticalSourceStaffEntryContainers[0].Timestamp) {
+        firstT = sourceMeasure.VerticalSourceStaffEntryContainers[0].Timestamp.RealValue;
+    }
+    const measureDuration = sourceMeasure.Duration ? sourceMeasure.Duration.RealValue : 1;
+    
+    const fractionsSet = new Set<number>();
+    sourceMeasure.VerticalSourceStaffEntryContainers.forEach(container => {
+        let isTrumpet = false;
+        container.StaffEntries.forEach(entry => {
+            if (entry.ParentStaff.ParentInstrument.Id === osmd!.Sheet!.Instruments[0].Id) {
+                // Ensure it's not just a rest placeholder if possible
+                let isRest = false;
+                if (entry.VoiceEntries.length > 0 && entry.VoiceEntries[0].Notes.length > 0) {
+                    isRest = entry.VoiceEntries[0].Notes[0].isRest();
+                }
+                if (!isRest) isTrumpet = true;
+            }
+        });
+        if (isTrumpet && container.Timestamp) {
+            let frac = (container.Timestamp.RealValue - firstT) / measureDuration;
+            if (frac < 0) frac = 0;
+            if (frac > 1) frac = 1;
+            fractionsSet.add(frac);
+        }
+    });
+    
+    let noteFractions = Array.from(fractionsSet).sort((a, b) => a - b);
+    if (noteFractions.length === 0) noteFractions = [0, 1];
+    else {
+        if (noteFractions[0] > 0.05) noteFractions.unshift(0);
+        if (noteFractions[noteFractions.length - 1] < 0.95) noteFractions.push(1);
+    }
+
+    // Create the block mesh
+    const box = MeshBuilder.CreateBox(`measure_${i}`, {
+        width: 4,
+        height: boxHeight,
+        depth: 0.2
+    }, scene);
+    
+    // Create a predictable alternating spread from high up for a curving Guitar Hero style track
+    const laneIndex = (i % 5) - 2; // Returns -2, -1, 0, 1, 2 sequentially
+    const startX = laneIndex * 20; // Spread extremely wide horizontally: -40, -20, 0, 20, 40
+    const startY = 25; // Start high up so they drop down a curved track
+
+    // Start the box far away
+    box.position = new Vector3(startX, startY, 150);
+    box.isVisible = false; // Hide until it enters the game area
+
+    gameBlocks.push({
+        mesh: box,
+        arrivalTime: (i + 1) * WHOLE_NOTE_DURATION, // i is 1-indexed. Delay by 2 measures for a smooth fly-in
+        startX: startX,
+        startY: startY,
+        boxHeight: boxHeight,
+        noteFractions: noteFractions,
+        firstT: firstT
     });
 
-    // Set engraving rules after instantiation
-    osmd.EngravingRules.StaffLineWidth = 5.0;
-    osmd.EngravingRules.StemWidth = 5.5;
-    osmd.EngravingRules.BeamWidth = 3.5;
-    osmd.EngravingRules.LedgerLineWidth = 5.0;
+    // Apply material
+    const material = new StandardMaterial(`mat_m${i}`, scene);
+    material.diffuseTexture = dynamicTexture;
+    
+    // To prevent blank textures from negative UV scales clamping, we keep scale positive
+    // and instead correctly rotate the 3D block to present the texture correctly to the camera
+    box.rotation.z = Math.PI; // Flip upright
+    box.rotation.y = Math.PI; // Flip horizontally (fixes mirroring)
+    
+    material.diffuseTexture.hasAlpha = true;
+    material.emissiveColor = new Color3(1, 1, 1); 
+    material.disableLighting = true; // So it looks like clear sheet music
+    
+    box.material = material;
+    measureBlocks.push(box);
+}
 
-    osmd.zoom = 5.0;
-
-    // Generate random music
-    const steps = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
-    const octaves = [4, 5];
-    let measuresXml = "";
-    for (let m = 1; m <= 32; m++) {
-        let measureContent = `<measure number="${m}">\n`;
-        if (m === 1) {
-            measureContent += `<attributes><divisions>1</divisions><key><fifths>0</fifths></key><time><beats>4</beats><beat-type>4</beat-type></time><clef><sign>G</sign><line>2</line></clef></attributes>\n`;
-        }
-        for (let n = 0; n < 4; n++) {
-            const randomStep = steps[Math.floor(Math.random() * steps.length)];
-            const randomOctave = octaves[Math.floor(Math.random() * octaves.length)];
-            measureContent += `<note><pitch><step>${randomStep}</step><octave>${randomOctave}</octave></pitch><duration>1</duration><type>quarter</type></note>\n`;
-        }
-        measureContent += `</measure>\n`;
-        measuresXml += measureContent;
+async function checkAndGenerateMeasures() {
+    if (isGenerating || nextMeasureToGenerate > measureCount) return;
+    
+    let currentMeasureIndex = 0;
+    if (gameStartTime !== null) {
+        const currentTime = Tone.now() - gameStartTime;
+        currentMeasureIndex = Math.floor(currentTime / WHOLE_NOTE_DURATION);
     }
 
-    const musicXml = `<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 3.1 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd"><score-partwise version="3.1"><part-list><score-part id="P1"><part-name>Notation</part-name></score-part></part-list><part id="P1">${measuresXml}</part></score-partwise>`;
-
-    await osmd.load(musicXml);
-    osmd.render();
-
-    const osmdCanvas = osmdContainer.querySelector("canvas") as HTMLCanvasElement;
-
-    if (osmdCanvas) {
-        const totalPixelsW = osmdCanvas.width;
-        const totalPixelsH = osmdCanvas.height;
-        const maxTexSize = 4096;
-        const slices = Math.ceil(totalPixelsW / maxTexSize);
-
-        for (let i = 0; i < slices; i++) {
-            const srcX = i * maxTexSize;
-            const slicePixW = Math.min(maxTexSize, totalPixelsW - srcX);
-
-            const sliceCanvas = document.createElement("canvas");
-            sliceCanvas.width = slicePixW;
-            sliceCanvas.height = totalPixelsH;
-
-            const ctx = sliceCanvas.getContext("2d") as CanvasRenderingContext2D;
-            ctx.fillStyle = "white"; // Draw opaque white background
-            ctx.fillRect(0, 0, slicePixW, totalPixelsH);
-            ctx.drawImage(osmdCanvas, srcX, 0, slicePixW, totalPixelsH, 0, 0, slicePixW, totalPixelsH);
-
-            // Make notes black with proper alpha, background transparent
-                    const imgData = ctx.getImageData(0, 0, slicePixW, totalPixelsH);
-                    for (let p = 0; p < imgData.data.length; p += 4) {
-                        const brightness = (imgData.data[p] + imgData.data[p+1] + imgData.data[p+2]) / 3;
-                        
-                        imgData.data[p]   = 0;
-                        imgData.data[p+1] = 0;
-                        imgData.data[p+2] = 0;
-                        imgData.data[p+3] = 255 - brightness;
-                    }
-                    ctx.putImageData(imgData, 0, 0);
-
-            sliceCanvas.toBlob((blob) => {
-                if (blob) {
-                    const url = URL.createObjectURL(blob);
-                    const link = document.createElement("a");
-                    link.href = url;
-                    link.download = `notation_slice_${i}.png`;
-                    link.click();
-                    URL.revokeObjectURL(url);
-                    console.log(`✓ Downloaded notation_slice_${i}.png`);
-                }
-            });
+    // Keep up to 30 measures ahead queued up
+    if (nextMeasureToGenerate <= currentMeasureIndex + 30) {
+        isGenerating = true;
+        try {
+            await generateSingleMeasure(nextMeasureToGenerate);
+            nextMeasureToGenerate++;
+            // Yield a tiny bit to avoid blocking the main thread
+            await new Promise(resolve => setTimeout(resolve, 10));
+        } catch(e) { 
+            console.error(e); 
+        } finally {
+            isGenerating = false;
         }
+        
+        // Immediately check if we need to generate more
+        checkAndGenerateMeasures();
+    }
+}
+
+// Start loading the Music XML file
+initSheetMusic();
+
+engine.runRenderLoop(() => {
+    // Continuously poll to ensure the queue processes upcoming measures during gameplay
+    checkAndGenerateMeasures();
+
+    if (gameStartTime !== null) {
+        const currentTime = Tone.now() - gameStartTime;
+        
+        gameBlocks.forEach(block => {
+            // How long until it's supposed to arrive at Z=0?
+            const timeUntilArrival = block.arrivalTime - currentTime;
+            
+            // Calculate current Z so that it arrives slightly in front of the camera (Z = 3) at timeUntilArrival = 0
+            const arrivalZ = 3;
+            const currentZ = arrivalZ + (timeUntilArrival * FLY_SPEED);
+
+            // Interpolate X and Y to converge to a hit-zone that is lower and wider, so you can see over/around it
+            // Assume the block originated from Z = 150
+            const totalDistanceZ = 150 - arrivalZ;
+            const distanceFraction = (currentZ - arrivalZ) / totalDistanceZ;
+            
+            // Use distanceFraction squared for Y to create a curved Guitar Hero style waterfall path
+            // If it passes the player (distanceFraction < 0), let it continue down smoothly
+            const curveY = distanceFraction > 0 ? Math.pow(distanceFraction, 2) : distanceFraction;
+
+            // Arrive exactly at eye-level and keep a bit of X-spread so measures form visible lanes instead of a single overlapping stack
+            const arrivalX = block.startX * 0.15; // 0.15 * 40 = 6 spread to either side
+            const arrivalY = scene.activeCamera ? scene.activeCamera.globalPosition.y : 1.6;  
+
+            block.mesh.position.x = arrivalX + (block.startX - arrivalX) * distanceFraction;
+            block.mesh.position.y = arrivalY + (block.startY - arrivalY) * curveY;
+            block.mesh.position.z = currentZ;
+            
+            // Tilt blocks backwards like a music stand as they arrive, and more drastically when far away
+            block.mesh.rotation.x = (Math.PI / 8) + (Math.PI / 4) * distanceFraction;
+
+            // Show it when it's coming from the horizon, vanish it after its duration has fully passed
+            const vanishDistance = arrivalZ - (WHOLE_NOTE_DURATION * FLY_SPEED);
+            if (currentZ < 150 && currentZ > vanishDistance) {
+                block.mesh.isVisible = true;
+            } else {
+                block.mesh.isVisible = false;
+            }
+        });
     }
 
-    document.body.removeChild(osmdContainer);
-    console.log("✓ Pre-computation complete! Save PNGs to public/assets/ then reload.");
-};
+    scene.render();
+});
 
-new App();
-
-
-
+window.addEventListener("resize", () => {
+    engine.resize();
+});

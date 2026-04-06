@@ -120,11 +120,12 @@ function generateProperMusicXML(numMeasures = 40) {
 
 // Create temporary HTML file for Puppeteer
 function createTempHTML(musicXml) {
+    const osmdSource = fs.readFileSync(path.resolve(__dirname, '../node_modules/opensheetmusicdisplay/build/opensheetmusicdisplay.min.js'), 'utf8');
     const html = `<!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
-    <script src="file://${path.resolve(__dirname, '../node_modules/opensheetmusicdisplay/build/opensheetmusicdisplay.min.js')}"></script>
+    <script>${osmdSource}</script>
     <style>
         body { margin: 0; padding: 0; background: white; }
         #container { width: 8192px; }
@@ -208,7 +209,7 @@ async function generateNotations() {
         console.log('🤖 Launching browser...');
         const browser = await puppeteer.launch({
             headless: 'new',
-            args: ['--no-sandbox', '--disable-setuid-sandbox']
+            args: ['--no-sandbox', '--disable-setuid-sandbox', '--allow-file-access-from-files']
         });
         
         const page = await browser.newPage();
