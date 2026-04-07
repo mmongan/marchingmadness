@@ -182,6 +182,9 @@ function buildFootballField(scene: Scene) {
     mat.diffuseTexture = fieldTex;
     mat.specularColor = new Color3(0.05, 0.05, 0.05); // low shine grass
     ground.material = mat;
+    
+    // Rotate the field 90 degrees so the user looks down the length of the field
+    ground.rotation.y = Math.PI / 2;
 
     // Create a surrounding dark turf base to fix seeing "under" the field edges
     const surroundBase = MeshBuilder.CreateGround("surroundBase", { width: 400, height: 400 }, scene);
