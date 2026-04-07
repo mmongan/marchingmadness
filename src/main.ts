@@ -232,15 +232,24 @@ function buildMarchingBand(scene: Scene) {
     const baseInstr = MeshBuilder.CreateCylinder("baseInstr", { diameterTop: 0.25, diameterBottom: 0.02, height: 0.6 }, scene);
     baseInstr.material = brassMat;
 
+    // Bass Drum (Cylinder facing sideways)
+    const baseBassDrum = MeshBuilder.CreateCylinder("baseBassDrum", { diameter: 0.6, height: 0.3 }, scene);
+    baseBassDrum.bakeTransformIntoVertices(Matrix.RotationZ(Math.PI / 2));
+    baseBassDrum.material = hatMat; // White drum shell
+
     const rows = 10;
     const cols = 10;
     const spacingX = 2.0; // 2 meters between columns
     const spacingZ = 2.0; // 2 meters between rows
     const startZ = 60;
 
+    let firstTrumpetPlaced = false;
+    let firstDrumPlaced = false;
+
     for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
             const isBase = (r === 0 && c === 0);
+            const isDrum = (r === 7 || r === 8); // Rows 7 and 8 are bass drums
             
             const xPos = (c - cols / 2 + 0.5) * spacingX;
             const zPos = startZ + r * spacingZ;
@@ -288,21 +297,31 @@ function buildMarchingBand(scene: Scene) {
             armL.parent = anchor;
             armL.position.set(-0.3, 1.25, 0.15);
             armL.rotation.x = Math.PI / 4;
-            armL.rotation.y = Math.PI / 8;
+            armL.rotation.y = isDrum ? Math.PI / 4 : Math.PI / 8;
 
             // Right Arm (Clone or Instance)
             const armR = isBase ? baseArm.clone(`armR_${r}_${c}`) : baseArm.createInstance(`armR_${r}_${c}`);
             armR.parent = anchor;
             armR.position.set(0.3, 1.25, 0.15);
             armR.rotation.x = Math.PI / 4;
-            armR.rotation.y = -Math.PI / 8;
+            armR.rotation.y = isDrum ? -Math.PI / 4 : -Math.PI / 8;
 
             // Instrument (Cylinder)
-            const instr = isBase ? baseInstr : baseInstr.createInstance(`instr_${r}_${c}`);
-            instr.parent = anchor;
-            // Connect to mouth area (head is at Y=1.55, diameter 0.3)
-            instr.position.set(0, 1.5, 0.45);
-            instr.rotation.x = Math.PI / 2;
+            let instr;
+            if (isDrum) {
+                instr = (!firstDrumPlaced) ? baseBassDrum : baseBassDrum.createInstance(`drum_${r}_${c}`);
+                firstDrumPlaced = true;
+                instr.parent = anchor;
+                instr.position.set(0, 1.1, 0.35); // Lower, resting on chest/belly
+                instr.rotation.x = 0; // Flat facing sideways
+            } else {
+                instr = (!firstTrumpetPlaced) ? baseInstr : baseInstr.createInstance(`instr_${r}_${c}`);
+                firstTrumpetPlaced = true;
+                instr.parent = anchor;
+                // Connect to mouth area (head is at Y=1.55, diameter 0.3)
+                instr.position.set(0, 1.5, 0.45);
+                instr.rotation.x = Math.PI / 2;
+            }
         }
     }
 }
