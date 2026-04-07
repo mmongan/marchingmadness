@@ -37,8 +37,8 @@ const engine = new Engine(canvas, true, { audioEngine: false });
 const scene = new Scene(engine);
 scene.clearColor = new Color3(0.9, 0.9, 0.9).toColor4();
 
-const camera = new FreeCamera("camera1", new Vector3(0, 0, 0), scene);
-camera.setTarget(new Vector3(0, 0, 1));
+const camera = new FreeCamera("camera1", new Vector3(0, 1.8, 0), scene);
+camera.setTarget(new Vector3(0, 1.8, 1));
 camera.attachControl(canvas, true);
 
 const light = new HemisphericLight("light", new Vector3(0, 1, 0), scene);
@@ -46,9 +46,10 @@ light.intensity = 0.8;
 
 // Enable WebXR/VR
 scene.createDefaultXRExperienceAsync().then((xr) => {
-    // Increase base viewing height to make the player taller
+    // If the device doesn't supply a real-world vertical tracking offset (3DoF/Emulators),
+    // this ensures the player eyes sit exactly at 1.8 meters from the floor.
     xr.baseExperience.onInitialXRPoseSetObservable.add((xrCamera) => {
-        xrCamera.position.y += 1.5; // Add 1.5 meters to baseline height
+        xrCamera.position.y = 1.8;
     });
 });
 
