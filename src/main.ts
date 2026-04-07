@@ -279,6 +279,17 @@ function buildMarchingBand(scene: Scene) {
     baseTrombone.name = "baseTrombone";
     baseTrombone.material = brassMat;
 
+    // Sousaphone (large circular body with big bell above the head)
+    const sousaBody = MeshBuilder.CreateTorus("sousaBody", { diameter: 0.8, thickness: 0.15 }, scene);
+    sousaBody.position.set(0, -0.2, 0); // Wrap around the torso
+    sousaBody.rotation.x = Math.PI / 2; // Make the ring face forward/up
+    const sousaBell = MeshBuilder.CreateCylinder("sousaBell", { diameterTop: 0.5, diameterBottom: 0.1, height: 0.4 }, scene);
+    sousaBell.position.set(-0.35, 0.5, 0.2); // Up and over the shoulder
+    sousaBell.rotation.x = Math.PI / 2; // Bell pointing forward
+    const baseSousaphone = Mesh.MergeMeshes([sousaBody, sousaBell], true) as Mesh;
+    baseSousaphone.name = "baseSousaphone";
+    baseSousaphone.material = brassMat;
+
     const rows = 10;
     const cols = 10;
     const spacingX = 2.0; // 2 meters between columns
@@ -292,16 +303,18 @@ function buildMarchingBand(scene: Scene) {
     let firstSaxophonePlaced = false;
     let firstClarinetPlaced = false;
     let firstTrombonePlaced = false;
+    let firstSousaphonePlaced = false;
 
     for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
             const isBase = (r === 0 && c === 0);
-            const isClarinet = (r === 0 || r === 1); // Rows 0 and 1 are clarinets
-            const isSaxophone = (r === 2 || r === 3); // Rows 2 and 3 are saxophones
-            const isTomTom = (r === 4); // Row 4 (one row) is tom toms
-            const isSnareDrum = (r === 5 || r === 6); // Rows 5 and 6 are snare drums
-            const isBassDrum = (r === 7 || r === 8); // Rows 7 and 8 are bass drums
-            const isTrombone = (r === 9); // Row 9 are trombones
+            const isClarinet = (r === 0 || r === 1); // Rows 0 and 1
+            const isSaxophone = (r === 2 || r === 3); // Rows 2 and 3
+            const isTomTom = (r === 4); // Row 4
+            const isSnareDrum = (r === 5 || r === 6); // Rows 5 and 6
+            const isBassDrum = (r === 7); // Row 7
+            const isTrombone = (r === 8); // Row 8
+            const isSousaphone = (r === 9); // Row 9 (back row)
             const isDrum = isBassDrum || isSnareDrum || isTomTom;
             
             const xPos = (c - cols / 2 + 0.5) * spacingX;
@@ -397,8 +410,16 @@ function buildMarchingBand(scene: Scene) {
                 instr = (!firstTrombonePlaced) ? baseTrombone : baseTrombone.createInstance(`trombone_${r}_${c}`);
                 firstTrombonePlaced = true;
                 instr.parent = anchor;
-                instr.position.set(0, 1.5, 0.45);
+                // Connect origin (mouthpiece) directly to the mouth area
+                instr.position.set(0, 1.45, 0.15);
                 instr.rotation.x = Math.PI / 2;
+            } else if (isSousaphone) {
+                instr = (!firstSousaphonePlaced) ? baseSousaphone : baseSousaphone.createInstance(`sousaphone_${r}_${c}`);
+                firstSousaphonePlaced = true;
+                instr.parent = anchor;
+                // Wraps around torso, bell high
+                instr.position.set(0, 1.3, 0); 
+                instr.rotation.x = 0;
             } else {
                 instr = (!firstTrumpetPlaced) ? baseInstr : baseInstr.createInstance(`instr_${r}_${c}`);
                 firstTrumpetPlaced = true;
