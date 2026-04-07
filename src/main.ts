@@ -1,4 +1,4 @@
-import { Engine, Scene, FreeCamera, Vector3, HemisphericLight, MeshBuilder, StandardMaterial, DynamicTexture, Color3, Texture, CubeTexture, ActionManager, ExecuteCodeAction } from "@babylonjs/core";
+import { Engine, Scene, FreeCamera, Vector3, Matrix, HemisphericLight, MeshBuilder, StandardMaterial, DynamicTexture, Color3, Texture, CubeTexture, ActionManager, ExecuteCodeAction } from "@babylonjs/core";
 import { OpenSheetMusicDisplay } from "opensheetmusicdisplay";
 import * as Tone from "tone";
 
@@ -211,6 +211,8 @@ function buildMarchingBand(scene: Scene) {
     baseTorso.material = uniformMat;
 
     const baseLeg = MeshBuilder.CreateBox("baseLeg", { width: 0.18, height: 0.8, depth: 0.18 }, scene);
+    // Shift geometry down so the origin of the mesh is at the top (the hip pivot)
+    baseLeg.bakeTransformIntoVertices(Matrix.Translation(0, -0.4, 0));
     baseLeg.material = pantsMat;
 
     const baseHead = MeshBuilder.CreateSphere("baseHead", { diameter: 0.3 }, scene);
@@ -257,12 +259,12 @@ function buildMarchingBand(scene: Scene) {
             // Left Leg (Box)
             const legL = isBase ? baseLeg : baseLeg.createInstance(`legL_${r}_${c}`);
             legL.parent = anchor;
-            legL.position.set(-0.12, 0.4, 0);
+            legL.position.set(-0.12, 0.8, 0); // attached at the hip
 
             // Right Leg (Clone or Instance)
             const legR = isBase ? baseLeg.clone(`legR_${r}_${c}`) : baseLeg.createInstance(`legR_${r}_${c}`);
             legR.parent = anchor;
-            legR.position.set(0.12, 0.4, 0);
+            legR.position.set(0.12, 0.8, 0); // attached at the hip
 
             bandLegs.push({ legL, legR, anchor, startZ: zPos });
 
