@@ -270,19 +270,39 @@ function buildMarchingBand(scene: Scene) {
     baseClarinet.bakeTransformIntoVertices(Matrix.Translation(0, -0.35, 0)); // Shift origin to top
     baseClarinet.material = clarinetMat;
 
-    // Trombone (shorter bell with longer slide)
+    // Trombone (shorter bell with looped slide)
     const tbMain = MeshBuilder.CreateCylinder("tbMain", { diameterTop: 0.15, diameterBottom: 0.02, height: 0.6 }, scene);
     tbMain.position.set(0, 0.3, 0); // Shift UP so origin is near the narrow mouthpiece
-    const tbSlide = MeshBuilder.CreateCylinder("tbSlide", { diameter: 0.02, height: 1.0 }, scene);
-    tbSlide.position.set(0, 0.6, 0.05); // Slide extends way forward past the bell
-    const baseTrombone = Mesh.MergeMeshes([tbMain, tbSlide], true) as Mesh;
+    
+    // Slide loop (2 parallel tubes + 1 bottom connector)
+    const tbSlide1 = MeshBuilder.CreateCylinder("tbSlide1", { diameter: 0.02, height: 0.8 }, scene);
+    tbSlide1.position.set(-0.06, 0.5, 0.1); // Offset in X and Z to avoid intersecting the bell
+    const tbSlide2 = MeshBuilder.CreateCylinder("tbSlide2", { diameter: 0.02, height: 0.8 }, scene);
+    tbSlide2.position.set(0.06, 0.5, 0.1); 
+    const tbSlideBottom = MeshBuilder.CreateCylinder("tbSlideBottom", { diameter: 0.02, height: 0.14 }, scene);
+    tbSlideBottom.rotation.z = Math.PI / 2; // Connect the two slide tubes
+    tbSlideBottom.position.set(0, 0.9, 0.1);
+
+    const baseTrombone = Mesh.MergeMeshes([tbMain, tbSlide1, tbSlide2, tbSlideBottom], true) as Mesh;
     baseTrombone.name = "baseTrombone";
     baseTrombone.material = brassMat;
 
-    // Sousaphone (large circular body with big bell above the head)
-    const sousaBody = MeshBuilder.CreateTorus("sousaBody", { diameter: 1.0, thickness: 0.15 }, scene);
-    sousaBody.position.set(0, 0, 0); // Wrap around the torso
-    sousaBody.rotation.x = Math.PI / 2; // Make the ring face forward/up
+    // Sousaphone (spiral body with big bell above the head)
+    const sousaPath: Vector3[] = [];
+    for (let i = 0; i <= 60; i++) {
+        const t = i / 60;
+        const angle = t * Math.PI * 4; // 2 complete loops
+        const radius = 0.4 + 0.1 * t; // spiral increasing outward slightly
+        const x = radius * Math.cos(angle);
+        const y = -0.4 + t * 1.2; // spiraling from waist up to shoulder
+        const z = radius * Math.sin(angle);
+        sousaPath.push(new Vector3(x, y, z));
+    }
+    // align last point exactly with bell base
+    sousaPath[sousaPath.length - 1] = new Vector3(-0.4, 0.8, 0);
+
+    const sousaBody = MeshBuilder.CreateTube("sousaBody", { path: sousaPath, radius: 0.08 }, scene);
+    
     const sousaBell = MeshBuilder.CreateCylinder("sousaBell", { diameterTop: 0.8, diameterBottom: 0.1, height: 0.6 }, scene);
     sousaBell.position.set(-0.4, 0.8, 0.3); // Up and over the shoulder
     sousaBell.rotation.x = Math.PI / 2; // Bell pointing forward
