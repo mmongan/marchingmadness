@@ -1,4 +1,4 @@
-import { Engine, Scene, FreeCamera, Vector3, Vector4, HemisphericLight, MeshBuilder, StandardMaterial, DynamicTexture, Color3, Texture, ActionManager, ExecuteCodeAction } from "@babylonjs/core";
+import { Engine, Scene, FreeCamera, Vector3, HemisphericLight, MeshBuilder, StandardMaterial, DynamicTexture, Color3, Texture, ActionManager, ExecuteCodeAction } from "@babylonjs/core";
 import { OpenSheetMusicDisplay } from "opensheetmusicdisplay";
 import * as Tone from "tone";
 
@@ -53,77 +53,32 @@ scene.createDefaultXRExperienceAsync().then((xr) => {
     });
 });
 
-// Stadium Skybox
+// Add a standard majestic skybox
 function buildSkybox(scene: Scene) {
-    const stadium = MeshBuilder.CreateCylinder("stadium", { diameter: 300, height: 100, sideOrientation: 0, faceUV: [new Vector4(0,0,1,1), new Vector4(0,0,1,1), new Vector4(0,0,1,1)] }, scene);
-    stadium.position.y = 40; // Lift it up slightly
-
-    // Apply stadium wrap material
-    const stadiumMat = new StandardMaterial("stadiumMat", scene);
-    stadiumMat.backFaceCulling = false; // So we see it from inside
-    stadiumMat.disableLighting = true;
-
-    // Draw obvious seats and lights
-    const texExt = 2048;
-    const texHeight = 512;
-    const stadiumTex = new DynamicTexture("stadiumTex", { width: texExt, height: texHeight }, scene, true);
-    const ctx = stadiumTex.getContext() as CanvasRenderingContext2D;
-
-    // Background gradient for upper sky
-    const skyGrad = ctx.createLinearGradient(0, 0, 0, texHeight);
-    skyGrad.addColorStop(0, "#00081a"); // night sky
-    skyGrad.addColorStop(0.5, "#112244");
-    skyGrad.addColorStop(1, "#334466"); // stadium interior base
-    ctx.fillStyle = skyGrad;
-    ctx.fillRect(0, 0, texExt, texHeight);
-
-    // Draw tiers of stadium seats (red/blue pixel rows)
-    const seatStartY = texHeight * 0.4;
-    for (let row = 0; row < 15; row++) {
-        const y = seatStartY + (row * 15);
-        ctx.fillStyle = (row % 2 === 0) ? "#881111" : "#112266";
-        // Draw dashed patterned seats
-        ctx.save();
-        ctx.setLineDash([8, 4]);
-        ctx.lineWidth = 10;
-        ctx.strokeStyle = ctx.fillStyle;
-        ctx.beginPath();
-        ctx.moveTo(0, y);
-        ctx.lineTo(texExt, y);
-        ctx.stroke();
-        ctx.restore();
-    }
-
-    // Draw bright stadium light banks around the top edge
-    for (let i = 0; i < 20; i++) {
-        const lx = (i * texExt / 20) + 20;
-        const ly = texHeight * 0.1; // High up on the wall
-        
-        ctx.fillStyle = "#ffffff";
-        ctx.shadowColor = "#ffffff";
-        ctx.shadowBlur = 20;
-        
-        // Rectangular light housing
-        ctx.fillRect(lx, ly, 40, 20);
-        
-        // Pillars holding them
-        ctx.shadowBlur = 0;
-        ctx.fillStyle = "#444444";
-        ctx.fillRect(lx + 15, ly + 20, 10, texHeight * 0.3); // pole down to the seats
-    }
-
-    stadiumTex.update();
-    stadiumMat.emissiveTexture = stadiumTex;
-    stadiumMat.emissiveColor = new Color3(1, 1, 1);
-    stadium.material = stadiumMat;
+    const skybox = MeshBuilder.CreateBox("skyBox", { size: 1000.0 }, scene);
+    const skyboxMaterial = new StandardMaterial("skyBox", scene);
+    skyboxMaterial.backFaceCulling = false;
+    skyboxMaterial.disableLighting = true;
     
-    // Add a dark dome above everything for the night sky top
-    const skyDome = MeshBuilder.CreateSphere("skyDome", { diameter: 400 }, scene);
-    const domeMat = new StandardMaterial("domeMat", scene);
-    domeMat.backFaceCulling = false;
-    domeMat.disableLighting = true;
-    domeMat.emissiveColor = new Color3(0, 0.05, 0.1); // Extremely dark blue almost black
-    skyDome.material = domeMat;
+    // Create a dynamic texture to paint a sky gradient
+    const texSize = 512;
+    const skyTex = new DynamicTexture("skyTex", texSize, scene, true);
+    const ctx = skyTex.getContext() as CanvasRenderingContext2D;
+    
+    const skyGrad = ctx.createLinearGradient(0, 0, 0, texSize);
+    skyGrad.addColorStop(0, "#0a1c3a");   // Deep night blue top
+    skyGrad.addColorStop(0.5, "#1e3b70"); // Mid atmosphere
+    skyGrad.addColorStop(1, "#4a6b9c");   // Horizon light
+    
+    ctx.fillStyle = skyGrad;
+    ctx.fillRect(0, 0, texSize, texSize);
+    skyTex.update();
+    
+    skyboxMaterial.emissiveTexture = skyTex;
+    
+    // Ensure skybox renders behind everything else
+    skybox.infiniteDistance = true; 
+    skybox.material = skyboxMaterial;
 }
 buildSkybox(scene);
 
