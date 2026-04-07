@@ -1,4 +1,5 @@
-import { Engine, Scene, FreeCamera, Vector3, Matrix, Mesh, HemisphericLight, MeshBuilder, StandardMaterial, DynamicTexture, Color3, Texture, CubeTexture, ActionManager, ExecuteCodeAction } from "@babylonjs/core";
+import { BandMemberFactory, InstrumentType, BandMemberData } from "./bandMemberFactory";
+import { Engine, Scene, FreeCamera, Vector3, HemisphericLight, MeshBuilder, StandardMaterial, DynamicTexture, Color3, Texture, CubeTexture, ActionManager, ExecuteCodeAction } from "@babylonjs/core";
 import { OpenSheetMusicDisplay } from "opensheetmusicdisplay";
 import * as Tone from "tone";
 
@@ -183,194 +184,11 @@ function buildFootballField(scene: Scene) {
 }
 buildFootballField(scene);
 
-const bandLegs: { legL: any, legR: any, anchor: any, startZ: number }[] = [];
+const bandLegs: BandMemberData[] = [];
 
 // Create a 100-member marching band in a 10x10 formation
 function buildMarchingBand(scene: Scene) {
-    // Generate Materials for different parts (Colors)
-    const skinMat = new StandardMaterial("skinMat", scene);
-    skinMat.diffuseColor = new Color3(0.9, 0.75, 0.6); // Skin tone
-
-    const uniformMat = new StandardMaterial("uniformMat", scene);
-    uniformMat.diffuseColor = new Color3(0.8, 0.1, 0.1); // Bright red jacket
-
-    const pantsMat = new StandardMaterial("pantsMat", scene);
-    pantsMat.diffuseColor = new Color3(0.1, 0.1, 0.3); // Navy blue pants
-
-    const hatMat = new StandardMaterial("hatMat", scene);
-    hatMat.diffuseColor = new Color3(0.95, 0.95, 0.95); // White hat
-
-    const plumeMat = new StandardMaterial("plumeMat", scene);
-    plumeMat.diffuseColor = new Color3(0.1, 0.6, 0.9); // Blue plume
-
-    const brassMat = new StandardMaterial("brassMat", scene);
-    brassMat.diffuseColor = new Color3(0.85, 0.7, 0.2); // Gold brass instrument
-    
-    // Create base body part meshes to be instanced (using cylinders, boxes, prisms)
-    const baseTorso = MeshBuilder.CreateBox("baseTorso", { width: 0.45, height: 0.6, depth: 0.3 }, scene);
-    baseTorso.material = uniformMat;
-
-    const baseLeg = MeshBuilder.CreateBox("baseLeg", { width: 0.18, height: 0.8, depth: 0.18 }, scene);
-    // Shift geometry down so the origin of the mesh is at the top (the hip pivot)
-    baseLeg.bakeTransformIntoVertices(Matrix.Translation(0, -0.4, 0));
-    baseLeg.material = pantsMat;
-
-    const baseHead = MeshBuilder.CreateSphere("baseHead", { diameter: 0.3 }, scene);
-    baseHead.material = skinMat;
-
-    const baseHat = MeshBuilder.CreateCylinder("baseHat", { diameter: 0.35, height: 0.2 }, scene);
-    baseHat.material = hatMat;
-
-    // Triangular prism for the plume (cylinder with 3 sides)
-    const basePlume = MeshBuilder.CreateCylinder("basePlume", { diameter: 0.1, height: 0.3, tessellation: 3 }, scene);
-    basePlume.material = plumeMat;
-
-    const baseArm = MeshBuilder.CreateCylinder("baseArm", { diameter: 0.12, height: 0.5 }, scene);
-    baseArm.material = uniformMat;
-
-    // Cone-shaped trumpet / brass instrument
-    
-    // Bass Drum (Cylinder facing sideways)
-    const baseBassDrum = MeshBuilder.CreateCylinder("baseBassDrum", { diameter: 0.6, height: 0.3 }, scene);
-    baseBassDrum.bakeTransformIntoVertices(Matrix.RotationZ(Math.PI / 2));
-    baseBassDrum.material = hatMat; // White drum shell
-
-    // Snare Drum (Cylinder facing up)
-    const baseSnareDrum = MeshBuilder.CreateCylinder("baseSnareDrum", { diameter: 0.4, height: 0.2 }, scene);
-    baseSnareDrum.material = hatMat; // White drum shell
-
-    // Tom Toms (3 Cylinders merged into one)
-    const tom1 = MeshBuilder.CreateCylinder("tom1", { diameter: 0.3, height: 0.2 }, scene);
-    tom1.position.set(-0.25, 0, 0); // Left
-    const tom2 = MeshBuilder.CreateCylinder("tom2", { diameter: 0.3, height: 0.2 }, scene);
-    tom2.position.set(0.25, 0, 0); // Right
-    const tom3 = MeshBuilder.CreateCylinder("tom3", { diameter: 0.25, height: 0.2 }, scene);
-    tom3.position.set(0, 0, 0.25); // Front-center
-    const baseTomToms = Mesh.MergeMeshes([tom1, tom2, tom3], true) as Mesh;
-    baseTomToms.name = "baseTomToms";
-    baseTomToms.material = hatMat;
-
-    // Cymbals (two large, thin metallic discs)
-    const cymbalL = MeshBuilder.CreateCylinder("cymbalL", { diameter: 0.5, height: 0.01 }, scene);
-    cymbalL.position.set(-0.15, 0, 0);
-    cymbalL.rotation.z = Math.PI / 2;
-    cymbalL.rotation.y = Math.PI / 8; // Angled outward
-    const cymbalR = MeshBuilder.CreateCylinder("cymbalR", { diameter: 0.5, height: 0.01 }, scene);
-    cymbalR.position.set(0.15, 0, 0);
-    cymbalR.rotation.z = Math.PI / 2;
-    cymbalR.rotation.y = -Math.PI / 8; // Angled outward
-    const baseCymbals = Mesh.MergeMeshes([cymbalL, cymbalR], true) as Mesh;
-    baseCymbals.name = "baseCymbals";
-    baseCymbals.material = brassMat;
-
-    // Saxophone (brass vertical cylinder with a bell pointing out)
-    const saxMain = MeshBuilder.CreateCylinder("saxMain", { diameterTop: 0.05, diameterBottom: 0.08, height: 0.6 }, scene);
-    saxMain.position.set(0, -0.3, 0); // main tube shifted down
-    const saxBell = MeshBuilder.CreateCylinder("saxBell", { diameterTop: 0.15, diameterBottom: 0.05, height: 0.25 }, scene);
-    saxBell.position.set(0, -0.55, 0.1); 
-    saxBell.rotation.x = Math.PI / 3; // curve upwards and out
-    const baseSaxophone = Mesh.MergeMeshes([saxMain, saxBell], true) as Mesh;
-    baseSaxophone.name = "baseSaxophone";
-    baseSaxophone.material = brassMat;
-
-    // Clarinet (thin black cylinder)
-    const clarinetMat = new StandardMaterial("clarinetMat", scene);
-    clarinetMat.diffuseColor = new Color3(0.1, 0.1, 0.1); // Near black
-    clarinetMat.specularColor = new Color3(0.5, 0.5, 0.5); // some shine
-    const baseClarinet = MeshBuilder.CreateCylinder("baseClarinet", { diameter: 0.04, height: 0.7 }, scene);
-    baseClarinet.bakeTransformIntoVertices(Matrix.Translation(0, -0.35, 0)); // Shift origin to top
-    baseClarinet.material = clarinetMat;
-
-    // Trombone (shorter bell with looped slide)
-    const tbMain = MeshBuilder.CreateCylinder("tbMain", { diameterTop: 0.15, diameterBottom: 0.02, height: 0.6 }, scene);
-    tbMain.position.set(0, 0.3, 0); // Shift UP so origin is near the narrow mouthpiece
-    
-    // Slide loop (2 parallel tubes + 1 bottom connector)
-    const tbSlide1 = MeshBuilder.CreateCylinder("tbSlide1", { diameter: 0.02, height: 0.8 }, scene);
-    tbSlide1.position.set(-0.06, 0.5, 0.1); // Offset in X and Z to avoid intersecting the bell
-    const tbSlide2 = MeshBuilder.CreateCylinder("tbSlide2", { diameter: 0.02, height: 0.8 }, scene);
-    tbSlide2.position.set(0.06, 0.5, 0.1); 
-    const tbSlideBottom = MeshBuilder.CreateCylinder("tbSlideBottom", { diameter: 0.02, height: 0.14 }, scene);
-    tbSlideBottom.rotation.z = Math.PI / 2; // Connect the two slide tubes
-    tbSlideBottom.position.set(0, 0.9, 0.1);
-
-    const baseTrombone = Mesh.MergeMeshes([tbMain, tbSlide1, tbSlide2, tbSlideBottom], true) as Mesh;
-    baseTrombone.name = "baseTrombone";
-    baseTrombone.material = brassMat;
-
-    // Sousaphone (spiral body with big bell above the head)
-    const sousaPath: Vector3[] = [];
-    for (let i = 0; i <= 60; i++) {
-        const t = i / 60;
-        const angle = t * Math.PI * 1.5; // 0.75 loops instead of 1, so it ends on the right side
-        const radius = 0.4 + 0.1 * t; // spiral increasing outward slightly
-        // Negate x so the spiral wraps to the other direction, ending at right side
-        const x = -radius * Math.cos(angle);
-        const y = -0.4 + t * 1.2; // spiraling from waist up to shoulder
-        const z = -radius * Math.sin(angle); // keep behind the player mostly
-        sousaPath.push(new Vector3(x, y, z));
-    }
-    // ensure last point smoothly connects to the bell
-    const lastP = sousaPath[sousaPath.length - 1];
-    
-    const sousaBody = MeshBuilder.CreateTube("sousaBody", { path: sousaPath, radius: 0.08 }, scene);
-    
-    // Attach the bell to the end of the tube
-    const sousaBell = MeshBuilder.CreateCylinder("sousaBell", { diameterTop: 0.8, diameterBottom: 0.1, height: 0.6 }, scene);
-    sousaBell.position.set(lastP.x, lastP.y, lastP.z + 0.3); // Extends forward from the tube's end
-    sousaBell.rotation.x = Math.PI / 2; // Bell pointing forward
-    const baseSousaphone = Mesh.MergeMeshes([sousaBody, sousaBell], true) as Mesh;
-
-    baseSousaphone.name = "baseSousaphone";
-    baseSousaphone.material = brassMat;
-
-    // Flute (thin silver tube, held to the side)
-    const baseFlute = MeshBuilder.CreateCylinder("baseFlute", { diameter: 0.02, height: 0.6 }, scene);
-    // Shift origin to the end (mouthpiece)
-    baseFlute.bakeTransformIntoVertices(Matrix.Translation(0, 0.3, 0));
-    baseFlute.material = new StandardMaterial("fluteMat", scene);
-    (baseFlute.material as StandardMaterial).diffuseColor = new Color3(0.9, 0.9, 0.9); // Silver
-    (baseFlute.material as StandardMaterial).specularColor = new Color3(1, 1, 1);
-
-    // Trumpet (brass, smaller shape, held forward)
-    const tptBody = MeshBuilder.CreateCylinder("tptBody", { diameterTop: 0.08, diameterBottom: 0.02, height: 0.4 }, scene);
-    tptBody.position.set(0, 0.2, 0); // Bell at top, mouthpiece at origin
-    const tptValves = MeshBuilder.CreateBox("tptValves", { width: 0.06, height: 0.1, depth: 0.04 }, scene);
-    tptValves.position.set(0, 0.15, 0.04);
-    const baseTrumpet = Mesh.MergeMeshes([tptBody, tptValves], true) as Mesh;
-    baseTrumpet.name = "baseTrumpet";
-    baseTrumpet.material = brassMat;
-
-    // Mellophone (forward-facing large bell like trumpet but chunkier)
-    const melloBody = MeshBuilder.CreateCylinder("melloBody", { diameterTop: 0.18, diameterBottom: 0.02, height: 0.45 }, scene);
-    melloBody.position.set(0, 0.225, 0); 
-    const melloValves = MeshBuilder.CreateBox("melloValves", { width: 0.08, height: 0.12, depth: 0.06 }, scene);
-    melloValves.position.set(0, 0.15, 0.05);
-    const baseMellophone = Mesh.MergeMeshes([melloBody, melloValves], true) as Mesh;
-    baseMellophone.name = "baseMellophone";
-    baseMellophone.material = brassMat;
-
-    // Euphonium (large marching brass instrument, similar to thick trumpet)
-    const euphBody = MeshBuilder.CreateCylinder("euphBody", { diameterTop: 0.25, diameterBottom: 0.05, height: 0.6 }, scene);
-    euphBody.position.set(0, 0.3, 0); 
-    const euphValves = MeshBuilder.CreateBox("euphValves", { width: 0.1, height: 0.15, depth: 0.08 }, scene);
-    euphValves.position.set(0, 0.2, 0.06);
-    const baseEuphonium = Mesh.MergeMeshes([euphBody, euphValves], true) as Mesh;
-    baseEuphonium.name = "baseEuphonium";
-    baseEuphonium.material = brassMat;
-
-    // Drum Major Mace (staff with spherical head)
-    const maceShaft = MeshBuilder.CreateCylinder("maceShaft", { diameter: 0.02, height: 0.8 }, scene);
-    const maceHead = MeshBuilder.CreateSphere("maceHead", { diameter: 0.08 }, scene);
-    maceHead.position.set(0, 0.4, 0); // At top of shaft
-    const maceTip = MeshBuilder.CreateSphere("maceTip", { diameter: 0.03 }, scene);
-    maceTip.position.set(0, -0.4, 0); // At bottom of shaft
-    const baseMace = Mesh.MergeMeshes([maceShaft, maceHead, maceTip], true) as Mesh;
-    baseMace.name = "baseMace";
-    const maceMat = new StandardMaterial("maceMat", scene);
-    maceMat.diffuseColor = new Color3(0.9, 0.9, 0.9); // Silver/White
-    maceMat.specularColor = new Color3(1, 1, 1);
-    baseMace.material = maceMat;
+    const factory = new BandMemberFactory(scene);
 
     const rows = 16;
     const cols = 10;
@@ -378,181 +196,40 @@ function buildMarchingBand(scene: Scene) {
     const spacingZ = 2.0; // 2 meters between rows
     const startZ = 60;
 
-    let firstMacePlaced = false;
-    let firstFlutePlaced = false;
-    let firstTrumpetPlaced = false;
-    let firstMellophonePlaced = false;
-    let firstEuphoniumPlaced = false;
-    let firstBassDrumPlaced = false;
-    let firstSnareDrumPlaced = false;
-    let firstTomTomPlaced = false;
-    let firstCymbalsPlaced = false;
-    let firstSaxophonePlaced = false;
-    let firstClarinetPlaced = false;
-    let firstTrombonePlaced = false;
-    let firstSousaphonePlaced = false;
-
     for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
-            const isBase = (r === 0 && c === 0);
-            const isDrumMajor = (r === 0); // Row 0
-            const isFlute = (r === 1); // Row 1
-            const isClarinet = (r === 2 || r === 3); // Rows 2 and 3
-            const isSaxophone = (r === 4 || r === 5); // Rows 4 and 5
-            const isTomTom = (r === 6); // Row 6
-            const isSnareDrum = (r === 7 || r === 8); // Rows 7 and 8
-            const isBassDrum = (r === 9); // Row 9
-            const isCymbals = (r === 10); // Row 10
-            const isTrumpet = (r === 11); // Row 11
-            const isMellophone = (r === 12); // Row 12
-            const isEuphonium = (r === 13); // Row 13
-            const isTrombone = (r === 14); // Row 14
-            const isSousaphone = (r === 15); // Row 15 (back row)
-            const isDrum = isBassDrum || isSnareDrum || isTomTom || isCymbals;
-            
+            const isFlute = (r === 1);
+            const isClarinet = (r === 2 || r === 3);
+            const isSaxophone = (r === 4 || r === 5);
+            const isTomTom = (r === 6);
+            const isSnareDrum = (r === 7 || r === 8);
+            const isBassDrum = (r === 9);
+            const isCymbals = (r === 10);
+            const isTrumpet = (r === 11);
+            const isMellophone = (r === 12);
+            const isEuphonium = (r === 13);
+            const isTrombone = (r === 14);
+            const isSousaphone = (r === 15);
+
+            let type: InstrumentType = "DrumMajor";
+            if (isFlute) type = "Flute";
+            else if (isClarinet) type = "Clarinet";
+            else if (isSaxophone) type = "Saxophone";
+            else if (isTomTom) type = "TomTom";
+            else if (isSnareDrum) type = "SnareDrum";
+            else if (isBassDrum) type = "BassDrum";
+            else if (isCymbals) type = "Cymbals";
+            else if (isTrumpet) type = "Trumpet";
+            else if (isMellophone) type = "Mellophone";
+            else if (isEuphonium) type = "Euphonium";
+            else if (isTrombone) type = "Trombone";
+            else if (isSousaphone) type = "Sousaphone";
+
             const xPos = (c - cols / 2 + 0.5) * spacingX;
             const zPos = startZ + r * spacingZ;
 
-            // Anchor point for this member
-            const anchor = MeshBuilder.CreateBox(`anchor_${r}_${c}`, { size: 0.01 }, scene);
-            anchor.position.set(xPos, 0, zPos);
-            anchor.rotation.y = Math.PI; // Face towards the camera / negative Z direction
-            anchor.isVisible = false;
-
-            // Torso (Box)
-            const torso = isBase ? baseTorso : baseTorso.createInstance(`torso_${r}_${c}`);
-            torso.parent = anchor;
-            torso.position.set(0, 1.1, 0);
-
-            // Left Leg (Box)
-            const legL = isBase ? baseLeg : baseLeg.createInstance(`legL_${r}_${c}`);
-            legL.parent = anchor;
-            legL.position.set(-0.12, 0.8, 0); // attached at the hip
-
-            // Right Leg (Clone or Instance)
-            const legR = isBase ? baseLeg.clone(`legR_${r}_${c}`) : baseLeg.createInstance(`legR_${r}_${c}`);
-            legR.parent = anchor;
-            legR.position.set(0.12, 0.8, 0); // attached at the hip
-
-            bandLegs.push({ legL, legR, anchor, startZ: zPos });
-
-            // Head (Sphere)
-            const head = isBase ? baseHead : baseHead.createInstance(`head_${r}_${c}`);
-            head.parent = anchor;
-            head.position.set(0, 1.55, 0);
-
-            // Hat (Cylinder)
-            const hat = isBase ? baseHat : baseHat.createInstance(`hat_${r}_${c}`);
-            hat.parent = anchor;
-            hat.position.set(0, 1.8, 0);
-
-            // Plume (Prism / Cylinder with tessellation 3)
-            const plume = isBase ? basePlume : basePlume.createInstance(`plume_${r}_${c}`);
-            plume.parent = anchor;
-            plume.position.set(0, 2.0, 0);
-
-            // Left Arm (Cylinder)
-            const armL = isBase ? baseArm : baseArm.createInstance(`armL_${r}_${c}`);
-            armL.parent = anchor;
-            armL.position.set(-0.3, 1.25, 0.15);
-            armL.rotation.x = Math.PI / 4;
-            armL.rotation.y = isDrum ? Math.PI / 4 : Math.PI / 8;
-
-            // Right Arm (Clone or Instance)
-            const armR = isBase ? baseArm.clone(`armR_${r}_${c}`) : baseArm.createInstance(`armR_${r}_${c}`);
-            armR.parent = anchor;
-            armR.position.set(0.3, 1.25, 0.15);
-            armR.rotation.x = Math.PI / 4; 
-            armR.rotation.y = isDrum ? -Math.PI / 4 : -Math.PI / 8;
-
-            // Instrument (Cylinder)
-            let instr;
-            if (isDrumMajor) {
-                instr = (!firstMacePlaced) ? baseMace : baseMace.createInstance(`mace_${r}_${c}`);
-                firstMacePlaced = true;
-                instr.parent = anchor;
-                instr.position.set(0.3, 1.6, 0.4); // Held up in the right hand
-                instr.rotation.x = -Math.PI / 8; // Angled slightly backward/upward
-                instr.rotation.z = Math.PI / 8;
-            } else if (isBassDrum) {
-                instr = (!firstBassDrumPlaced) ? baseBassDrum : baseBassDrum.createInstance(`bassdrum_${r}_${c}`);
-                firstBassDrumPlaced = true;
-                instr.parent = anchor;
-                instr.position.set(0, 1.1, 0.45); // Pushed forward so it doesn't clip into the torso
-                instr.rotation.x = 0; 
-            } else if (isCymbals) {
-                instr = (!firstCymbalsPlaced) ? baseCymbals : baseCymbals.createInstance(`cymbals_${r}_${c}`);
-                firstCymbalsPlaced = true;
-                instr.parent = anchor;
-                instr.position.set(0, 1.25, 0.4); // Held up in front of chest
-                instr.rotation.x = 0;
-            } else if (isSnareDrum) {
-                instr = (!firstSnareDrumPlaced) ? baseSnareDrum : baseSnareDrum.createInstance(`snaredrum_${r}_${c}`);
-                firstSnareDrumPlaced = true;
-                instr.parent = anchor;
-                instr.position.set(0, 1.0, 0.35); // Hanging around waist, resting flat
-                instr.rotation.x = 0;
-            } else if (isTomTom) {
-                instr = (!firstTomTomPlaced) ? baseTomToms : baseTomToms.createInstance(`tomtom_${r}_${c}`);
-                firstTomTomPlaced = true;
-                instr.parent = anchor;
-                instr.position.set(0, 1.0, 0.4); // Moved further forward to avoid intersecting torso
-                instr.rotation.x = 0;
-            } else if (isSaxophone) {
-                instr = (!firstSaxophonePlaced) ? baseSaxophone : baseSaxophone.createInstance(`sax_${r}_${c}`);
-                firstSaxophonePlaced = true;
-                instr.parent = anchor;
-                // Connect to mouth area and tilt bottom outward (negative X rotation)
-                instr.position.set(0, 1.45, 0.15); // Origin is at the mouthpiece, placed at the lips
-                instr.rotation.x = -Math.PI / 6; // Negative rotation tilts the bottom of the instrument forward, away from the torso
-            } else if (isClarinet) {
-                instr = (!firstClarinetPlaced) ? baseClarinet : baseClarinet.createInstance(`clarinet_${r}_${c}`);
-                firstClarinetPlaced = true;
-                instr.parent = anchor;
-                // Connect to mouth area and tilt bottom outward, slightly steeper than sax
-                instr.position.set(0, 1.45, 0.15); 
-                instr.rotation.x = -Math.PI / 4; 
-            } else if (isTrombone) {
-                instr = (!firstTrombonePlaced) ? baseTrombone : baseTrombone.createInstance(`trombone_${r}_${c}`);
-                firstTrombonePlaced = true;
-                instr.parent = anchor;
-                // Connect origin (mouthpiece) directly to the mouth area
-                instr.position.set(0, 1.45, 0.15);
-                instr.rotation.x = Math.PI / 2;
-            } else if (isSousaphone) {
-                instr = (!firstSousaphonePlaced) ? baseSousaphone : baseSousaphone.createInstance(`sousaphone_${r}_${c}`);
-                firstSousaphonePlaced = true;
-                instr.parent = anchor;
-                // Wrap around the right shoulder, bell protruding forward
-                instr.position.set(0, 1.25, 0.1); 
-                instr.rotation.x = 0;
-            } else if (isFlute) {
-                instr = (!firstFlutePlaced) ? baseFlute : baseFlute.createInstance(`flute_${r}_${c}`);
-                firstFlutePlaced = true;
-                instr.parent = anchor;
-                // Move origin (mouthpiece) to the lips, pivot instrument to face right horizontally
-                instr.position.set(0, 1.45, 0.15);
-                instr.rotation.z = -Math.PI / 2; // Pivot to point to the right
-                instr.rotation.y = Math.PI / 8; // Slight angle forward
-            } else if (isTrumpet) {
-                instr = (!firstTrumpetPlaced) ? baseTrumpet : baseTrumpet.createInstance(`trumpet_${r}_${c}`);
-                firstTrumpetPlaced = true;
-                instr.parent = anchor;
-                instr.position.set(0, 1.45, 0.15);
-                instr.rotation.x = Math.PI / 2;
-            } else if (isMellophone) {
-                instr = (!firstMellophonePlaced) ? baseMellophone : baseMellophone.createInstance(`mello_${r}_${c}`);
-                firstMellophonePlaced = true;
-                instr.parent = anchor;
-                instr.position.set(0, 1.45, 0.15);
-                instr.rotation.x = Math.PI / 2;
-            } else if (isEuphonium) {
-                instr = (!firstEuphoniumPlaced) ? baseEuphonium : baseEuphonium.createInstance(`euph_${r}_${c}`);
-                firstEuphoniumPlaced = true;
-                instr.parent = anchor;
-                instr.position.set(0, 1.45, 0.15);
-                instr.rotation.x = Math.PI / 2;
-            }
+            const memberData = factory.createMember(r, c, type, xPos, zPos);
+            bandLegs.push(memberData);
         }
     }
 }
