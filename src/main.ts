@@ -183,7 +183,7 @@ function buildFootballField(scene: Scene) {
 }
 buildFootballField(scene);
 
-const bandLegs: { legL: any, legR: any, anchor: any }[] = [];
+const bandLegs: { legL: any, legR: any, anchor: any, startZ: number }[] = [];
 
 // Create a 100-member marching band in a 10x10 formation
 function buildMarchingBand(scene: Scene) {
@@ -234,7 +234,7 @@ function buildMarchingBand(scene: Scene) {
     const cols = 10;
     const spacingX = 2.0; // 2 meters between columns
     const spacingZ = 2.0; // 2 meters between rows
-    const startZ = 15;
+    const startZ = 60;
 
     for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
@@ -263,7 +263,7 @@ function buildMarchingBand(scene: Scene) {
             legR.parent = anchor;
             legR.position.set(0.12, 0.4, 0);
 
-            bandLegs.push({ legL, legR, anchor });
+            bandLegs.push({ legL, legR, anchor, startZ: zPos });
 
             // Head (Sphere)
             const head = isBase ? baseHead : baseHead.createInstance(`head_${r}_${c}`);
@@ -311,7 +311,10 @@ const gameBlocks: { mesh: any, arrivalTime: number, startX: number, startY: numb
 let gameStartTime: number | null = null;
 const BPM = 80;
 const WHOLE_NOTE_DURATION = (60 / BPM) * 4;
-const FLY_SPEED = 2; // units per second (slower for readability)
+
+// 8 steps per 5 yards: 5 yards = 5 * (109.7/120) meters = 4.5708m. 8 beats = 4.5708m.
+// 1 beat = 4.5708 / 8 = 0.57135m. At BPM, speed = 0.57135 * (BPM / 60) m/s.
+const FLY_SPEED = 0.57135 * (BPM / 60);
 
 // 3D VR Start Button
 const startBtnMesh = MeshBuilder.CreatePlane("startBtnMesh", { width: 2, height: 1 }, scene);
@@ -615,10 +618,14 @@ engine.runRenderLoop(() => {
     const secondsPerBeat = 60 / BPM;
     // Calculate a phase angle where one full stride occurs every 2 beats
     const marchPhase = (currentRenderTime * Math.PI * 2) / (secondsPerBeat * 2);
-    bandLegs.forEach(({ legL, legR }) => {
+    bandLegs.forEach(({ legL, legR, anchor, startZ }) => {
         // Swing legs back and forth like pendulums
         legL.rotation.x = Math.sin(marchPhase) * 0.6;
         legR.rotation.x = -Math.sin(marchPhase) * 0.6;
+        // Actually move them down the field at standard marching speed
+        if (gameStartTime !== null) {
+            anchor.position.z = startZ - (currentRenderTime * FLY_SPEED);
+        }
     });
 
     // Continuously poll to ensure the queue processes upcoming measures during gameplay
