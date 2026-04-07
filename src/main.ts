@@ -252,6 +252,16 @@ function buildMarchingBand(scene: Scene) {
     baseTomToms.name = "baseTomToms";
     baseTomToms.material = hatMat;
 
+    // Saxophone (brass vertical cylinder with a bell pointing out)
+    const saxMain = MeshBuilder.CreateCylinder("saxMain", { diameterTop: 0.05, diameterBottom: 0.08, height: 0.6 }, scene);
+    saxMain.position.set(0, 0, 0); // main tube
+    const saxBell = MeshBuilder.CreateCylinder("saxBell", { diameterTop: 0.15, diameterBottom: 0.05, height: 0.25 }, scene);
+    saxBell.position.set(0, -0.25, 0.1); 
+    saxBell.rotation.x = Math.PI / 3; // curve upwards and out
+    const baseSaxophone = Mesh.MergeMeshes([saxMain, saxBell], true) as Mesh;
+    baseSaxophone.name = "baseSaxophone";
+    baseSaxophone.material = brassMat;
+
     const rows = 10;
     const cols = 10;
     const spacingX = 2.0; // 2 meters between columns
@@ -262,6 +272,7 @@ function buildMarchingBand(scene: Scene) {
     let firstBassDrumPlaced = false;
     let firstSnareDrumPlaced = false;
     let firstTomTomPlaced = false;
+    let firstSaxophonePlaced = false;
 
     for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
@@ -269,6 +280,7 @@ function buildMarchingBand(scene: Scene) {
             const isBassDrum = (r === 7 || r === 8); // Rows 7 and 8 are bass drums
             const isSnareDrum = (r === 5 || r === 6); // Rows 5 and 6 are snare drums
             const isTomTom = (r === 4); // Row 4 (one row) is tom toms
+            const isSaxophone = (r === 2 || r === 3); // Rows 2 and 3 are saxophones
             const isDrum = isBassDrum || isSnareDrum || isTomTom;
             
             const xPos = (c - cols / 2 + 0.5) * spacingX;
@@ -346,6 +358,13 @@ function buildMarchingBand(scene: Scene) {
                 instr.parent = anchor;
                 instr.position.set(0, 1.0, 0.25); // Attached in front of waist
                 instr.rotation.x = 0;
+            } else if (isSaxophone) {
+                instr = (!firstSaxophonePlaced) ? baseSaxophone : baseSaxophone.createInstance(`sax_${r}_${c}`);
+                firstSaxophonePlaced = true;
+                instr.parent = anchor;
+                // Connect to mouth area and angle down
+                instr.position.set(0, 1.3, 0.3); // Mouth area going down
+                instr.rotation.x = Math.PI / 8; // Slanted out slightly
             } else {
                 instr = (!firstTrumpetPlaced) ? baseInstr : baseInstr.createInstance(`instr_${r}_${c}`);
                 firstTrumpetPlaced = true;
