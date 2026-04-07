@@ -224,7 +224,8 @@ function buildMarchingBand(scene: Scene) {
     const baseArm = MeshBuilder.CreateCylinder("baseArm", { diameter: 0.12, height: 0.5 }, scene);
     baseArm.material = uniformMat;
 
-    const baseInstr = MeshBuilder.CreateCylinder("baseInstr", { diameter: 0.1, height: 0.6 }, scene);
+    // Cone-shaped trumpet / brass instrument
+    const baseInstr = MeshBuilder.CreateCylinder("baseInstr", { diameterTop: 0.25, diameterBottom: 0.02, height: 0.6 }, scene);
     baseInstr.material = brassMat;
 
     const rows = 10;
