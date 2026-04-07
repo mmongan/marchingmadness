@@ -185,57 +185,115 @@ buildFootballField(scene);
 
 // Create a 100-member marching band in a 10x10 formation
 function buildMarchingBand(scene: Scene) {
-    const bandMat = new StandardMaterial("bandMat", scene);
-    bandMat.diffuseColor = new Color3(0.8, 0.1, 0.1); // Bright red uniforms
-    bandMat.specularColor = new Color3(0.1, 0.1, 0.1);
+    // Generate Materials for different parts (Colors)
+    const skinMat = new StandardMaterial("skinMat", scene);
+    skinMat.diffuseColor = new Color3(0.9, 0.75, 0.6); // Skin tone
 
-    // Create a base mesh to instance (cylinder to represent humans)
-    // 1.8 meters tall, 0.6 meters wide
-    const baseMember = MeshBuilder.CreateCylinder("bandMemberBase", { diameter: 0.6, height: 1.8 }, scene);
-    baseMember.material = bandMat;
-    
-    // Add a little white hat to the base member
-    const hat = MeshBuilder.CreateCylinder("hat", { diameter: 0.65, height: 0.2 }, scene);
+    const uniformMat = new StandardMaterial("uniformMat", scene);
+    uniformMat.diffuseColor = new Color3(0.8, 0.1, 0.1); // Bright red jacket
+
+    const pantsMat = new StandardMaterial("pantsMat", scene);
+    pantsMat.diffuseColor = new Color3(0.1, 0.1, 0.3); // Navy blue pants
+
     const hatMat = new StandardMaterial("hatMat", scene);
-    hatMat.diffuseColor = new Color3(1, 1, 1);
-    hat.material = hatMat;
-    hat.parent = baseMember;
-    hat.position.y = 0.9; // Sit on top of the head
+    hatMat.diffuseColor = new Color3(0.95, 0.95, 0.95); // White hat
 
-    // Move the base member so its feet are on the ground (y=0)
-    baseMember.position.y = 0.9; 
+    const plumeMat = new StandardMaterial("plumeMat", scene);
+    plumeMat.diffuseColor = new Color3(0.1, 0.6, 0.9); // Blue plume
+
+    const brassMat = new StandardMaterial("brassMat", scene);
+    brassMat.diffuseColor = new Color3(0.85, 0.7, 0.2); // Gold brass instrument
     
+    // Create base body part meshes to be instanced (using cylinders, boxes, prisms)
+    const baseTorso = MeshBuilder.CreateBox("baseTorso", { width: 0.45, height: 0.6, depth: 0.3 }, scene);
+    baseTorso.material = uniformMat;
+
+    const baseLeg = MeshBuilder.CreateBox("baseLeg", { width: 0.18, height: 0.8, depth: 0.18 }, scene);
+    baseLeg.material = pantsMat;
+
+    const baseHead = MeshBuilder.CreateSphere("baseHead", { diameter: 0.3 }, scene);
+    baseHead.material = skinMat;
+
+    const baseHat = MeshBuilder.CreateCylinder("baseHat", { diameter: 0.35, height: 0.2 }, scene);
+    baseHat.material = hatMat;
+
+    // Triangular prism for the plume (cylinder with 3 sides)
+    const basePlume = MeshBuilder.CreateCylinder("basePlume", { diameter: 0.1, height: 0.3, tessellation: 3 }, scene);
+    basePlume.material = plumeMat;
+
+    const baseArm = MeshBuilder.CreateCylinder("baseArm", { diameter: 0.12, height: 0.5 }, scene);
+    baseArm.material = uniformMat;
+
+    const baseInstr = MeshBuilder.CreateCylinder("baseInstr", { diameter: 0.1, height: 0.6 }, scene);
+    baseInstr.material = brassMat;
+
     const rows = 10;
     const cols = 10;
     const spacingX = 2.0; // 2 meters between columns
     const spacingZ = 2.0; // 2 meters between rows
-
-    // Start placing them down the field, offset ahead of the player (e.g. Z = 15 to 33)
     const startZ = 15;
 
     for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
-            // Use the base mesh for the very first position, otherwise create an instance for performance
-            const member = (r === 0 && c === 0) ? baseMember : baseMember.createInstance(`bandMember_${r}_${c}`);
+            const isBase = (r === 0 && c === 0);
             
-            // Center the columns around X=0
             const xPos = (c - cols / 2 + 0.5) * spacingX;
             const zPos = startZ + r * spacingZ;
-            
-            if (member !== baseMember) {
-                // Instances need their absolute position set
-                member.position.x = xPos;
-                member.position.y = 0.9;
-                member.position.z = zPos;
 
-                // Create a clone of the hat logic for the instance hierarchy
-                const instanceHat = hat.createInstance(`hat_${r}_${c}`);
-                instanceHat.parent = member;
-                instanceHat.position.y = 0.9;
-            } else {
-                baseMember.position.x = xPos;
-                baseMember.position.z = zPos;
-            }
+            // Anchor point for this member
+            const anchor = MeshBuilder.CreateBox(`anchor_${r}_${c}`, { size: 0.01 }, scene);
+            anchor.position.set(xPos, 0, zPos);
+            anchor.isVisible = false;
+
+            // Torso (Box)
+            const torso = isBase ? baseTorso : baseTorso.createInstance(`torso_${r}_${c}`);
+            torso.parent = anchor;
+            torso.position.set(0, 1.1, 0);
+
+            // Left Leg (Box)
+            const legL = isBase ? baseLeg : baseLeg.createInstance(`legL_${r}_${c}`);
+            legL.parent = anchor;
+            legL.position.set(-0.12, 0.4, 0);
+
+            // Right Leg (Clone or Instance)
+            const legR = isBase ? baseLeg.clone(`legR_${r}_${c}`) : baseLeg.createInstance(`legR_${r}_${c}`);
+            legR.parent = anchor;
+            legR.position.set(0.12, 0.4, 0);
+
+            // Head (Sphere)
+            const head = isBase ? baseHead : baseHead.createInstance(`head_${r}_${c}`);
+            head.parent = anchor;
+            head.position.set(0, 1.55, 0);
+
+            // Hat (Cylinder)
+            const hat = isBase ? baseHat : baseHat.createInstance(`hat_${r}_${c}`);
+            hat.parent = anchor;
+            hat.position.set(0, 1.8, 0);
+
+            // Plume (Prism / Cylinder with tessellation 3)
+            const plume = isBase ? basePlume : basePlume.createInstance(`plume_${r}_${c}`);
+            plume.parent = anchor;
+            plume.position.set(0, 2.0, 0);
+
+            // Left Arm (Cylinder)
+            const armL = isBase ? baseArm : baseArm.createInstance(`armL_${r}_${c}`);
+            armL.parent = anchor;
+            armL.position.set(-0.3, 1.25, 0.15);
+            armL.rotation.x = Math.PI / 4;
+            armL.rotation.y = Math.PI / 8;
+
+            // Right Arm (Clone or Instance)
+            const armR = isBase ? baseArm.clone(`armR_${r}_${c}`) : baseArm.createInstance(`armR_${r}_${c}`);
+            armR.parent = anchor;
+            armR.position.set(0.3, 1.25, 0.15);
+            armR.rotation.x = Math.PI / 4;
+            armR.rotation.y = -Math.PI / 8;
+
+            // Instrument (Cylinder)
+            const instr = isBase ? baseInstr : baseInstr.createInstance(`instr_${r}_${c}`);
+            instr.parent = anchor;
+            instr.position.set(0, 1.2, 0.3);
+            instr.rotation.x = Math.PI / 2;
         }
     }
 }
