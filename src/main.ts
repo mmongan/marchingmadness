@@ -229,9 +229,7 @@ function buildMarchingBand(scene: Scene) {
     baseArm.material = uniformMat;
 
     // Cone-shaped trumpet / brass instrument
-    const baseInstr = MeshBuilder.CreateCylinder("baseInstr", { diameterTop: 0.25, diameterBottom: 0.02, height: 0.6 }, scene);
-    baseInstr.material = brassMat;
-
+    
     // Bass Drum (Cylinder facing sideways)
     const baseBassDrum = MeshBuilder.CreateCylinder("baseBassDrum", { diameter: 0.6, height: 0.3 }, scene);
     baseBassDrum.bakeTransformIntoVertices(Matrix.RotationZ(Math.PI / 2));
@@ -293,20 +291,22 @@ function buildMarchingBand(scene: Scene) {
         const t = i / 60;
         const angle = t * Math.PI * 2; // 1 complete loop
         const radius = 0.4 + 0.1 * t; // spiral increasing outward slightly
-        const x = radius * Math.cos(angle);
+        // Negate x so the spiral wraps to the other direction, ending at positive X
+        const x = -radius * Math.cos(angle);
         const y = -0.4 + t * 1.2; // spiraling from waist up to shoulder
         const z = radius * Math.sin(angle);
         sousaPath.push(new Vector3(x, y, z));
     }
     // align last point exactly with bell base
-    sousaPath[sousaPath.length - 1] = new Vector3(-0.4, 0.8, 0);
+    sousaPath[sousaPath.length - 1] = new Vector3(0.4, 0.8, 0);
 
     const sousaBody = MeshBuilder.CreateTube("sousaBody", { path: sousaPath, radius: 0.08 }, scene);
     
     const sousaBell = MeshBuilder.CreateCylinder("sousaBell", { diameterTop: 0.8, diameterBottom: 0.1, height: 0.6 }, scene);
-    sousaBell.position.set(-0.4, 0.8, 0.3); // Up and over the shoulder
+    sousaBell.position.set(0.4, 0.8, 0.3); // Up and over the other shoulder
     sousaBell.rotation.x = Math.PI / 2; // Bell pointing forward
     const baseSousaphone = Mesh.MergeMeshes([sousaBody, sousaBell], true) as Mesh;
+
     baseSousaphone.name = "baseSousaphone";
     baseSousaphone.material = brassMat;
 
@@ -456,8 +456,8 @@ function buildMarchingBand(scene: Scene) {
                 instr = (!firstSousaphonePlaced) ? baseSousaphone : baseSousaphone.createInstance(`sousaphone_${r}_${c}`);
                 firstSousaphonePlaced = true;
                 instr.parent = anchor;
-                // Wrap torus around shoulder, let the bell protrude up and forward
-                instr.position.set(0.1, 1.25, 0.1); 
+                // Wrap around the right shoulder, bell protruding forward
+                instr.position.set(0, 1.25, 0.1); 
                 instr.rotation.x = 0;
             } else if (isFlute) {
                 instr = (!firstFlutePlaced) ? baseFlute : baseFlute.createInstance(`flute_${r}_${c}`);
@@ -471,14 +471,6 @@ function buildMarchingBand(scene: Scene) {
                 firstTrumpetPlaced = true;
                 instr.parent = anchor;
                 instr.position.set(0, 1.45, 0.15);
-                instr.rotation.x = Math.PI / 2;
-            } else {
-                // Not used mostly right now, default cylinder if needed
-                instr = (!firstTrumpetPlaced) ? baseInstr : baseInstr.createInstance(`instr_${r}_${c}`);
-                firstTrumpetPlaced = true;
-                instr.parent = anchor;
-                // Connect to mouth area (head is at Y=1.55, diameter 0.3)
-                instr.position.set(0, 1.5, 0.45);
                 instr.rotation.x = Math.PI / 2;
             }
         }
