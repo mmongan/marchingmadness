@@ -1,4 +1,4 @@
-import { Engine, Scene, FreeCamera, Vector3, Matrix, HemisphericLight, MeshBuilder, StandardMaterial, DynamicTexture, Color3, Texture, CubeTexture, ActionManager, ExecuteCodeAction } from "@babylonjs/core";
+import { Engine, Scene, FreeCamera, Vector3, Matrix, Mesh, HemisphericLight, MeshBuilder, StandardMaterial, DynamicTexture, Color3, Texture, CubeTexture, ActionManager, ExecuteCodeAction } from "@babylonjs/core";
 import { OpenSheetMusicDisplay } from "opensheetmusicdisplay";
 import * as Tone from "tone";
 
@@ -241,6 +241,17 @@ function buildMarchingBand(scene: Scene) {
     const baseSnareDrum = MeshBuilder.CreateCylinder("baseSnareDrum", { diameter: 0.4, height: 0.2 }, scene);
     baseSnareDrum.material = hatMat; // White drum shell
 
+    // Tom Toms (3 Cylinders merged into one)
+    const tom1 = MeshBuilder.CreateCylinder("tom1", { diameter: 0.3, height: 0.2 }, scene);
+    tom1.position.set(-0.25, 0, 0); // Left
+    const tom2 = MeshBuilder.CreateCylinder("tom2", { diameter: 0.3, height: 0.2 }, scene);
+    tom2.position.set(0.25, 0, 0); // Right
+    const tom3 = MeshBuilder.CreateCylinder("tom3", { diameter: 0.25, height: 0.2 }, scene);
+    tom3.position.set(0, 0, 0.25); // Front-center
+    const baseTomToms = Mesh.MergeMeshes([tom1, tom2, tom3], true) as Mesh;
+    baseTomToms.name = "baseTomToms";
+    baseTomToms.material = hatMat;
+
     const rows = 10;
     const cols = 10;
     const spacingX = 2.0; // 2 meters between columns
@@ -250,13 +261,15 @@ function buildMarchingBand(scene: Scene) {
     let firstTrumpetPlaced = false;
     let firstBassDrumPlaced = false;
     let firstSnareDrumPlaced = false;
+    let firstTomTomPlaced = false;
 
     for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
             const isBase = (r === 0 && c === 0);
             const isBassDrum = (r === 7 || r === 8); // Rows 7 and 8 are bass drums
             const isSnareDrum = (r === 5 || r === 6); // Rows 5 and 6 are snare drums
-            const isDrum = isBassDrum || isSnareDrum;
+            const isTomTom = (r === 4); // Row 4 (one row) is tom toms
+            const isDrum = isBassDrum || isSnareDrum || isTomTom;
             
             const xPos = (c - cols / 2 + 0.5) * spacingX;
             const zPos = startZ + r * spacingZ;
@@ -319,13 +332,19 @@ function buildMarchingBand(scene: Scene) {
                 instr = (!firstBassDrumPlaced) ? baseBassDrum : baseBassDrum.createInstance(`bassdrum_${r}_${c}`);
                 firstBassDrumPlaced = true;
                 instr.parent = anchor;
-                instr.position.set(0, 1.1, 0.35); // Lower, resting on chest/belly
+                instr.position.set(0, 1.1, 0.45); // Pushed forward so it doesn't clip into the torso
                 instr.rotation.x = 0; // Flat facing sideways
             } else if (isSnareDrum) {
                 instr = (!firstSnareDrumPlaced) ? baseSnareDrum : baseSnareDrum.createInstance(`snaredrum_${r}_${c}`);
                 firstSnareDrumPlaced = true;
                 instr.parent = anchor;
                 instr.position.set(0, 1.0, 0.35); // Hanging around waist, resting flat
+                instr.rotation.x = 0;
+            } else if (isTomTom) {
+                instr = (!firstTomTomPlaced) ? baseTomToms : baseTomToms.createInstance(`tomtom_${r}_${c}`);
+                firstTomTomPlaced = true;
+                instr.parent = anchor;
+                instr.position.set(0, 1.0, 0.25); // Attached in front of waist
                 instr.rotation.x = 0;
             } else {
                 instr = (!firstTrumpetPlaced) ? baseInstr : baseInstr.createInstance(`instr_${r}_${c}`);
