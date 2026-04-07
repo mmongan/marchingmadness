@@ -292,7 +292,8 @@ function buildMarchingBand(scene: Scene) {
             // Instrument (Cylinder)
             const instr = isBase ? baseInstr : baseInstr.createInstance(`instr_${r}_${c}`);
             instr.parent = anchor;
-            instr.position.set(0, 1.2, 0.3);
+            // Connect to mouth area (head is at Y=1.55, diameter 0.3)
+            instr.position.set(0, 1.5, 0.45);
             instr.rotation.x = Math.PI / 2;
         }
     }
