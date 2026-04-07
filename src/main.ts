@@ -337,7 +337,16 @@ function buildMarchingBand(scene: Scene) {
     baseMellophone.name = "baseMellophone";
     baseMellophone.material = brassMat;
 
-    const rows = 13;
+    // Euphonium (large marching brass instrument, similar to thick trumpet)
+    const euphBody = MeshBuilder.CreateCylinder("euphBody", { diameterTop: 0.25, diameterBottom: 0.05, height: 0.6 }, scene);
+    euphBody.position.set(0, 0.3, 0); 
+    const euphValves = MeshBuilder.CreateBox("euphValves", { width: 0.1, height: 0.15, depth: 0.08 }, scene);
+    euphValves.position.set(0, 0.2, 0.06);
+    const baseEuphonium = Mesh.MergeMeshes([euphBody, euphValves], true) as Mesh;
+    baseEuphonium.name = "baseEuphonium";
+    baseEuphonium.material = brassMat;
+
+    const rows = 14;
     const cols = 10;
     const spacingX = 2.0; // 2 meters between columns
     const spacingZ = 2.0; // 2 meters between rows
@@ -346,7 +355,7 @@ function buildMarchingBand(scene: Scene) {
     let firstFlutePlaced = false;
     let firstTrumpetPlaced = false;
     let firstMellophonePlaced = false;
-    let firstBassDrumPlaced = false;
+    let firstEuphoniumPlaced = false;    let firstBassDrumPlaced = false;
     let firstSnareDrumPlaced = false;
     let firstTomTomPlaced = false;
     let firstSaxophonePlaced = false;
@@ -365,8 +374,9 @@ function buildMarchingBand(scene: Scene) {
             const isBassDrum = (r === 8); // Row 8
             const isTrumpet = (r === 9); // Row 9
             const isMellophone = (r === 10); // Row 10
-            const isTrombone = (r === 11); // Row 11
-            const isSousaphone = (r === 12); // Row 12 (back row)
+            const isEuphonium = (r === 11); // Row 11
+            const isTrombone = (r === 12); // Row 12
+            const isSousaphone = (r === 13); // Row 13 (back row)
             const isDrum = isBassDrum || isSnareDrum || isTomTom;
             
             const xPos = (c - cols / 2 + 0.5) * spacingX;
@@ -489,6 +499,12 @@ function buildMarchingBand(scene: Scene) {
             } else if (isMellophone) {
                 instr = (!firstMellophonePlaced) ? baseMellophone : baseMellophone.createInstance(`mello_${r}_${c}`);
                 firstMellophonePlaced = true;
+                instr.parent = anchor;
+                instr.position.set(0, 1.45, 0.15);
+                instr.rotation.x = Math.PI / 2;
+            } else if (isEuphonium) {
+                instr = (!firstEuphoniumPlaced) ? baseEuphonium : baseEuphonium.createInstance(`euph_${r}_${c}`);
+                firstEuphoniumPlaced = true;
                 instr.parent = anchor;
                 instr.position.set(0, 1.45, 0.15);
                 instr.rotation.x = Math.PI / 2;
