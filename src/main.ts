@@ -431,7 +431,7 @@ function buildMarchingBand(scene: Scene) {
                 instr = (!firstTomTomPlaced) ? baseTomToms : baseTomToms.createInstance(`tomtom_${r}_${c}`);
                 firstTomTomPlaced = true;
                 instr.parent = anchor;
-                instr.position.set(0, 1.0, 0.25); // Attached in front of waist
+                instr.position.set(0, 1.0, 0.4); // Moved further forward to avoid intersecting torso
                 instr.rotation.x = 0;
             } else if (isSaxophone) {
                 instr = (!firstSaxophonePlaced) ? baseSaxophone : baseSaxophone.createInstance(`sax_${r}_${c}`);
