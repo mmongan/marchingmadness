@@ -261,6 +261,8 @@ function buildMarchingBand(scene: Scene) {
             legR.parent = anchor;
             legR.position.set(0.12, 0.4, 0);
 
+            bandLegs.push({ legL, legR, anchor });
+
             // Head (Sphere)
             const head = isBase ? baseHead : baseHead.createInstance(`head_${r}_${c}`);
             head.parent = anchor;
@@ -305,6 +307,7 @@ buildMarchingBand(scene);
 const measureBlocks: any[] = [];
 const gameBlocks: { mesh: any, arrivalTime: number, startX: number, startY: number, boxHeight: number, noteFractions: number[], firstT: number }[] = [];
 let gameStartTime: number | null = null;
+const bandLegs: { legL: any, legR: any, anchor: any }[] = [];
 const BPM = 80;
 const WHOLE_NOTE_DURATION = (60 / BPM) * 4;
 const FLY_SPEED = 2; // units per second (slower for readability)
@@ -605,6 +608,19 @@ engine.runRenderLoop(() => {
     if (scene.activeCamera && scene.activeCamera.globalPosition.y < 1.5) {
         scene.activeCamera.position.y = 1.5; // Always bounce them back up to a standing height
     }
+
+    // Marching Band Animation
+    const currentRenderTime = gameStartTime !== null ? Tone.now() - gameStartTime : performance.now() / 1000;
+    const secondsPerBeat = 60 / BPM;
+    // Calculate a phase angle where one full stride occurs every 2 beats
+    const marchPhase = (currentRenderTime * Math.PI * 2) / (secondsPerBeat * 2);
+    bandLegs.forEach(({ legL, legR, anchor }) => {
+        // Swing legs back and forth like pendulums
+        legL.rotation.x = Math.sin(marchPhase) * 0.6;
+        legR.rotation.x = -Math.sin(marchPhase) * 0.6;
+        // Make the anchor (the whole person) subtly bob up and down with each step
+        anchor.position.y = Math.abs(Math.sin(marchPhase * 2)) * 0.08;
+    });
 
     // Continuously poll to ensure the queue processes upcoming measures during gameplay
     checkAndGenerateMeasures();
