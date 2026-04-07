@@ -289,21 +289,22 @@ function buildMarchingBand(scene: Scene) {
     const sousaPath: Vector3[] = [];
     for (let i = 0; i <= 60; i++) {
         const t = i / 60;
-        const angle = t * Math.PI * 2; // 1 complete loop
+        const angle = t * Math.PI * 1.5; // 0.75 loops instead of 1, so it ends on the right side
         const radius = 0.4 + 0.1 * t; // spiral increasing outward slightly
-        // Negate x so the spiral wraps to the other direction, ending at positive X
+        // Negate x so the spiral wraps to the other direction, ending at right side
         const x = -radius * Math.cos(angle);
         const y = -0.4 + t * 1.2; // spiraling from waist up to shoulder
-        const z = radius * Math.sin(angle);
+        const z = -radius * Math.sin(angle); // keep behind the player mostly
         sousaPath.push(new Vector3(x, y, z));
     }
-    // align last point exactly with bell base
-    sousaPath[sousaPath.length - 1] = new Vector3(0.4, 0.8, 0);
-
+    // ensure last point smoothly connects to the bell
+    const lastP = sousaPath[sousaPath.length - 1];
+    
     const sousaBody = MeshBuilder.CreateTube("sousaBody", { path: sousaPath, radius: 0.08 }, scene);
     
+    // Attach the bell to the end of the tube
     const sousaBell = MeshBuilder.CreateCylinder("sousaBell", { diameterTop: 0.8, diameterBottom: 0.1, height: 0.6 }, scene);
-    sousaBell.position.set(0.4, 0.8, 0.3); // Up and over the other shoulder
+    sousaBell.position.set(lastP.x, lastP.y, lastP.z + 0.3); // Extends forward from the tube's end
     sousaBell.rotation.x = Math.PI / 2; // Bell pointing forward
     const baseSousaphone = Mesh.MergeMeshes([sousaBody, sousaBell], true) as Mesh;
 
@@ -312,10 +313,11 @@ function buildMarchingBand(scene: Scene) {
 
     // Flute (thin silver tube, held to the side)
     const baseFlute = MeshBuilder.CreateCylinder("baseFlute", { diameter: 0.02, height: 0.6 }, scene);
+    // Shift origin to the end (mouthpiece)
+    baseFlute.bakeTransformIntoVertices(Matrix.Translation(0, 0.3, 0));
     baseFlute.material = new StandardMaterial("fluteMat", scene);
     (baseFlute.material as StandardMaterial).diffuseColor = new Color3(0.9, 0.9, 0.9); // Silver
     (baseFlute.material as StandardMaterial).specularColor = new Color3(1, 1, 1);
-    baseFlute.rotation.z = Math.PI / 2; // Held sideways
 
     // Trumpet (brass, smaller shape, held forward)
     const tptBody = MeshBuilder.CreateCylinder("tptBody", { diameterTop: 0.08, diameterBottom: 0.02, height: 0.4 }, scene);
@@ -463,9 +465,10 @@ function buildMarchingBand(scene: Scene) {
                 instr = (!firstFlutePlaced) ? baseFlute : baseFlute.createInstance(`flute_${r}_${c}`);
                 firstFlutePlaced = true;
                 instr.parent = anchor;
-                instr.position.set(0.3, 1.45, 0.15); // Flute comes out horizontally to the side
-                instr.rotation.x = 0;
-                instr.rotation.y = Math.PI / 2;
+                // Move origin (mouthpiece) to the lips, pivot instrument to face right horizontally
+                instr.position.set(0, 1.45, 0.15);
+                instr.rotation.z = -Math.PI / 2; // Pivot to point to the right
+                instr.rotation.y = Math.PI / 8; // Slight angle forward
             } else if (isTrumpet) {
                 instr = (!firstTrumpetPlaced) ? baseTrumpet : baseTrumpet.createInstance(`trumpet_${r}_${c}`);
                 firstTrumpetPlaced = true;
