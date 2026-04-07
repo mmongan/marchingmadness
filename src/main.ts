@@ -291,7 +291,7 @@ function buildMarchingBand(scene: Scene) {
     const sousaPath: Vector3[] = [];
     for (let i = 0; i <= 60; i++) {
         const t = i / 60;
-        const angle = t * Math.PI * 4; // 2 complete loops
+        const angle = t * Math.PI * 2; // 1 complete loop
         const radius = 0.4 + 0.1 * t; // spiral increasing outward slightly
         const x = radius * Math.cos(angle);
         const y = -0.4 + t * 1.2; // spiraling from waist up to shoulder
