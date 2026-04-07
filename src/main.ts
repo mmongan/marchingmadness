@@ -226,6 +226,14 @@ function buildFootballField(scene: Scene) {
     mat.diffuseTexture = fieldTex;
     mat.specularColor = new Color3(0.05, 0.05, 0.05); // low shine grass
     ground.material = mat;
+
+    // Create a surrounding dark turf base to fix seeing "under" the field edges
+    const surroundBase = MeshBuilder.CreateGround("surroundBase", { width: 400, height: 400 }, scene);
+    surroundBase.position = new Vector3(0, -0.05, 0); // Just beneath the main field
+    const surroundMat = new StandardMaterial("surroundMat", scene);
+    surroundMat.diffuseColor = new Color3(0.05, 0.15, 0.05); // Very dark green turf
+    surroundMat.specularColor = new Color3(0.01, 0.01, 0.01);
+    surroundBase.material = surroundMat;
 }
 buildFootballField(scene);
 
