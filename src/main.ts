@@ -250,6 +250,19 @@ function buildMarchingBand(scene: Scene) {
     baseTomToms.name = "baseTomToms";
     baseTomToms.material = hatMat;
 
+    // Cymbals (two large, thin metallic discs)
+    const cymbalL = MeshBuilder.CreateCylinder("cymbalL", { diameter: 0.5, height: 0.01 }, scene);
+    cymbalL.position.set(-0.15, 0, 0);
+    cymbalL.rotation.z = Math.PI / 2;
+    cymbalL.rotation.y = Math.PI / 8; // Angled outward
+    const cymbalR = MeshBuilder.CreateCylinder("cymbalR", { diameter: 0.5, height: 0.01 }, scene);
+    cymbalR.position.set(0.15, 0, 0);
+    cymbalR.rotation.z = Math.PI / 2;
+    cymbalR.rotation.y = -Math.PI / 8; // Angled outward
+    const baseCymbals = Mesh.MergeMeshes([cymbalL, cymbalR], true) as Mesh;
+    baseCymbals.name = "baseCymbals";
+    baseCymbals.material = brassMat;
+
     // Saxophone (brass vertical cylinder with a bell pointing out)
     const saxMain = MeshBuilder.CreateCylinder("saxMain", { diameterTop: 0.05, diameterBottom: 0.08, height: 0.6 }, scene);
     saxMain.position.set(0, -0.3, 0); // main tube shifted down
@@ -346,7 +359,7 @@ function buildMarchingBand(scene: Scene) {
     baseEuphonium.name = "baseEuphonium";
     baseEuphonium.material = brassMat;
 
-    const rows = 14;
+    const rows = 15;
     const cols = 10;
     const spacingX = 2.0; // 2 meters between columns
     const spacingZ = 2.0; // 2 meters between rows
@@ -355,9 +368,11 @@ function buildMarchingBand(scene: Scene) {
     let firstFlutePlaced = false;
     let firstTrumpetPlaced = false;
     let firstMellophonePlaced = false;
-    let firstEuphoniumPlaced = false;    let firstBassDrumPlaced = false;
+    let firstEuphoniumPlaced = false;
+    let firstBassDrumPlaced = false;
     let firstSnareDrumPlaced = false;
     let firstTomTomPlaced = false;
+    let firstCymbalsPlaced = false;
     let firstSaxophonePlaced = false;
     let firstClarinetPlaced = false;
     let firstTrombonePlaced = false;
@@ -372,12 +387,13 @@ function buildMarchingBand(scene: Scene) {
             const isTomTom = (r === 5); // Row 5
             const isSnareDrum = (r === 6 || r === 7); // Rows 6 and 7
             const isBassDrum = (r === 8); // Row 8
-            const isTrumpet = (r === 9); // Row 9
-            const isMellophone = (r === 10); // Row 10
-            const isEuphonium = (r === 11); // Row 11
-            const isTrombone = (r === 12); // Row 12
-            const isSousaphone = (r === 13); // Row 13 (back row)
-            const isDrum = isBassDrum || isSnareDrum || isTomTom;
+            const isCymbals = (r === 9); // Row 9
+            const isTrumpet = (r === 10); // Row 10
+            const isMellophone = (r === 11); // Row 11
+            const isEuphonium = (r === 12); // Row 12
+            const isTrombone = (r === 13); // Row 13
+            const isSousaphone = (r === 14); // Row 14 (back row)
+            const isDrum = isBassDrum || isSnareDrum || isTomTom || isCymbals;
             
             const xPos = (c - cols / 2 + 0.5) * spacingX;
             const zPos = startZ + r * spacingZ;
@@ -441,8 +457,12 @@ function buildMarchingBand(scene: Scene) {
                 firstBassDrumPlaced = true;
                 instr.parent = anchor;
                 instr.position.set(0, 1.1, 0.45); // Pushed forward so it doesn't clip into the torso
-                instr.rotation.x = 0; // Flat facing sideways
-            } else if (isSnareDrum) {
+                instr.rotation.x = 0; // Flat facing sideways            } else if (isCymbals) {
+                instr = (!firstCymbalsPlaced) ? baseCymbals : baseCymbals.createInstance(`cymbals_${r}_${c}`);
+                firstCymbalsPlaced = true;
+                instr.parent = anchor;
+                instr.position.set(0, 1.25, 0.4); // Held up in front of chest
+                instr.rotation.x = 0;            } else if (isSnareDrum) {
                 instr = (!firstSnareDrumPlaced) ? baseSnareDrum : baseSnareDrum.createInstance(`snaredrum_${r}_${c}`);
                 firstSnareDrumPlaced = true;
                 instr.parent = anchor;
