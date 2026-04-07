@@ -280,11 +280,11 @@ function buildMarchingBand(scene: Scene) {
     baseTrombone.material = brassMat;
 
     // Sousaphone (large circular body with big bell above the head)
-    const sousaBody = MeshBuilder.CreateTorus("sousaBody", { diameter: 0.8, thickness: 0.15 }, scene);
-    sousaBody.position.set(0, -0.2, 0); // Wrap around the torso
+    const sousaBody = MeshBuilder.CreateTorus("sousaBody", { diameter: 1.0, thickness: 0.15 }, scene);
+    sousaBody.position.set(0, 0, 0); // Wrap around the torso
     sousaBody.rotation.x = Math.PI / 2; // Make the ring face forward/up
-    const sousaBell = MeshBuilder.CreateCylinder("sousaBell", { diameterTop: 0.5, diameterBottom: 0.1, height: 0.4 }, scene);
-    sousaBell.position.set(-0.35, 0.5, 0.2); // Up and over the shoulder
+    const sousaBell = MeshBuilder.CreateCylinder("sousaBell", { diameterTop: 0.8, diameterBottom: 0.1, height: 0.6 }, scene);
+    sousaBell.position.set(-0.4, 0.8, 0.3); // Up and over the shoulder
     sousaBell.rotation.x = Math.PI / 2; // Bell pointing forward
     const baseSousaphone = Mesh.MergeMeshes([sousaBody, sousaBell], true) as Mesh;
     baseSousaphone.name = "baseSousaphone";
@@ -417,8 +417,8 @@ function buildMarchingBand(scene: Scene) {
                 instr = (!firstSousaphonePlaced) ? baseSousaphone : baseSousaphone.createInstance(`sousaphone_${r}_${c}`);
                 firstSousaphonePlaced = true;
                 instr.parent = anchor;
-                // Wraps around torso, bell high
-                instr.position.set(0, 1.3, 0); 
+                // Wrap torus around shoulder, let the bell protrude up and forward
+                instr.position.set(0.1, 1.25, 0.1); 
                 instr.rotation.x = 0;
             } else {
                 instr = (!firstTrumpetPlaced) ? baseInstr : baseInstr.createInstance(`instr_${r}_${c}`);
