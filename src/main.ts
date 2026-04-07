@@ -246,6 +246,7 @@ function buildMarchingBand(scene: Scene) {
             // Anchor point for this member
             const anchor = MeshBuilder.CreateBox(`anchor_${r}_${c}`, { size: 0.01 }, scene);
             anchor.position.set(xPos, 0, zPos);
+            anchor.rotation.y = Math.PI; // Face towards the camera / negative Z direction
             anchor.isVisible = false;
 
             // Torso (Box)
