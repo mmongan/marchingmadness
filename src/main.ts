@@ -359,12 +359,26 @@ function buildMarchingBand(scene: Scene) {
     baseEuphonium.name = "baseEuphonium";
     baseEuphonium.material = brassMat;
 
-    const rows = 15;
+    // Drum Major Mace (staff with spherical head)
+    const maceShaft = MeshBuilder.CreateCylinder("maceShaft", { diameter: 0.02, height: 0.8 }, scene);
+    const maceHead = MeshBuilder.CreateSphere("maceHead", { diameter: 0.08 }, scene);
+    maceHead.position.set(0, 0.4, 0); // At top of shaft
+    const maceTip = MeshBuilder.CreateSphere("maceTip", { diameter: 0.03 }, scene);
+    maceTip.position.set(0, -0.4, 0); // At bottom of shaft
+    const baseMace = Mesh.MergeMeshes([maceShaft, maceHead, maceTip], true) as Mesh;
+    baseMace.name = "baseMace";
+    const maceMat = new StandardMaterial("maceMat", scene);
+    maceMat.diffuseColor = new Color3(0.9, 0.9, 0.9); // Silver/White
+    maceMat.specularColor = new Color3(1, 1, 1);
+    baseMace.material = maceMat;
+
+    const rows = 16;
     const cols = 10;
     const spacingX = 2.0; // 2 meters between columns
     const spacingZ = 2.0; // 2 meters between rows
     const startZ = 60;
 
+    let firstMacePlaced = false;
     let firstFlutePlaced = false;
     let firstTrumpetPlaced = false;
     let firstMellophonePlaced = false;
@@ -381,18 +395,19 @@ function buildMarchingBand(scene: Scene) {
     for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
             const isBase = (r === 0 && c === 0);
-            const isFlute = (r === 0); // Row 0
-            const isClarinet = (r === 1 || r === 2); // Rows 1 and 2
-            const isSaxophone = (r === 3 || r === 4); // Rows 3 and 4
-            const isTomTom = (r === 5); // Row 5
-            const isSnareDrum = (r === 6 || r === 7); // Rows 6 and 7
-            const isBassDrum = (r === 8); // Row 8
-            const isCymbals = (r === 9); // Row 9
-            const isTrumpet = (r === 10); // Row 10
-            const isMellophone = (r === 11); // Row 11
-            const isEuphonium = (r === 12); // Row 12
-            const isTrombone = (r === 13); // Row 13
-            const isSousaphone = (r === 14); // Row 14 (back row)
+            const isDrumMajor = (r === 0); // Row 0
+            const isFlute = (r === 1); // Row 1
+            const isClarinet = (r === 2 || r === 3); // Rows 2 and 3
+            const isSaxophone = (r === 4 || r === 5); // Rows 4 and 5
+            const isTomTom = (r === 6); // Row 6
+            const isSnareDrum = (r === 7 || r === 8); // Rows 7 and 8
+            const isBassDrum = (r === 9); // Row 9
+            const isCymbals = (r === 10); // Row 10
+            const isTrumpet = (r === 11); // Row 11
+            const isMellophone = (r === 12); // Row 12
+            const isEuphonium = (r === 13); // Row 13
+            const isTrombone = (r === 14); // Row 14
+            const isSousaphone = (r === 15); // Row 15 (back row)
             const isDrum = isBassDrum || isSnareDrum || isTomTom || isCymbals;
             
             const xPos = (c - cols / 2 + 0.5) * spacingX;
@@ -441,18 +456,25 @@ function buildMarchingBand(scene: Scene) {
             armL.parent = anchor;
             armL.position.set(-0.3, 1.25, 0.15);
             armL.rotation.x = Math.PI / 4;
-            armL.rotation.y = isDrum ? Math.PI / 4 : Math.PI / 8;
+            armL.rotation.y = (isDrum || isDrumMajor) ? Math.PI / 4 : Math.PI / 8;
 
             // Right Arm (Clone or Instance)
             const armR = isBase ? baseArm.clone(`armR_${r}_${c}`) : baseArm.createInstance(`armR_${r}_${c}`);
             armR.parent = anchor;
             armR.position.set(0.3, 1.25, 0.15);
-            armR.rotation.x = Math.PI / 4;
-            armR.rotation.y = isDrum ? -Math.PI / 4 : -Math.PI / 8;
+            armR.rotation.x = isDrumMajor ? -Math.PI / 4 : Math.PI / 4; // Right arm held up for baton
+            armR.rotation.y = (isDrum || isDrumMajor) ? -Math.PI / 4 : -Math.PI / 8;
 
             // Instrument (Cylinder)
             let instr;
-            if (isBassDrum) {
+            if (isDrumMajor) {
+                instr = (!firstMacePlaced) ? baseMace : baseMace.createInstance(`mace_${r}_${c}`);
+                firstMacePlaced = true;
+                instr.parent = anchor;
+                instr.position.set(0.3, 1.6, 0.4); // Held up in the right hand
+                instr.rotation.x = -Math.PI / 8; // Angled slightly backward/upward
+                instr.rotation.z = Math.PI / 8;
+            } else if (isBassDrum) {
                 instr = (!firstBassDrumPlaced) ? baseBassDrum : baseBassDrum.createInstance(`bassdrum_${r}_${c}`);
                 firstBassDrumPlaced = true;
                 instr.parent = anchor;
