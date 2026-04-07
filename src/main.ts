@@ -457,12 +457,14 @@ function buildMarchingBand(scene: Scene) {
                 firstBassDrumPlaced = true;
                 instr.parent = anchor;
                 instr.position.set(0, 1.1, 0.45); // Pushed forward so it doesn't clip into the torso
-                instr.rotation.x = 0; // Flat facing sideways            } else if (isCymbals) {
+                instr.rotation.x = 0; 
+            } else if (isCymbals) {
                 instr = (!firstCymbalsPlaced) ? baseCymbals : baseCymbals.createInstance(`cymbals_${r}_${c}`);
                 firstCymbalsPlaced = true;
                 instr.parent = anchor;
                 instr.position.set(0, 1.25, 0.4); // Held up in front of chest
-                instr.rotation.x = 0;            } else if (isSnareDrum) {
+                instr.rotation.x = 0;
+            } else if (isSnareDrum) {
                 instr = (!firstSnareDrumPlaced) ? baseSnareDrum : baseSnareDrum.createInstance(`snaredrum_${r}_${c}`);
                 firstSnareDrumPlaced = true;
                 instr.parent = anchor;
