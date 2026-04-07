@@ -1,4 +1,4 @@
-import { Engine, Scene, FreeCamera, Vector3, HemisphericLight, MeshBuilder, StandardMaterial, DynamicTexture, Color3, Texture, ActionManager, ExecuteCodeAction } from "@babylonjs/core";
+import { Engine, Scene, FreeCamera, Vector3, HemisphericLight, MeshBuilder, StandardMaterial, DynamicTexture, Color3, Texture, CubeTexture, ActionManager, ExecuteCodeAction } from "@babylonjs/core";
 import { OpenSheetMusicDisplay } from "opensheetmusicdisplay";
 import * as Tone from "tone";
 
@@ -58,23 +58,10 @@ function buildSkybox(scene: Scene) {
     const skybox = MeshBuilder.CreateBox("skyBox", { size: 1000.0 }, scene);
     const skyboxMaterial = new StandardMaterial("skyBox", scene);
     skyboxMaterial.backFaceCulling = false;
-    skyboxMaterial.disableLighting = true;
-    
-    // Create a dynamic texture to paint a sky gradient
-    const texSize = 512;
-    const skyTex = new DynamicTexture("skyTex", texSize, scene, true);
-    const ctx = skyTex.getContext() as CanvasRenderingContext2D;
-    
-    const skyGrad = ctx.createLinearGradient(0, 0, 0, texSize);
-    skyGrad.addColorStop(0, "#0a1c3a");   // Deep night blue top
-    skyGrad.addColorStop(0.5, "#1e3b70"); // Mid atmosphere
-    skyGrad.addColorStop(1, "#4a6b9c");   // Horizon light
-    
-    ctx.fillStyle = skyGrad;
-    ctx.fillRect(0, 0, texSize, texSize);
-    skyTex.update();
-    
-    skyboxMaterial.emissiveTexture = skyTex;
+    skyboxMaterial.reflectionTexture = new CubeTexture("https://playground.babylonjs.com/textures/skybox", scene);
+    skyboxMaterial.reflectionTexture.coordinatesMode = Texture.SKYBOX_MODE;
+    skyboxMaterial.diffuseColor = new Color3(0, 0, 0);
+    skyboxMaterial.specularColor = new Color3(0, 0, 0);
     
     // Ensure skybox renders behind everything else
     skybox.infiniteDistance = true; 
@@ -181,17 +168,19 @@ function buildFootballField(scene: Scene) {
     const mat = new StandardMaterial("fieldMat", scene);
     mat.diffuseTexture = fieldTex;
     mat.specularColor = new Color3(0.05, 0.05, 0.05); // low shine grass
+    mat.backFaceCulling = false; // Make field visible from underneath
     ground.material = mat;
-    
+
     // Rotate the field 90 degrees so the user looks down the length of the field
     ground.rotation.y = Math.PI / 2;
 
-    // Create a surrounding dark turf base to fix seeing "under" the field edges
-    const surroundBase = MeshBuilder.CreateGround("surroundBase", { width: 400, height: 400 }, scene);
-    surroundBase.position = new Vector3(0, -0.05, 0); // Just beneath the main field
+    // Create a surrounding thick dark turf box base to fix seeing "under" from any angle
+    const surroundBase = MeshBuilder.CreateBox("surroundBase", { width: 800, depth: 800, height: 200 }, scene);
+    surroundBase.position = new Vector3(0, -100.05, 0); // Top face sits at -0.05
     const surroundMat = new StandardMaterial("surroundMat", scene);
     surroundMat.diffuseColor = new Color3(0.05, 0.15, 0.05); // Very dark green turf
     surroundMat.specularColor = new Color3(0.01, 0.01, 0.01);
+    surroundMat.backFaceCulling = false; // Render inside if camera clips into it
     surroundBase.material = surroundMat;
 }
 buildFootballField(scene);
