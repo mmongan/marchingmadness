@@ -183,6 +183,8 @@ function buildFootballField(scene: Scene) {
 }
 buildFootballField(scene);
 
+const bandLegs: { legL: any, legR: any, anchor: any }[] = [];
+
 // Create a 100-member marching band in a 10x10 formation
 function buildMarchingBand(scene: Scene) {
     // Generate Materials for different parts (Colors)
@@ -307,7 +309,6 @@ buildMarchingBand(scene);
 const measureBlocks: any[] = [];
 const gameBlocks: { mesh: any, arrivalTime: number, startX: number, startY: number, boxHeight: number, noteFractions: number[], firstT: number }[] = [];
 let gameStartTime: number | null = null;
-const bandLegs: { legL: any, legR: any, anchor: any }[] = [];
 const BPM = 80;
 const WHOLE_NOTE_DURATION = (60 / BPM) * 4;
 const FLY_SPEED = 2; // units per second (slower for readability)
