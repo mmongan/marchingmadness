@@ -328,7 +328,16 @@ function buildMarchingBand(scene: Scene) {
     baseTrumpet.name = "baseTrumpet";
     baseTrumpet.material = brassMat;
 
-    const rows = 12;
+    // Mellophone (forward-facing large bell like trumpet but chunkier)
+    const melloBody = MeshBuilder.CreateCylinder("melloBody", { diameterTop: 0.18, diameterBottom: 0.02, height: 0.45 }, scene);
+    melloBody.position.set(0, 0.225, 0); 
+    const melloValves = MeshBuilder.CreateBox("melloValves", { width: 0.08, height: 0.12, depth: 0.06 }, scene);
+    melloValves.position.set(0, 0.15, 0.05);
+    const baseMellophone = Mesh.MergeMeshes([melloBody, melloValves], true) as Mesh;
+    baseMellophone.name = "baseMellophone";
+    baseMellophone.material = brassMat;
+
+    const rows = 13;
     const cols = 10;
     const spacingX = 2.0; // 2 meters between columns
     const spacingZ = 2.0; // 2 meters between rows
@@ -336,6 +345,7 @@ function buildMarchingBand(scene: Scene) {
 
     let firstFlutePlaced = false;
     let firstTrumpetPlaced = false;
+    let firstMellophonePlaced = false;
     let firstBassDrumPlaced = false;
     let firstSnareDrumPlaced = false;
     let firstTomTomPlaced = false;
@@ -354,8 +364,9 @@ function buildMarchingBand(scene: Scene) {
             const isSnareDrum = (r === 6 || r === 7); // Rows 6 and 7
             const isBassDrum = (r === 8); // Row 8
             const isTrumpet = (r === 9); // Row 9
-            const isTrombone = (r === 10); // Row 10
-            const isSousaphone = (r === 11); // Row 11 (back row)
+            const isMellophone = (r === 10); // Row 10
+            const isTrombone = (r === 11); // Row 11
+            const isSousaphone = (r === 12); // Row 12 (back row)
             const isDrum = isBassDrum || isSnareDrum || isTomTom;
             
             const xPos = (c - cols / 2 + 0.5) * spacingX;
@@ -472,6 +483,12 @@ function buildMarchingBand(scene: Scene) {
             } else if (isTrumpet) {
                 instr = (!firstTrumpetPlaced) ? baseTrumpet : baseTrumpet.createInstance(`trumpet_${r}_${c}`);
                 firstTrumpetPlaced = true;
+                instr.parent = anchor;
+                instr.position.set(0, 1.45, 0.15);
+                instr.rotation.x = Math.PI / 2;
+            } else if (isMellophone) {
+                instr = (!firstMellophonePlaced) ? baseMellophone : baseMellophone.createInstance(`mello_${r}_${c}`);
+                firstMellophonePlaced = true;
                 instr.parent = anchor;
                 instr.position.set(0, 1.45, 0.15);
                 instr.rotation.x = Math.PI / 2;
