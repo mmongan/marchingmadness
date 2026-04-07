@@ -237,6 +237,10 @@ function buildMarchingBand(scene: Scene) {
     baseBassDrum.bakeTransformIntoVertices(Matrix.RotationZ(Math.PI / 2));
     baseBassDrum.material = hatMat; // White drum shell
 
+    // Snare Drum (Cylinder facing up)
+    const baseSnareDrum = MeshBuilder.CreateCylinder("baseSnareDrum", { diameter: 0.4, height: 0.2 }, scene);
+    baseSnareDrum.material = hatMat; // White drum shell
+
     const rows = 10;
     const cols = 10;
     const spacingX = 2.0; // 2 meters between columns
@@ -244,12 +248,15 @@ function buildMarchingBand(scene: Scene) {
     const startZ = 60;
 
     let firstTrumpetPlaced = false;
-    let firstDrumPlaced = false;
+    let firstBassDrumPlaced = false;
+    let firstSnareDrumPlaced = false;
 
     for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
             const isBase = (r === 0 && c === 0);
-            const isDrum = (r === 7 || r === 8); // Rows 7 and 8 are bass drums
+            const isBassDrum = (r === 7 || r === 8); // Rows 7 and 8 are bass drums
+            const isSnareDrum = (r === 5 || r === 6); // Rows 5 and 6 are snare drums
+            const isDrum = isBassDrum || isSnareDrum;
             
             const xPos = (c - cols / 2 + 0.5) * spacingX;
             const zPos = startZ + r * spacingZ;
@@ -308,12 +315,18 @@ function buildMarchingBand(scene: Scene) {
 
             // Instrument (Cylinder)
             let instr;
-            if (isDrum) {
-                instr = (!firstDrumPlaced) ? baseBassDrum : baseBassDrum.createInstance(`drum_${r}_${c}`);
-                firstDrumPlaced = true;
+            if (isBassDrum) {
+                instr = (!firstBassDrumPlaced) ? baseBassDrum : baseBassDrum.createInstance(`bassdrum_${r}_${c}`);
+                firstBassDrumPlaced = true;
                 instr.parent = anchor;
                 instr.position.set(0, 1.1, 0.35); // Lower, resting on chest/belly
                 instr.rotation.x = 0; // Flat facing sideways
+            } else if (isSnareDrum) {
+                instr = (!firstSnareDrumPlaced) ? baseSnareDrum : baseSnareDrum.createInstance(`snaredrum_${r}_${c}`);
+                firstSnareDrumPlaced = true;
+                instr.parent = anchor;
+                instr.position.set(0, 1.0, 0.35); // Hanging around waist, resting flat
+                instr.rotation.x = 0;
             } else {
                 instr = (!firstTrumpetPlaced) ? baseInstr : baseInstr.createInstance(`instr_${r}_${c}`);
                 firstTrumpetPlaced = true;
