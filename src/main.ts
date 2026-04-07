@@ -270,11 +270,11 @@ function buildMarchingBand(scene: Scene) {
     baseClarinet.bakeTransformIntoVertices(Matrix.Translation(0, -0.35, 0)); // Shift origin to top
     baseClarinet.material = clarinetMat;
 
-    // Trombone (long brass cylinder with slide)
-    const tbMain = MeshBuilder.CreateCylinder("tbMain", { diameterTop: 0.15, diameterBottom: 0.02, height: 1.0 }, scene);
-    tbMain.position.set(0, 0.45, 0); // Shift UP so origin is near the narrow mouthpiece
-    const tbSlide = MeshBuilder.CreateCylinder("tbSlide", { diameter: 0.02, height: 0.6 }, scene);
-    tbSlide.position.set(0, 0.7, 0.05); // Slide extends forward near the bell
+    // Trombone (shorter bell with longer slide)
+    const tbMain = MeshBuilder.CreateCylinder("tbMain", { diameterTop: 0.15, diameterBottom: 0.02, height: 0.6 }, scene);
+    tbMain.position.set(0, 0.3, 0); // Shift UP so origin is near the narrow mouthpiece
+    const tbSlide = MeshBuilder.CreateCylinder("tbSlide", { diameter: 0.02, height: 1.0 }, scene);
+    tbSlide.position.set(0, 0.6, 0.05); // Slide extends way forward past the bell
     const baseTrombone = Mesh.MergeMeshes([tbMain, tbSlide], true) as Mesh;
     baseTrombone.name = "baseTrombone";
     baseTrombone.material = brassMat;
