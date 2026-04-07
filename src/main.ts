@@ -168,19 +168,17 @@ function buildFootballField(scene: Scene) {
     const mat = new StandardMaterial("fieldMat", scene);
     mat.diffuseTexture = fieldTex;
     mat.specularColor = new Color3(0.05, 0.05, 0.05); // low shine grass
-    mat.backFaceCulling = false; // Make field visible from underneath
     ground.material = mat;
-
+    
     // Rotate the field 90 degrees so the user looks down the length of the field
     ground.rotation.y = Math.PI / 2;
 
-    // Create a surrounding thick dark turf box base to fix seeing "under" from any angle
-    const surroundBase = MeshBuilder.CreateBox("surroundBase", { width: 800, depth: 800, height: 200 }, scene);
-    surroundBase.position = new Vector3(0, -100.05, 0); // Top face sits at -0.05
+    // Create a surrounding dark turf base to fix seeing "under" the field edges
+    const surroundBase = MeshBuilder.CreateGround("surroundBase", { width: 400, height: 400 }, scene);
+    surroundBase.position = new Vector3(0, -0.05, 0); // Just beneath the main field
     const surroundMat = new StandardMaterial("surroundMat", scene);
     surroundMat.diffuseColor = new Color3(0.05, 0.15, 0.05); // Very dark green turf
     surroundMat.specularColor = new Color3(0.01, 0.01, 0.01);
-    surroundMat.backFaceCulling = false; // Render inside if camera clips into it
     surroundBase.material = surroundMat;
 }
 buildFootballField(scene);
@@ -485,6 +483,11 @@ async function checkAndGenerateMeasures() {
 initSheetMusic();
 
 engine.runRenderLoop(() => {
+    // Prevent the actively driven camera from clipping under the ground plane or crouching too low
+    if (scene.activeCamera && scene.activeCamera.globalPosition.y < 1.5) {
+        scene.activeCamera.position.y = 1.5; // Always bounce them back up to a standing height
+    }
+
     // Continuously poll to ensure the queue processes upcoming measures during gameplay
     checkAndGenerateMeasures();
 
