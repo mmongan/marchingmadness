@@ -254,13 +254,30 @@ function buildMarchingBand(scene: Scene) {
 
     // Saxophone (brass vertical cylinder with a bell pointing out)
     const saxMain = MeshBuilder.CreateCylinder("saxMain", { diameterTop: 0.05, diameterBottom: 0.08, height: 0.6 }, scene);
-    saxMain.position.set(0, 0, 0); // main tube
+    saxMain.position.set(0, -0.3, 0); // main tube shifted down
     const saxBell = MeshBuilder.CreateCylinder("saxBell", { diameterTop: 0.15, diameterBottom: 0.05, height: 0.25 }, scene);
-    saxBell.position.set(0, -0.25, 0.1); 
+    saxBell.position.set(0, -0.55, 0.1); 
     saxBell.rotation.x = Math.PI / 3; // curve upwards and out
     const baseSaxophone = Mesh.MergeMeshes([saxMain, saxBell], true) as Mesh;
     baseSaxophone.name = "baseSaxophone";
     baseSaxophone.material = brassMat;
+
+    // Clarinet (thin black cylinder)
+    const clarinetMat = new StandardMaterial("clarinetMat", scene);
+    clarinetMat.diffuseColor = new Color3(0.1, 0.1, 0.1); // Near black
+    clarinetMat.specularColor = new Color3(0.5, 0.5, 0.5); // some shine
+    const baseClarinet = MeshBuilder.CreateCylinder("baseClarinet", { diameter: 0.04, height: 0.7 }, scene);
+    baseClarinet.bakeTransformIntoVertices(Matrix.Translation(0, -0.35, 0)); // Shift origin to top
+    baseClarinet.material = clarinetMat;
+
+    // Trombone (long brass cylinder with slide)
+    const tbMain = MeshBuilder.CreateCylinder("tbMain", { diameterTop: 0.15, diameterBottom: 0.02, height: 1.0 }, scene);
+    tbMain.position.set(0, 0.45, 0); // Shift UP so origin is near the narrow mouthpiece
+    const tbSlide = MeshBuilder.CreateCylinder("tbSlide", { diameter: 0.02, height: 0.6 }, scene);
+    tbSlide.position.set(0, 0.7, 0.05); // Slide extends forward near the bell
+    const baseTrombone = Mesh.MergeMeshes([tbMain, tbSlide], true) as Mesh;
+    baseTrombone.name = "baseTrombone";
+    baseTrombone.material = brassMat;
 
     const rows = 10;
     const cols = 10;
@@ -273,14 +290,18 @@ function buildMarchingBand(scene: Scene) {
     let firstSnareDrumPlaced = false;
     let firstTomTomPlaced = false;
     let firstSaxophonePlaced = false;
+    let firstClarinetPlaced = false;
+    let firstTrombonePlaced = false;
 
     for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
             const isBase = (r === 0 && c === 0);
-            const isBassDrum = (r === 7 || r === 8); // Rows 7 and 8 are bass drums
-            const isSnareDrum = (r === 5 || r === 6); // Rows 5 and 6 are snare drums
-            const isTomTom = (r === 4); // Row 4 (one row) is tom toms
+            const isClarinet = (r === 0 || r === 1); // Rows 0 and 1 are clarinets
             const isSaxophone = (r === 2 || r === 3); // Rows 2 and 3 are saxophones
+            const isTomTom = (r === 4); // Row 4 (one row) is tom toms
+            const isSnareDrum = (r === 5 || r === 6); // Rows 5 and 6 are snare drums
+            const isBassDrum = (r === 7 || r === 8); // Rows 7 and 8 are bass drums
+            const isTrombone = (r === 9); // Row 9 are trombones
             const isDrum = isBassDrum || isSnareDrum || isTomTom;
             
             const xPos = (c - cols / 2 + 0.5) * spacingX;
@@ -362,9 +383,22 @@ function buildMarchingBand(scene: Scene) {
                 instr = (!firstSaxophonePlaced) ? baseSaxophone : baseSaxophone.createInstance(`sax_${r}_${c}`);
                 firstSaxophonePlaced = true;
                 instr.parent = anchor;
-                // Connect to mouth area and angle down
-                instr.position.set(0, 1.3, 0.3); // Mouth area going down
-                instr.rotation.x = Math.PI / 8; // Slanted out slightly
+                // Connect to mouth area and tilt bottom outward (negative X rotation)
+                instr.position.set(0, 1.45, 0.15); // Origin is at the mouthpiece, placed at the lips
+                instr.rotation.x = -Math.PI / 6; // Negative rotation tilts the bottom of the instrument forward, away from the torso
+            } else if (isClarinet) {
+                instr = (!firstClarinetPlaced) ? baseClarinet : baseClarinet.createInstance(`clarinet_${r}_${c}`);
+                firstClarinetPlaced = true;
+                instr.parent = anchor;
+                // Connect to mouth area and tilt bottom outward, slightly steeper than sax
+                instr.position.set(0, 1.45, 0.15); 
+                instr.rotation.x = -Math.PI / 4; 
+            } else if (isTrombone) {
+                instr = (!firstTrombonePlaced) ? baseTrombone : baseTrombone.createInstance(`trombone_${r}_${c}`);
+                firstTrombonePlaced = true;
+                instr.parent = anchor;
+                instr.position.set(0, 1.5, 0.45);
+                instr.rotation.x = Math.PI / 2;
             } else {
                 instr = (!firstTrumpetPlaced) ? baseInstr : baseInstr.createInstance(`instr_${r}_${c}`);
                 firstTrumpetPlaced = true;
