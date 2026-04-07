@@ -456,14 +456,14 @@ function buildMarchingBand(scene: Scene) {
             armL.parent = anchor;
             armL.position.set(-0.3, 1.25, 0.15);
             armL.rotation.x = Math.PI / 4;
-            armL.rotation.y = (isDrum || isDrumMajor) ? Math.PI / 4 : Math.PI / 8;
+            armL.rotation.y = isDrum ? Math.PI / 4 : Math.PI / 8;
 
             // Right Arm (Clone or Instance)
             const armR = isBase ? baseArm.clone(`armR_${r}_${c}`) : baseArm.createInstance(`armR_${r}_${c}`);
             armR.parent = anchor;
             armR.position.set(0.3, 1.25, 0.15);
-            armR.rotation.x = isDrumMajor ? -Math.PI / 4 : Math.PI / 4; // Right arm held up for baton
-            armR.rotation.y = (isDrum || isDrumMajor) ? -Math.PI / 4 : -Math.PI / 8;
+            armR.rotation.x = Math.PI / 4; 
+            armR.rotation.y = isDrum ? -Math.PI / 4 : -Math.PI / 8;
 
             // Instrument (Cylinder)
             let instr;
