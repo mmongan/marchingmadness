@@ -173,49 +173,6 @@ function buildFootballField(scene: Scene) {
     // Rotate the field 90 degrees so the user looks down the length of the field
     ground.rotation.y = Math.PI / 2;
 
-    // Create an 8-to-5 marching grid overlay
-    const gridGround = MeshBuilder.CreateGround("marchingGrid", { width: lengthX, height: depthZ }, scene);
-    gridGround.position = new Vector3(0, 0.01, 0); // slightly above the grass
-    gridGround.rotation.y = Math.PI / 2; // Match the rotation of the main field
-
-    const gridTexSize = 256;
-    const gridTex = new DynamicTexture("gridTex", { width: gridTexSize, height: gridTexSize }, scene, true);
-    
-    // Draw an 8x8 grid representing one 5-yard by 5-yard square
-    const gCtx = gridTex.getContext() as CanvasRenderingContext2D;
-    gCtx.clearRect(0, 0, gridTexSize, gridTexSize);
-    gCtx.strokeStyle = "rgba(255, 255, 255, 1.0)";
-    gCtx.lineWidth = 2;
-
-    const stepPixels = gridTexSize / 8; // 8 steps = 5 yards
-    gCtx.beginPath();
-    for (let i = 0; i <= 8; i++) {
-        // Vertical lines (yard lines / steps)
-        gCtx.moveTo(i * stepPixels, 0);
-        gCtx.lineTo(i * stepPixels, gridTexSize);
-        // Horizontal lines (hashes / steps)
-        gCtx.moveTo(0, i * stepPixels);
-        gCtx.lineTo(gridTexSize, i * stepPixels);
-    }
-    gCtx.stroke();
-    gridTex.update();
-
-    gridTex.uScale = depthZ / 5;   // Because it's rotated, width becomes depth
-    gridTex.vScale = lengthX / 5;  // Because it's rotated, depth becomes length
-
-    const gridMat = new StandardMaterial("gridMat", scene);
-    gridMat.diffuseTexture = gridTex;
-    gridMat.opacityTexture = gridTex;
-    gridMat.specularColor = new Color3(0, 0, 0);
-    gridMat.disableLighting = true;
-    gridMat.emissiveColor = new Color3(1, 1, 1);
-    
-    // Make the grid 0% visible initially, adjustable via global state
-    gridMat.alpha = 0.0;
-    gridGround.material = gridMat;
-
-    (window as any).marchingGridMat = gridMat; // Expose to buttons/window
-
     // Create a surrounding dark turf base to fix seeing "under" the field edges
     const surroundBase = MeshBuilder.CreateGround("surroundBase", { width: 400, height: 400 }, scene);
     surroundBase.position = new Vector3(0, -0.05, 0); // Just beneath the main field
@@ -225,6 +182,64 @@ function buildFootballField(scene: Scene) {
     surroundBase.material = surroundMat;
 }
 buildFootballField(scene);
+
+// Create a 100-member marching band in a 10x10 formation
+function buildMarchingBand(scene: Scene) {
+    const bandMat = new StandardMaterial("bandMat", scene);
+    bandMat.diffuseColor = new Color3(0.8, 0.1, 0.1); // Bright red uniforms
+    bandMat.specularColor = new Color3(0.1, 0.1, 0.1);
+
+    // Create a base mesh to instance (cylinder to represent humans)
+    // 1.8 meters tall, 0.6 meters wide
+    const baseMember = MeshBuilder.CreateCylinder("bandMemberBase", { diameter: 0.6, height: 1.8 }, scene);
+    baseMember.material = bandMat;
+    
+    // Add a little white hat to the base member
+    const hat = MeshBuilder.CreateCylinder("hat", { diameter: 0.65, height: 0.2 }, scene);
+    const hatMat = new StandardMaterial("hatMat", scene);
+    hatMat.diffuseColor = new Color3(1, 1, 1);
+    hat.material = hatMat;
+    hat.parent = baseMember;
+    hat.position.y = 0.9; // Sit on top of the head
+
+    // Move the base member so its feet are on the ground (y=0)
+    baseMember.position.y = 0.9; 
+    
+    const rows = 10;
+    const cols = 10;
+    const spacingX = 2.0; // 2 meters between columns
+    const spacingZ = 2.0; // 2 meters between rows
+
+    // Start placing them down the field, offset ahead of the player (e.g. Z = 15 to 33)
+    const startZ = 15;
+
+    for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+            // Use the base mesh for the very first position, otherwise create an instance for performance
+            const member = (r === 0 && c === 0) ? baseMember : baseMember.createInstance(`bandMember_${r}_${c}`);
+            
+            // Center the columns around X=0
+            const xPos = (c - cols / 2 + 0.5) * spacingX;
+            const zPos = startZ + r * spacingZ;
+            
+            if (member !== baseMember) {
+                // Instances need their absolute position set
+                member.position.x = xPos;
+                member.position.y = 0.9;
+                member.position.z = zPos;
+
+                // Create a clone of the hat logic for the instance hierarchy
+                const instanceHat = hat.createInstance(`hat_${r}_${c}`);
+                instanceHat.parent = member;
+                instanceHat.position.y = 0.9;
+            } else {
+                baseMember.position.x = xPos;
+                baseMember.position.z = zPos;
+            }
+        }
+    }
+}
+buildMarchingBand(scene);
 
 // Keep reference to blocks
 const measureBlocks: any[] = [];
@@ -252,57 +267,6 @@ const btnMat = new StandardMaterial("btnMat", scene);
 btnMat.diffuseTexture = btnTex;
 btnMat.emissiveColor = new Color3(1, 1, 1);
 startBtnMesh.material = btnMat;
-
-// 3D Grid Visibility Toggles
-const gridBtnPlus = MeshBuilder.CreatePlane("gridBtnPlus", { width: 0.8, height: 0.8 }, scene);
-gridBtnPlus.position = new Vector3(1.5, 1.6, 2);
-const plusTex = new DynamicTexture("plusTex", { width: 256, height: 256 }, scene, false);
-const pCtx = plusTex.getContext() as CanvasRenderingContext2D;
-pCtx.fillStyle = "#333333";
-pCtx.fillRect(0, 0, 256, 256);
-pCtx.fillStyle = "white";
-pCtx.font = "bold 40px Arial";
-pCtx.textAlign = "center";
-pCtx.fillText("Grid +", 128, 140);
-plusTex.update();
-const pMat = new StandardMaterial("pMat", scene);
-pMat.diffuseTexture = plusTex;
-pMat.emissiveColor = new Color3(1, 1, 1);
-gridBtnPlus.material = pMat;
-
-const gridBtnMinus = MeshBuilder.CreatePlane("gridBtnMinus", { width: 0.8, height: 0.8 }, scene);
-gridBtnMinus.position = new Vector3(1.5, 0.7, 2);
-const minusTex = new DynamicTexture("minusTex", { width: 256, height: 256 }, scene, false);
-const mCtx = minusTex.getContext() as CanvasRenderingContext2D;
-mCtx.fillStyle = "#333333";
-mCtx.fillRect(0, 0, 256, 256);
-mCtx.fillStyle = "white";
-mCtx.font = "bold 40px Arial";
-mCtx.textAlign = "center";
-mCtx.fillText("Grid -", 128, 140);
-minusTex.update();
-const mMat = new StandardMaterial("mMat", scene);
-mMat.diffuseTexture = minusTex;
-mMat.emissiveColor = new Color3(1, 1, 1);
-gridBtnMinus.material = mMat;
-
-gridBtnPlus.actionManager = new ActionManager(scene);
-gridBtnPlus.actionManager.registerAction(
-    new ExecuteCodeAction(ActionManager.OnPickTrigger, () => {
-        if ((window as any).marchingGridMat) {
-            (window as any).marchingGridMat.alpha = Math.min(1.0, (window as any).marchingGridMat.alpha + 0.1);
-        }
-    })
-);
-
-gridBtnMinus.actionManager = new ActionManager(scene);
-gridBtnMinus.actionManager.registerAction(
-    new ExecuteCodeAction(ActionManager.OnPickTrigger, () => {
-        if ((window as any).marchingGridMat) {
-            (window as any).marchingGridMat.alpha = Math.max(0.0, (window as any).marchingGridMat.alpha - 0.1);
-        }
-    })
-);
 
 startBtnMesh.actionManager = new ActionManager(scene);
 startBtnMesh.actionManager.registerAction(
