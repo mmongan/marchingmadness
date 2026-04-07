@@ -615,12 +615,10 @@ engine.runRenderLoop(() => {
     const secondsPerBeat = 60 / BPM;
     // Calculate a phase angle where one full stride occurs every 2 beats
     const marchPhase = (currentRenderTime * Math.PI * 2) / (secondsPerBeat * 2);
-    bandLegs.forEach(({ legL, legR, anchor }) => {
+    bandLegs.forEach(({ legL, legR }) => {
         // Swing legs back and forth like pendulums
         legL.rotation.x = Math.sin(marchPhase) * 0.6;
         legR.rotation.x = -Math.sin(marchPhase) * 0.6;
-        // Make the anchor (the whole person) subtly bob up and down with each step
-        anchor.position.y = Math.abs(Math.sin(marchPhase * 2)) * 0.08;
     });
 
     // Continuously poll to ensure the queue processes upcoming measures during gameplay
