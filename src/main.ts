@@ -310,12 +310,29 @@ function buildMarchingBand(scene: Scene) {
     baseSousaphone.name = "baseSousaphone";
     baseSousaphone.material = brassMat;
 
-    const rows = 10;
+    // Flute (thin silver tube, held to the side)
+    const baseFlute = MeshBuilder.CreateCylinder("baseFlute", { diameter: 0.02, height: 0.6 }, scene);
+    baseFlute.material = new StandardMaterial("fluteMat", scene);
+    (baseFlute.material as StandardMaterial).diffuseColor = new Color3(0.9, 0.9, 0.9); // Silver
+    (baseFlute.material as StandardMaterial).specularColor = new Color3(1, 1, 1);
+    baseFlute.rotation.z = Math.PI / 2; // Held sideways
+
+    // Trumpet (brass, smaller shape, held forward)
+    const tptBody = MeshBuilder.CreateCylinder("tptBody", { diameterTop: 0.08, diameterBottom: 0.02, height: 0.4 }, scene);
+    tptBody.position.set(0, 0.2, 0); // Bell at top, mouthpiece at origin
+    const tptValves = MeshBuilder.CreateBox("tptValves", { width: 0.06, height: 0.1, depth: 0.04 }, scene);
+    tptValves.position.set(0, 0.15, 0.04);
+    const baseTrumpet = Mesh.MergeMeshes([tptBody, tptValves], true) as Mesh;
+    baseTrumpet.name = "baseTrumpet";
+    baseTrumpet.material = brassMat;
+
+    const rows = 12;
     const cols = 10;
     const spacingX = 2.0; // 2 meters between columns
     const spacingZ = 2.0; // 2 meters between rows
     const startZ = 60;
 
+    let firstFlutePlaced = false;
     let firstTrumpetPlaced = false;
     let firstBassDrumPlaced = false;
     let firstSnareDrumPlaced = false;
@@ -328,13 +345,15 @@ function buildMarchingBand(scene: Scene) {
     for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
             const isBase = (r === 0 && c === 0);
-            const isClarinet = (r === 0 || r === 1); // Rows 0 and 1
-            const isSaxophone = (r === 2 || r === 3); // Rows 2 and 3
-            const isTomTom = (r === 4); // Row 4
-            const isSnareDrum = (r === 5 || r === 6); // Rows 5 and 6
-            const isBassDrum = (r === 7); // Row 7
-            const isTrombone = (r === 8); // Row 8
-            const isSousaphone = (r === 9); // Row 9 (back row)
+            const isFlute = (r === 0); // Row 0
+            const isClarinet = (r === 1 || r === 2); // Rows 1 and 2
+            const isSaxophone = (r === 3 || r === 4); // Rows 3 and 4
+            const isTomTom = (r === 5); // Row 5
+            const isSnareDrum = (r === 6 || r === 7); // Rows 6 and 7
+            const isBassDrum = (r === 8); // Row 8
+            const isTrumpet = (r === 9); // Row 9
+            const isTrombone = (r === 10); // Row 10
+            const isSousaphone = (r === 11); // Row 11 (back row)
             const isDrum = isBassDrum || isSnareDrum || isTomTom;
             
             const xPos = (c - cols / 2 + 0.5) * spacingX;
@@ -440,7 +459,21 @@ function buildMarchingBand(scene: Scene) {
                 // Wrap torus around shoulder, let the bell protrude up and forward
                 instr.position.set(0.1, 1.25, 0.1); 
                 instr.rotation.x = 0;
+            } else if (isFlute) {
+                instr = (!firstFlutePlaced) ? baseFlute : baseFlute.createInstance(`flute_${r}_${c}`);
+                firstFlutePlaced = true;
+                instr.parent = anchor;
+                instr.position.set(0.3, 1.45, 0.15); // Flute comes out horizontally to the side
+                instr.rotation.x = 0;
+                instr.rotation.y = Math.PI / 2;
+            } else if (isTrumpet) {
+                instr = (!firstTrumpetPlaced) ? baseTrumpet : baseTrumpet.createInstance(`trumpet_${r}_${c}`);
+                firstTrumpetPlaced = true;
+                instr.parent = anchor;
+                instr.position.set(0, 1.45, 0.15);
+                instr.rotation.x = Math.PI / 2;
             } else {
+                // Not used mostly right now, default cylinder if needed
                 instr = (!firstTrumpetPlaced) ? baseInstr : baseInstr.createInstance(`instr_${r}_${c}`);
                 firstTrumpetPlaced = true;
                 instr.parent = anchor;
