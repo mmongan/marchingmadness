@@ -600,9 +600,9 @@ beatIndicator.isVisible = false;
 // Formation Quality HUD — wrist-mounted display on left arm
 const scoreHUD = MeshBuilder.CreatePlane("scoreHUD", { width: 0.18, height: 0.06 }, scene);
 scoreHUD.parent = playerBody.getLeftArm();
-// Position on the inner forearm: offset slightly forward along arm (+Y = toward hand)
+// Position on the wrist: far down the arm (+Y = toward hand)
 // and outward (+Z = face up/outward so you can glance down at it)
-scoreHUD.position.set(0, -0.25, 0.08);
+scoreHUD.position.set(0, 0.45, 0.08);
 scoreHUD.rotation.set(Math.PI / 2, 0, 0); // face outward from the arm
 scoreHUD.isPickable = false;
 const scoreTex = new DynamicTexture("scoreTex", { width: 512, height: 128 }, scene, false);
