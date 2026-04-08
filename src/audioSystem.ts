@@ -5,25 +5,12 @@ import { Vector3 } from "@babylonjs/core";
 import { BandMemberData } from "./bandMemberFactory";
 import {
     GM_INSTRUMENT_NAMES, GM_INSTRUMENT_VOLUMES, ROW_TO_SF_INDEX,
-    SPATIAL_RADIUS_SQ, BPM, WHOLE_NOTE_DURATION
+    SPATIAL_RADIUS_SQ
 } from "./gameConstants";
 import type { StumbleState } from "./gameConstants";
 
 export const sfInstruments: Map<number, Soundfont> = new Map();
 export const sfPanners: Map<number, PannerNode> = new Map();
-
-let metronomeSynth: Tone.MembraneSynth | null = null;
-function getMetronomeSynth() {
-    if (!metronomeSynth) {
-        metronomeSynth = new Tone.MembraneSynth({
-            pitchDecay: 0.01,
-            octaves: 2,
-            envelope: { attack: 0.001, decay: 0.1, sustain: 0, release: 0.1 }
-        }).toDestination();
-        metronomeSynth.volume.value = -10;
-    }
-    return metronomeSynth;
-}
 
 let crashSynth: Tone.NoiseSynth | null = null;
 function getCrashSynth() {
@@ -86,56 +73,6 @@ export async function loadInstruments(): Promise<void> {
         sf.output.setVolume(GM_INSTRUMENT_VOLUMES[i]);
         sfInstruments.set(i, sf);
     }
-    getMetronomeSynth();
-}
-
-/** Start metronome and schedule music on Transport. */
-export function startMetronomeAndMusic(
-    osmdSheet: any, // OpenSheetMusicDisplay Sheet object
-    gameStartTime: number
-): void {
-    Tone.Transport.bpm.value = BPM;
-    Tone.Transport.scheduleRepeat((time) => {
-        getMetronomeSynth().triggerAttackRelease("C5", "32n", time);
-    }, "4n");
-
-    if (osmdSheet) {
-        const instruments = osmdSheet.Instruments;
-        osmdSheet.SourceMeasures.forEach((sourceMeasure: any, mIndex: number) => {
-            let measureFirstT = 0;
-            if (sourceMeasure.VerticalSourceStaffEntryContainers.length > 0 &&
-                sourceMeasure.VerticalSourceStaffEntryContainers[0].Timestamp) {
-                measureFirstT = sourceMeasure.VerticalSourceStaffEntryContainers[0].Timestamp.RealValue;
-            }
-
-            sourceMeasure.VerticalSourceStaffEntryContainers.forEach((container: any) => {
-                if (!container.Timestamp) return;
-                const timeInMeasure = (container.Timestamp.RealValue - measureFirstT) * WHOLE_NOTE_DURATION;
-
-                container.StaffEntries.forEach((entry: any) => {
-                    const instrIndex = instruments.findIndex((inst: any) => inst.Id === entry.ParentStaff.ParentInstrument.Id);
-                    if (instrIndex < 0) return;
-
-                    const sf = sfInstruments.get(instrIndex);
-                    entry.VoiceEntries.forEach((ve: any) => {
-                        ve.Notes.forEach((note: any) => {
-                            if (note.halfTone) {
-                                const transpose = (instruments[instrIndex] as any).PlaybackTranspose || 0;
-                                const midiNote = note.halfTone + transpose;
-                                const duration = note.Length.RealValue * WHOLE_NOTE_DURATION;
-                                const scheduleTime = (mIndex * WHOLE_NOTE_DURATION) + timeInMeasure;
-                                Tone.Transport.schedule((time) => {
-                                    sf?.start({ note: midiNote, time, duration });
-                                }, scheduleTime);
-                            }
-                        });
-                    });
-                });
-            });
-        });
-    }
-
-    Tone.Transport.start(gameStartTime + 2 * WHOLE_NOTE_DURATION);
 }
 
 /** Sync Web Audio API listener position to camera. */
