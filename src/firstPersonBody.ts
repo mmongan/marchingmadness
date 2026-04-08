@@ -90,10 +90,11 @@ export class FirstPersonBody {
                 .addInPlace(right.scale(xOffset))
                 .addInPlace(fwd.scale(0.3))
                 .addInPlace(Vector3.Up().scale(-0.4));
-            // Swing hands slightly during march on desktop
+            // Natural march arm swing: opposite to same-side leg
             if (isMarching) {
-                const swing = Math.sin(marchPhase) * 0.1 * Math.sign(xOffset);
-                handPos.addInPlace(fwd.scale(swing));
+                const swing = Math.sin(marchPhase) * Math.sign(xOffset);
+                handPos.addInPlace(fwd.scale(swing * 0.25));
+                handPos.addInPlace(Vector3.Up().scale(Math.abs(swing) * 0.08));
             }
         }
 
