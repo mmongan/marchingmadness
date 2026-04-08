@@ -12,15 +12,19 @@ export class FirstPersonBody {
     private controllerLeft: WebXRInputSource | null = null;
     private controllerRight: WebXRInputSource | null = null;
 
-    // Arm-swing locomotion tracking
+    // Arm-swing locomotion tracking (Gorilla Tag style)
     private prevGripPosL: Vector3 | null = null;
     private prevGripPosR: Vector3 | null = null;
-    private swingSpeed = 0;
-    private armSwingL = 0; // current forward/back offset of left arm
-    private armSwingR = 0; // current forward/back offset of right arm
-    private readonly SWING_DECAY = 0.85;
-    private readonly SWING_GAIN = 2.5;
-    private readonly MOVE_SPEED = 3.0;  // meters per second at full swing
+    private velocityL = Vector3.Zero();
+    private velocityR = Vector3.Zero();
+    private moveSpeed = 0;
+    private walkPhase = 0;
+
+    // Tuning constants
+    private readonly VEL_THRESHOLD = 0.4;   // m/s minimum swing to count
+    private readonly MAX_SPEED = 4.0;       // m/s top movement speed
+    private readonly ACCEL = 8.0;           // how fast moveSpeed ramps up
+    private readonly FRICTION = 5.0;        // how fast moveSpeed decays
 
     constructor(scene: Scene) {
         const uniformMat = new StandardMaterial("playerUniformMat", scene);
@@ -80,69 +84,69 @@ export class FirstPersonBody {
         this.updateArm(this.armL, this.controllerLeft, cam, -0.3, marchPhase, isMarching);
         this.updateArm(this.armR, this.controllerRight, cam, 0.3, marchPhase, isMarching);
 
-        // Arm-swing locomotion: detect pumping motion from controllers
+        // Arm-swing locomotion: Gorilla Tag style
         const movement = this.computeArmSwingLocomotion(cam, deltaTime);
 
-        // Legs directly track opposite arm's forward/back position
-        // Left arm forward → right leg forward (natural gait)
-        this.legR.rotation.x = -this.armSwingL * 3.0;
-        this.legL.rotation.x = -this.armSwingR * 3.0;
+        // Animate legs from movement speed
+        if (this.moveSpeed > 0.1) {
+            this.walkPhase += deltaTime * this.moveSpeed * 3.5;
+            const amplitude = Math.min(1, this.moveSpeed / 2.0) * 0.6;
+            this.legL.rotation.x = Math.sin(this.walkPhase) * amplitude;
+            this.legR.rotation.x = -Math.sin(this.walkPhase) * amplitude;
+        } else {
+            this.legL.rotation.x = 0;
+            this.legR.rotation.x = 0;
+        }
 
         return movement;
     }
 
-    private computeArmSwingLocomotion(cam: Camera, deltaTime: number): Vector3 {
-        let totalSwing = 0;
+    private computeArmSwingLocomotion(cam: Camera, dt: number): Vector3 {
+        const fwd = cam.getDirection(Vector3.Forward());
+        fwd.y = 0;
+        fwd.normalize();
 
-        // Measure how fast each grip is swinging along the forward/back axis
-        if (this.controllerLeft?.grip) {
-            const pos = this.controllerLeft.grip.absolutePosition;
-            if (this.prevGripPosL) {
-                const delta = pos.subtract(this.prevGripPosL);
-                const fwd = cam.getDirection(Vector3.Forward());
-                const fwdDot = Vector3.Dot(delta, fwd);
-                totalSwing += Math.abs(fwdDot);
-                totalSwing += Math.abs(delta.y) * 0.5;
-            }
-            // Track arm's forward offset relative to shoulder
-            const fwd = cam.getDirection(Vector3.Forward());
-            const shoulderL = cam.globalPosition.clone().addInPlace(Vector3.Up().scale(-0.38));
-            this.armSwingL = Vector3.Dot(pos.subtract(shoulderL), fwd);
-            this.prevGripPosL = pos.clone();
+        // Compute per-controller velocity from frame deltas
+        this.velocityL = this.gripVelocity(this.controllerLeft, this.prevGripPosL, dt);
+        this.prevGripPosL = this.controllerLeft?.grip
+            ? this.controllerLeft.grip.absolutePosition.clone() : null;
+
+        this.velocityR = this.gripVelocity(this.controllerRight, this.prevGripPosR, dt);
+        this.prevGripPosR = this.controllerRight?.grip
+            ? this.controllerRight.grip.absolutePosition.clone() : null;
+
+        // Measure backward swing intensity for each hand.
+        // Gorilla Tag style: pushing hands backward propels you forward.
+        // Negative dot with camera forward = hand moving backward.
+        const headFwd = cam.getDirection(Vector3.Forward());
+        const swingL = Math.max(0, -Vector3.Dot(this.velocityL, headFwd));
+        const swingR = Math.max(0, -Vector3.Dot(this.velocityR, headFwd));
+
+        // Apply velocity threshold — ignore tiny idle jitter
+        const effectiveL = swingL > this.VEL_THRESHOLD ? swingL : 0;
+        const effectiveR = swingR > this.VEL_THRESHOLD ? swingR : 0;
+        const totalSwing = effectiveL + effectiveR;
+
+        // Ramp speed up when swinging, friction when not
+        if (totalSwing > 0) {
+            // Nonlinear: stronger swings accelerate faster
+            const targetSpeed = Math.min(this.MAX_SPEED, totalSwing * 2.0);
+            this.moveSpeed += (targetSpeed - this.moveSpeed) * Math.min(1, this.ACCEL * dt);
         } else {
-            this.prevGripPosL = null;
-            this.armSwingL *= 0.8; // decay toward zero
+            this.moveSpeed -= this.moveSpeed * Math.min(1, this.FRICTION * dt);
+            if (this.moveSpeed < 0.01) this.moveSpeed = 0;
         }
 
-        if (this.controllerRight?.grip) {
-            const pos = this.controllerRight.grip.absolutePosition;
-            if (this.prevGripPosR) {
-                const delta = pos.subtract(this.prevGripPosR);
-                const fwd = cam.getDirection(Vector3.Forward());
-                totalSwing += Math.abs(Vector3.Dot(delta, fwd));
-                totalSwing += Math.abs(delta.y) * 0.5;
-            }
-            const fwd = cam.getDirection(Vector3.Forward());
-            const shoulderR = cam.globalPosition.clone().addInPlace(Vector3.Up().scale(-0.38));
-            this.armSwingR = Vector3.Dot(pos.subtract(shoulderR), fwd);
-            this.prevGripPosR = pos.clone();
-        } else {
-            this.prevGripPosR = null;
-            this.armSwingR *= 0.8;
-        }
-
-        // Smooth the swing speed: ramp up with gain, decay when idle
-        this.swingSpeed = this.swingSpeed * this.SWING_DECAY + totalSwing * this.SWING_GAIN;
-        this.swingSpeed = Math.min(this.swingSpeed, 1.0); // clamp to max
-
-        // Move forward in the camera's facing direction (Y flattened)
-        if (this.swingSpeed > 0.02) {
-            const fwd = cam.getDirection(Vector3.Forward());
-            fwd.y = 0;
-            fwd.normalize();
-            return fwd.scale(this.swingSpeed * this.MOVE_SPEED * deltaTime);
+        if (this.moveSpeed > 0) {
+            return fwd.scale(this.moveSpeed * dt);
         }
         return Vector3.Zero();
+    }
+
+    private gripVelocity(controller: WebXRInputSource | null, prevPos: Vector3 | null, dt: number): Vector3 {
+        if (!controller?.grip || !prevPos || dt <= 0) return Vector3.Zero();
+        const pos = controller.grip.absolutePosition;
+        return pos.subtract(prevPos).scale(1 / dt);
     }
 
     private updateArm(arm: Mesh, controller: WebXRInputSource | null, cam: Camera, xOffset: number, marchPhase: number, isMarching: boolean): void {
