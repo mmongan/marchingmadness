@@ -537,6 +537,46 @@ for (let i = 0; i < bandLegs.length; i++) {
     disc.position.set(bandLegs[i].anchor.position.x, 0.02, bandLegs[i].anchor.position.z);
     shadowDiscs.push(disc as any);
 }
+// === PLAYER DRILL FOOTSTEP TARGETS ===
+// The player has an assigned drill slot and must hit each beat's ground marker
+const PLAYER_DRILL_ROW = 0;   // drum major row (front of band)
+const PLAYER_DRILL_COL = 2;   // center column
+const PLAYER_START_X = (PLAYER_DRILL_COL - 5 / 2 + 0.5) * 2.0; // 0.0
+const PLAYER_START_Z = 15;    // same Z offset as row 0
+const STEP_LOOK_AHEAD = 12;   // show 12 upcoming footsteps
+const STEP_HIT_PERFECT = 1.0; // metres
+const STEP_HIT_GOOD = 2.0;    // metres
+const FOOT_LATERAL = 0.18;    // L/R offset from drill center
+
+interface StepMarker {
+    mesh: AbstractMesh;
+    mat: StandardMaterial;
+    beatNum: number;
+    flashTimer: number;
+}
+const stepMarkers: StepMarker[] = [];
+
+for (let i = 0; i < STEP_LOOK_AHEAD; i++) {
+    const mesh = MeshBuilder.CreateTorus(`step_${i}`, { diameter: 0.7, thickness: 0.05, tessellation: 24 }, scene);
+    mesh.rotation.x = Math.PI / 2;
+    mesh.position.y = 0.04;
+    mesh.isPickable = false;
+    mesh.isVisible = false;
+    const mat = new StandardMaterial(`stepMat_${i}`, scene);
+    mat.emissiveColor = new Color3(0, 0.5, 1);
+    mat.disableLighting = true;
+    mat.alpha = 0.6;
+    mesh.material = mat;
+    stepMarkers.push({ mesh, mat, beatNum: -1, flashTimer: 0 });
+}
+
+let lastScoredBeat = -1;
+let stepStreak = 0;
+let totalStepsScored = 0;
+let perfectSteps = 0;
+let goodSteps = 0;
+let missedSteps = 0;
+
 // Keep reference to blocks
 const measureBlocks: any[] = [];
 const gameBlocks: { mesh: any, arrivalTime: number, startX: number, startY: number, boxHeight: number, noteFractions: number[], firstT: number }[] = [];
@@ -579,7 +619,8 @@ let lastScoreText = "";
 function updateScoreHUD() {
     const grade = formationQuality >= 90 ? "A" : formationQuality >= 80 ? "B"
         : formationQuality >= 70 ? "C" : formationQuality >= 60 ? "D" : "F";
-    const text = `${Math.round(formationQuality)}% ${grade}  KO:${marchersKnockedDown}`;
+    const streakTxt = stepStreak > 2 ? ` 🔥${stepStreak}` : "";
+    const text = `${Math.round(formationQuality)}% ${grade}  KO:${marchersKnockedDown}${streakTxt}`;
     if (text === lastScoreText) return; // avoid redrawing every frame
     lastScoreText = text;
     const ctx = scoreTex.getContext() as CanvasRenderingContext2D;
@@ -589,7 +630,7 @@ function updateScoreHUD() {
     ctx.fill();
     const color = formationQuality >= 80 ? "#44ff44" : formationQuality >= 60 ? "#ffcc00" : "#ff4444";
     ctx.fillStyle = color;
-    ctx.font = "bold 48px Arial";
+    ctx.font = "bold 44px Arial";
     ctx.textAlign = "center";
     ctx.fillText(text, 256, 82);
     scoreTex.update();
@@ -781,6 +822,13 @@ scene.onPointerObservable.add(async (pointerInfo) => {
             scoreHUD.isVisible = true;
             formationQuality = 100;
             marchersKnockedDown = 0;
+            // Reset footstep scoring state
+            lastScoredBeat = -1;
+            stepStreak = 0;
+            totalStepsScored = 0;
+            perfectSteps = 0;
+            goodSteps = 0;
+            missedSteps = 0;
             updateScoreHUD();
             // Start the metronome and music specifically delayed by 2 whole notes
             Tone.Transport.start(gameStartTime + 2 * WHOLE_NOTE_DURATION);
@@ -810,10 +858,13 @@ function showResults() {
     Tone.Transport.stop();
     beatIndicator.isVisible = false;
     scoreHUD.isVisible = false;
+    // Hide footstep markers
+    for (const m of stepMarkers) m.mesh.isVisible = false;
     resultsMesh.isVisible = true;
 
     const grade = formationQuality >= 90 ? "A" : formationQuality >= 80 ? "B"
         : formationQuality >= 70 ? "C" : formationQuality >= 60 ? "D" : "F";
+    const stepPct = totalStepsScored > 0 ? Math.round(((perfectSteps + goodSteps) / totalStepsScored) * 100) : 0;
     const ctx = resultsTex.getContext() as CanvasRenderingContext2D;
     ctx.clearRect(0, 0, 768, 512);
     // Background
@@ -824,19 +875,20 @@ function showResults() {
     ctx.fillStyle = "#FFD700";
     ctx.font = "bold 56px Arial";
     ctx.textAlign = "center";
-    ctx.fillText("PERFORMANCE REVIEW", 384, 70);
+    ctx.fillText("PERFORMANCE REVIEW", 384, 65);
     // Grade
     const gradeColor = formationQuality >= 80 ? "#44ff44" : formationQuality >= 60 ? "#ffcc00" : "#ff4444";
     ctx.fillStyle = gradeColor;
-    ctx.font = "bold 120px Arial";
-    ctx.fillText(grade, 384, 210);
+    ctx.font = "bold 100px Arial";
+    ctx.fillText(grade, 384, 180);
     // Stats
     ctx.fillStyle = "#ffffff";
-    ctx.font = "36px Arial";
-    ctx.fillText(`Formation: ${Math.round(formationQuality)}%`, 384, 290);
-    ctx.fillText(`Marchers Down: ${marchersKnockedDown}`, 384, 340);
+    ctx.font = "32px Arial";
+    ctx.fillText(`Formation: ${Math.round(formationQuality)}%`, 384, 240);
+    ctx.fillText(`Marchers Down: ${marchersKnockedDown}`, 384, 280);
+    ctx.fillText(`Steps: ${perfectSteps} perfect / ${goodSteps} good / ${missedSteps} miss (${stepPct}%)`, 384, 320);
     const survived = bandLegs.length - marchersKnockedDown;
-    ctx.fillText(`Still Standing: ${survived} / ${bandLegs.length}`, 384, 390);
+    ctx.fillText(`Still Standing: ${survived} / ${bandLegs.length}`, 384, 360);
     // Footer
     ctx.fillStyle = "#aaaaaa";
     ctx.font = "28px Arial";
@@ -1151,6 +1203,78 @@ engine.runRenderLoop(() => {
                 shadow.position.z = anchor.position.z;
             }
         });
+
+        // === FOOTSTEP MARKER POSITIONING ===
+        const baseBeat = Math.floor(currentBeat);
+        const dt = engine.getDeltaTime() / 1000;
+        for (let i = 0; i < STEP_LOOK_AHEAD; i++) {
+            const marker = stepMarkers[i];
+            const targetBeat = baseBeat + i + 1;
+            marker.beatNum = targetBeat;
+
+            const drill = getDrillPosition(targetBeat, PLAYER_DRILL_ROW, PLAYER_DRILL_COL,
+                5, 15, PLAYER_START_X, PLAYER_START_Z);
+            const beatTimeSec = targetBeat * secondsPerBeat;
+            const isLeftFoot = targetBeat % 2 === 0;
+            const footX = drill.x + (isLeftFoot ? -FOOT_LATERAL : FOOT_LATERAL);
+            const footZ = drill.z - beatTimeSec * FLY_SPEED;
+
+            marker.mesh.position.x = footX;
+            marker.mesh.position.z = footZ;
+            marker.mesh.isVisible = true;
+
+            // Flash countdown (from hit/miss feedback)
+            if (marker.flashTimer > 0) {
+                marker.flashTimer -= dt;
+            } else {
+                // Color: left = blue, right = orange; brightness by proximity in time
+                const beatsAhead = targetBeat - currentBeat;
+                const nearness = Math.max(0, 1 - beatsAhead / STEP_LOOK_AHEAD);
+                if (isLeftFoot) {
+                    marker.mat.emissiveColor.set(0.1 + 0.2 * nearness, 0.3 + 0.4 * nearness, 0.7 + 0.3 * nearness);
+                } else {
+                    marker.mat.emissiveColor.set(0.7 + 0.3 * nearness, 0.3 + 0.2 * nearness, 0.1 + 0.1 * nearness);
+                }
+                marker.mat.alpha = 0.25 + 0.55 * nearness;
+            }
+        }
+
+        // === FOOTSTEP SCORING (on each new beat) ===
+        const thisBeat = Math.floor(currentBeat);
+        if (thisBeat > lastScoredBeat && lastScoredBeat >= 0) {
+            const drill = getDrillPosition(thisBeat, PLAYER_DRILL_ROW, PLAYER_DRILL_COL,
+                5, 15, PLAYER_START_X, PLAYER_START_Z);
+            const beatTimeSec2 = thisBeat * secondsPerBeat;
+            const tgtX = drill.x;
+            const tgtZ = drill.z - beatTimeSec2 * FLY_SPEED;
+
+            const pPos = scene.activeCamera!.globalPosition;
+            const ddx = pPos.x - tgtX;
+            const ddz = pPos.z - tgtZ;
+            const dist = Math.sqrt(ddx * ddx + ddz * ddz);
+
+            const hitMarker = stepMarkers.find(m => m.beatNum === thisBeat);
+            totalStepsScored++;
+
+            if (dist < STEP_HIT_PERFECT) {
+                perfectSteps++;
+                stepStreak++;
+                formationQuality = Math.min(100, formationQuality + 0.8);
+                if (hitMarker) { hitMarker.mat.emissiveColor.set(0, 1, 0); hitMarker.flashTimer = 0.3; }
+            } else if (dist < STEP_HIT_GOOD) {
+                goodSteps++;
+                stepStreak++;
+                formationQuality = Math.min(100, formationQuality + 0.2);
+                if (hitMarker) { hitMarker.mat.emissiveColor.set(1, 1, 0); hitMarker.flashTimer = 0.3; }
+            } else {
+                missedSteps++;
+                stepStreak = 0;
+                formationQuality = Math.max(0, formationQuality - 0.3);
+                if (hitMarker) { hitMarker.mat.emissiveColor.set(1, 0, 0); hitMarker.flashTimer = 0.3; }
+            }
+        }
+        lastScoredBeat = thisBeat;
+
     } else {
         bandLegs.forEach(({ legL, legR }) => {
             // Swing legs back and forth like pendulums
