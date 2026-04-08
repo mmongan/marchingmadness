@@ -180,6 +180,12 @@ export class BandMemberFactory {
 
         // Sousaphone
         const sousaPath: Vector3[] = [];
+        
+        // Add mouthpiece extension reaching the mouth (mouth local pos: 0, 0.2, 0.05)
+        sousaPath.push(new Vector3(0, 0.2, 0.05));
+        sousaPath.push(new Vector3(-0.2, 0.1, 0.0)); // bend down
+        sousaPath.push(new Vector3(-0.35, -0.2, 0.0)); // continue bending
+
         for (let i = 0; i <= 60; i++) {
             const t = i / 60;
             const angle = t * Math.PI * 1.5;
