@@ -1,6 +1,6 @@
 import { BandMemberFactory, InstrumentType, BandMemberData } from "./bandMemberFactory";
-import { Engine, Scene, FreeCamera, Vector3, HemisphericLight, MeshBuilder, StandardMaterial, DynamicTexture, Color3, Texture, CubeTexture, PointerEventTypes, Matrix, TransformNode } from "@babylonjs/core";
-import { WebXRInputSource } from "@babylonjs/core/XR";
+import { FirstPersonBody } from "./firstPersonBody";
+import { Engine, Scene, FreeCamera, Vector3, HemisphericLight, MeshBuilder, StandardMaterial, DynamicTexture, Color3, Texture, CubeTexture, PointerEventTypes } from "@babylonjs/core";
 import { OpenSheetMusicDisplay } from "opensheetmusicdisplay";
 import * as Tone from "tone";
 import { Soundfont } from "smplr";
@@ -38,8 +38,7 @@ const light = new HemisphericLight("light", new Vector3(0, 1, 0), scene);
 light.intensity = 0.8;
 
 // Track XR controllers for arm tracking
-let xrControllerLeft: WebXRInputSource | null = null;
-let xrControllerRight: WebXRInputSource | null = null;
+const playerBody = new FirstPersonBody(scene);
 
 // Enable WebXR/VR with graceful device detection
 scene.createDefaultXRExperienceAsync({
@@ -56,54 +55,16 @@ scene.createDefaultXRExperienceAsync({
     // Track controllers for arm positioning
     xr.input.onControllerAddedObservable.add((controller) => {
         console.log(`XR controller connected: ${controller.inputSource.handedness}, profile: ${controller.inputSource.profiles.join(", ")}`);
-        if (controller.inputSource.handedness === "left") xrControllerLeft = controller;
-        if (controller.inputSource.handedness === "right") xrControllerRight = controller;
+        if (controller.inputSource.handedness === "left") playerBody.setController("left", controller);
+        if (controller.inputSource.handedness === "right") playerBody.setController("right", controller);
     });
     xr.input.onControllerRemovedObservable.add((controller) => {
-        if (controller.inputSource.handedness === "left") xrControllerLeft = null;
-        if (controller.inputSource.handedness === "right") xrControllerRight = null;
+        if (controller.inputSource.handedness === "left") playerBody.setController("left", null);
+        if (controller.inputSource.handedness === "right") playerBody.setController("right", null);
     });
 }).catch((err) => {
     console.warn("WebXR not available, falling back to desktop controls:", err);
 });
-
-// Player's own body — block-style torso, arms, and legs visible when looking down
-const playerBodyRoot = new TransformNode("playerBodyRoot", scene);
-
-const playerUniformMat = new StandardMaterial("playerUniformMat", scene);
-playerUniformMat.diffuseColor = new Color3(0.1, 0.2, 0.8);
-
-const playerPantsMat = new StandardMaterial("playerPantsMat", scene);
-playerPantsMat.diffuseColor = new Color3(0.1, 0.2, 0.8);
-
-const playerTorso = MeshBuilder.CreateBox("playerTorso", { width: 0.45, height: 0.6, depth: 0.3 }, scene);
-playerTorso.material = playerUniformMat;
-playerTorso.parent = playerBodyRoot;
-playerTorso.position.set(0, -0.65, 0.05); // Lower and slightly forward so it's below FOV
-
-const playerArmL = MeshBuilder.CreateBox("playerArmL", { width: 0.12, height: 0.5, depth: 0.12 }, scene);
-playerArmL.material = playerUniformMat;
-// Not parented to bodyRoot — positioned independently to track controllers
-playerArmL.position.set(-0.3, -0.35, 0.15);
-playerArmL.rotation.x = Math.PI / 6;
-
-const playerArmR = MeshBuilder.CreateBox("playerArmR", { width: 0.12, height: 0.5, depth: 0.12 }, scene);
-playerArmR.material = playerUniformMat;
-// Not parented to bodyRoot — positioned independently to track controllers
-playerArmR.position.set(0.3, -0.35, 0.15);
-playerArmR.rotation.x = Math.PI / 6;
-
-const playerLegL = MeshBuilder.CreateBox("playerLegL", { width: 0.18, height: 1.0, depth: 0.18 }, scene);
-playerLegL.bakeTransformIntoVertices(Matrix.Translation(0, -0.5, 0));
-playerLegL.material = playerPantsMat;
-playerLegL.parent = playerBodyRoot;
-playerLegL.position.set(-0.12, -0.75, 0);
-
-const playerLegR = MeshBuilder.CreateBox("playerLegR", { width: 0.18, height: 1.0, depth: 0.18 }, scene);
-playerLegR.bakeTransformIntoVertices(Matrix.Translation(0, -0.5, 0));
-playerLegR.material = playerPantsMat;
-playerLegR.parent = playerBodyRoot;
-playerLegR.position.set(0.12, -0.75, 0);
 
 // Add a standard majestic skybox
 function buildSkybox(scene: Scene) {
@@ -704,46 +665,6 @@ engine.runRenderLoop(() => {
         scene.activeCamera.position.y = 1.5; // Always bounce them back up to a standing height
     }
 
-    // Update player body to follow camera
-    if (scene.activeCamera) {
-        const cam = scene.activeCamera;
-        playerBodyRoot.position.copyFrom(cam.globalPosition);
-        playerBodyRoot.rotation.y = cam.absoluteRotation.toEulerAngles().y;
-
-        // Track arms to XR controllers, or fall back to body-relative default
-        if (xrControllerLeft && xrControllerLeft.grip) {
-            const grip = xrControllerLeft.grip;
-            playerArmL.position.copyFrom(grip.absolutePosition);
-            playerArmL.rotationQuaternion = grip.absoluteRotationQuaternion?.clone() ?? null;
-        } else {
-            // Desktop fallback: arms relative to camera
-            const fwd = cam.getDirection(Vector3.Forward());
-            const right = cam.getDirection(Vector3.Right());
-            playerArmL.position.copyFrom(cam.globalPosition)
-                .addInPlace(right.scale(-0.3))
-                .addInPlace(fwd.scale(0.2))
-                .addInPlace(Vector3.Up().scale(-0.35));
-            playerArmL.rotationQuaternion = null;
-            playerArmL.rotation.set(Math.PI / 6, cam.absoluteRotation.toEulerAngles().y, 0);
-        }
-
-        if (xrControllerRight && xrControllerRight.grip) {
-            const grip = xrControllerRight.grip;
-            playerArmR.position.copyFrom(grip.absolutePosition);
-            playerArmR.rotationQuaternion = grip.absoluteRotationQuaternion?.clone() ?? null;
-        } else {
-            // Desktop fallback: arms relative to camera
-            const fwd = cam.getDirection(Vector3.Forward());
-            const right = cam.getDirection(Vector3.Right());
-            playerArmR.position.copyFrom(cam.globalPosition)
-                .addInPlace(right.scale(0.3))
-                .addInPlace(fwd.scale(0.2))
-                .addInPlace(Vector3.Up().scale(-0.35));
-            playerArmR.rotationQuaternion = null;
-            playerArmR.rotation.set(Math.PI / 6, cam.absoluteRotation.toEulerAngles().y, 0);
-        }
-    }
-
     // Marching Band Animation
     const currentRenderTime = gameStartTime !== null ? Tone.now() - gameStartTime : performance.now() / 1000;
     const secondsPerBeat = 60 / BPM;
@@ -800,17 +721,9 @@ engine.runRenderLoop(() => {
         });
     }
 
-    // Animate player legs in sync with march
-    if (gameStartTime !== null) {
-        playerLegL.rotation.x = Math.sin(marchPhase) * 0.6;
-        playerLegR.rotation.x = -Math.sin(marchPhase) * 0.6;
-        // Only swing arms on desktop (no controllers) — in VR they track controllers
-        if (!xrControllerLeft) {
-            playerArmL.rotation.x = Math.PI / 6 - Math.sin(marchPhase) * 0.2;
-        }
-        if (!xrControllerRight) {
-            playerArmR.rotation.x = Math.PI / 6 + Math.sin(marchPhase) * 0.2;
-        }
+    // Update player body with march animation
+    if (scene.activeCamera) {
+        playerBody.update(scene.activeCamera, marchPhase, gameStartTime !== null);
     }
 
     // Continuously poll to ensure the queue processes upcoming measures during gameplay
