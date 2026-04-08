@@ -198,35 +198,25 @@ const drillShapes: DrillShape[] = [
     // 1: Expanded Block
     (_r, _c, _cols, _rows, startX, startZ) => ({ x: startX * 2.0, z: startZ }),
     
-    // 2: Wedge
+    // 2: Wedge (Arrowhead) - Z shifts based on column distance from center
     (_r, c, cols, _rows, startX, startZ) => {
         const centerCol = (cols - 1) / 2;
         const distFromCenter = Math.abs(c - centerCol);
-        return { x: startX * 1.5, z: startZ - distFromCenter * 2.5 };
-    },
-    
-    // 3: Simple Circle
-    (r, c, cols, rows, _startX, _startZ) => {
-        // Map 17x10 grid into concentric circles
-        const totalIndex = r * cols + c;
-        const totalMembers = cols * rows;
-        const angle = (totalIndex / totalMembers) * Math.PI * 2 * 4; // 4 rings
-        const ring = Math.floor(r / 4) + 1; // rings 1..5
-        const radius = ring * 3 + 4; // outer rings are wider
-        
-        // Base Z center is roughly where row 8 is (60 + 8*2 = 76)
-        const centerZ = 60 + 8 * 2; 
-        return { x: Math.cos(angle) * radius, z: centerZ + Math.sin(angle) * radius };
+        return { x: startX * 1.5, z: startZ - distFromCenter * 3.0 };
     },
 
-    // 4: Diamond
-    (r, c, cols, rows, startX, startZ) => {
-        const centerCol = (cols - 1) / 2;
-        const distFromCenter = Math.abs(c - centerCol);
-        const centerRow = rows / 2;
-        const distFromRowCenter = Math.abs(r - centerRow);
-        // Diamond 
-        return { x: startX * 1.5, z: startZ + (distFromCenter - distFromRowCenter) * 2.0 };
+    // 3: Diamond Bow - X stretches outward in the middle rows
+    (r, _c, _cols, rows, startX, startZ) => {
+        const rowPhase = (r / (rows - 1)) * Math.PI;
+        // Multiplier ranges from 1.0 at ends to 2.2 in the middle
+        const stretch = 1.0 + 1.2 * Math.sin(rowPhase);
+        return { x: startX * stretch, z: startZ };
+    },
+
+    // 4: S-Curve Wave - Entire band slithers left and right down the field
+    (_r, _c, _cols, _rows, startX, startZ) => {
+        const waveShift = Math.sin(startZ / 5.0) * 3.0;
+        return { x: startX * 1.5 + waveShift, z: startZ };
     }
 ];
 
@@ -656,27 +646,6 @@ engine.runRenderLoop(() => {
         const drillPositions = bandLegs.map(member => {
             return getDrillPosition(currentBeat, member.row, member.col, 5, 15, member.startX, member.startZ);
         });
-
-        const minSpace = 1.0; // Keep at least 1 meter apart
-        for (let iteration = 0; iteration < 3; iteration++) {
-            for (let i = 0; i < drillPositions.length; i++) {
-                for (let j = i + 1; j < drillPositions.length; j++) {
-                    const dx = drillPositions[i].x - drillPositions[j].x;
-                    const dz = drillPositions[i].z - drillPositions[j].z;
-                    const distSq = dx * dx + dz * dz;
-                    if (distSq < minSpace * minSpace && distSq > 0.0001) {
-                        const dist = Math.sqrt(distSq);
-                        const overlap = minSpace - dist;
-                        const pushX = (dx / dist) * overlap * 0.5;
-                        const pushZ = (dz / dist) * overlap * 0.5;
-                        drillPositions[i].x += pushX;
-                        drillPositions[i].z += pushZ;
-                        drillPositions[j].x -= pushX;
-                        drillPositions[j].z -= pushZ;
-                    }
-                }
-            }
-        }
 
         bandLegs.forEach(({ legL, legR, anchor }, index) => {
             // Swing legs back and forth like pendulums
