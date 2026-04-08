@@ -298,18 +298,18 @@ function buildMarchingBand(scene: Scene) {
     for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
             const isFlute = (r === 1);
-            const isClarinet = (r === 2 || r === 3);
-            const isSaxophone = (r === 4 || r === 5);
-            const isTomTom = (r === 6);
-            const isSnareDrum = (r === 7 || r === 8);
-            const isBassDrum = (r === 9);
-            const isCymbals = (r === 10);
-            const isTrumpet = (r === 11);
-            const isMellophone = (r === 12);
-            const isEuphonium = (r === 13);
-            const isTrombone = (r === 14);
-            const isSousaphone = (r === 15);
-            const isGlockenspiel = (r === 16);
+            const isClarinet = (r === 2);
+            const isSaxophone = (r === 3);
+            const isMellophone = (r === 4);
+            const isTrumpet = (r === 5 || r === 6);
+            const isTrombone = (r === 7);
+            const isEuphonium = (r === 8);
+            const isSousaphone = (r === 9);
+            const isGlockenspiel = (r === 10);
+            const isSnareDrum = (r === 11);
+            const isTomTom = (r === 12);
+            const isBassDrum = (r === 13);
+            const isCymbals = (r === 14);
 
             let type: InstrumentType = "DrumMajor";
             if (isFlute) type = "Flute";
@@ -651,36 +651,67 @@ engine.runRenderLoop(() => {
     const marchPhase = (currentRenderTime * Math.PI * 2) / (secondsPerBeat * 2);
     const currentBeat = currentRenderTime * (BPM / 60);
 
-    bandLegs.forEach(({ legL, legR, anchor, startZ, startX, row, col }) => {
-        // Swing legs back and forth like pendulums
-        legL.rotation.x = Math.sin(marchPhase) * 0.6;
-        legR.rotation.x = -Math.sin(marchPhase) * 0.6;
-        
-        // Actually move them down the field at standard marching speed
-        if (gameStartTime !== null) {
-            const targetPos = getDrillPosition(currentBeat, row, col, 10, 17, startX, startZ);
-            
+    if (gameStartTime !== null) {
+        // Pre-calculate positions and apply collision avoidance
+        const drillPositions = bandLegs.map(member => {
+            return getDrillPosition(currentBeat, member.row, member.col, 5, 15, member.startX, member.startZ);
+        });
+
+        const minSpace = 1.0; // Keep at least 1 meter apart
+        for (let iteration = 0; iteration < 3; iteration++) {
+            for (let i = 0; i < drillPositions.length; i++) {
+                for (let j = i + 1; j < drillPositions.length; j++) {
+                    const dx = drillPositions[i].x - drillPositions[j].x;
+                    const dz = drillPositions[i].z - drillPositions[j].z;
+                    const distSq = dx * dx + dz * dz;
+                    if (distSq < minSpace * minSpace && distSq > 0.0001) {
+                        const dist = Math.sqrt(distSq);
+                        const overlap = minSpace - dist;
+                        const pushX = (dx / dist) * overlap * 0.5;
+                        const pushZ = (dz / dist) * overlap * 0.5;
+                        drillPositions[i].x += pushX;
+                        drillPositions[i].z += pushZ;
+                        drillPositions[j].x -= pushX;
+                        drillPositions[j].z -= pushZ;
+                    }
+                }
+            }
+        }
+
+        bandLegs.forEach(({ legL, legR, anchor }, index) => {
+            // Swing legs back and forth like pendulums
+            legL.rotation.x = Math.sin(marchPhase) * 0.6;
+            legR.rotation.x = -Math.sin(marchPhase) * 0.6;
+
+            const targetPos = drillPositions[index];
+
             // Allow members to point in the direction they march (simple approach)
             const dx = targetPos.x - anchor.position.x;
-            const dz = targetPos.z - (anchor.position.z + currentRenderTime * FLY_SPEED); 
-            
+            const dz = targetPos.z - (anchor.position.z + currentRenderTime * FLY_SPEED);
+
             if (Math.abs(dx) > 0.05 || Math.abs(dz) > 0.05) {
                 const lateralAngle = Math.atan2(dx, dz);
-                const targetRotationY = Math.PI - lateralAngle; 
-                
+                const targetRotationY = Math.PI - lateralAngle;
+
                 if (Math.abs(dx) < 0.1) {
-                    anchor.rotation.y = Math.PI; 
+                    anchor.rotation.y = Math.PI;
                 } else {
                     anchor.rotation.y += (targetRotationY - anchor.rotation.y) * 0.1;
                 }
             } else {
-                anchor.rotation.y = Math.PI; 
+                anchor.rotation.y = Math.PI;
             }
 
             anchor.position.x = targetPos.x;
             anchor.position.z = targetPos.z - (currentRenderTime * FLY_SPEED);
-        }
-    });
+        });
+    } else {
+        bandLegs.forEach(({ legL, legR }) => {
+            // Swing legs back and forth like pendulums
+            legL.rotation.x = Math.sin(marchPhase) * 0.6;
+            legR.rotation.x = -Math.sin(marchPhase) * 0.6;
+        });
+    }
 
     // Continuously poll to ensure the queue processes upcoming measures during gameplay
     checkAndGenerateMeasures();

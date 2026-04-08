@@ -1,4 +1,4 @@
-import { Scene, Mesh, MeshBuilder, StandardMaterial, Color3, Matrix, InstancedMesh } from "@babylonjs/core";
+import { Scene, Mesh, MeshBuilder, StandardMaterial, Color3, Matrix, InstancedMesh, DynamicTexture } from "@babylonjs/core";
 import { InstrumentType, InstrumentFactory } from "./instrumentFactory";
 
 export type { InstrumentType };
@@ -126,6 +126,22 @@ export class BandMemberFactory {
         armR.rotation.y = isDrum ? -Math.PI / 4 : -Math.PI / 8;
 
         this.instrumentFactory.createInstrument(type, r, c, anchor);
+
+        const labelText = String.fromCharCode(65 + r) + (c + 1); // e.g. A1   
+        const labelPlane = MeshBuilder.CreatePlane(`label_${r}_${c}`, { width: 0.6, height: 0.3 }, this.scene);
+        labelPlane.parent = anchor;
+        labelPlane.position.set(0, 2.1, 0); // Hovering above the head
+        
+        const labelTexture = new DynamicTexture(`labelTex_${r}_${c}`, { width: 128, height: 64 }, this.scene, false);
+        labelTexture.hasAlpha = true;
+        labelTexture.drawText(labelText, null, null, "bold 44px Arial", "white", "transparent", true);
+        
+        const labelMat = new StandardMaterial(`labelMat_${r}_${c}`, this.scene);
+        labelMat.diffuseTexture = labelTexture;
+        labelMat.emissiveColor = new Color3(1, 1, 1);
+        labelMat.disableLighting = true;
+        labelPlane.material = labelMat;
+        labelPlane.billboardMode = Mesh.BILLBOARDMODE_Y;
 
         return { legL, legR, anchor, startZ: zPos, startX: xPos, row: r, col: c };
     }
