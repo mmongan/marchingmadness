@@ -16,6 +16,7 @@ export class FirstPersonBody {
     private prevGripPosL: Vector3 | null = null;
     private prevGripPosR: Vector3 | null = null;
     private swingSpeed = 0;
+    private walkPhase = 0;
     private readonly SWING_DECAY = 0.85;
     private readonly SWING_GAIN = 2.5;
     private readonly MOVE_SPEED = 3.0;  // meters per second at full swing
@@ -87,11 +88,11 @@ export class FirstPersonBody {
         // Arm-swing locomotion: detect pumping motion from controllers
         const movement = this.computeArmSwingLocomotion(cam, deltaTime);
 
-        // Animate legs from swing speed when not game-marching
+        // Animate legs from arm swing when not game-marching
         if (!isMarching && this.swingSpeed > 0.05) {
-            const walkPhase = performance.now() / 1000 * Math.PI * 4 * this.swingSpeed;
-            this.legL.rotation.x = Math.sin(walkPhase) * 0.6 * Math.min(1, this.swingSpeed);
-            this.legR.rotation.x = -Math.sin(walkPhase) * 0.6 * Math.min(1, this.swingSpeed);
+            const amplitude = Math.min(1, this.swingSpeed) * 0.6;
+            this.legL.rotation.x = Math.sin(this.walkPhase) * amplitude;
+            this.legR.rotation.x = -Math.sin(this.walkPhase) * amplitude;
         }
 
         return movement;
@@ -132,6 +133,9 @@ export class FirstPersonBody {
         // Smooth the swing speed: ramp up with gain, decay when idle
         this.swingSpeed = this.swingSpeed * this.SWING_DECAY + totalSwing * this.SWING_GAIN;
         this.swingSpeed = Math.min(this.swingSpeed, 1.0); // clamp to max
+
+        // Advance walk phase proportional to swing speed (legs match arm tempo)
+        this.walkPhase += this.swingSpeed * deltaTime * Math.PI * 4;
 
         // Move forward in the camera's facing direction (Y flattened)
         if (this.swingSpeed > 0.02) {
