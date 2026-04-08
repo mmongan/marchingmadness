@@ -205,11 +205,13 @@ export class BandMemberFactory {
 
         for (let i = 0; i <= 60; i++) {
             const t = i / 60;
-            const angle = t * Math.PI * 1.5;
-            const radius = 0.4 + 0.1 * t;
+            const angle = t * Math.PI * 1.8; // almost a full circle
+            // Make the path a truly circular tilted ring
+            const radius = 0.45;
             const x = -radius * Math.cos(angle);
-            const y = -0.4 + t * 1.2;
             const z = -radius * Math.sin(angle);
+            // Tilted perfectly circularly (plane tilt)
+            const y = -0.3 + x * 0.8; 
             sousaPath.push(new Vector3(x, y, z));
         }
         const lastP = sousaPath[sousaPath.length - 1];
@@ -271,12 +273,12 @@ export class BandMemberFactory {
         this.maceMat.specularColor = new Color3(1, 1, 1);
         this.baseMace.material = this.maceMat;
 
-        // Glockenspiel
-        const glockHolder = MeshBuilder.CreateBox("glockHolder", { width: 0.05, height: 0.3, depth: 0.2 }, scene);
-        glockHolder.position.set(0, -0.15, 0); 
-        const glockBars = MeshBuilder.CreateBox("glockBars", { width: 0.5, height: 0.05, depth: 0.2 }, scene);
-        glockBars.position.set(0, 0, 0);
-        this.baseGlockenspiel = Mesh.MergeMeshes([glockHolder, glockBars], true) as Mesh;
+        // Glockenspiel (Bell Lyre)
+        const glockPole = MeshBuilder.CreateCylinder("glockPole", { diameter: 0.04, height: 0.8 }, scene);
+        glockPole.position.set(0, 0, 0); 
+        const glockBars = MeshBuilder.CreateBox("glockBars", { width: 0.4, height: 0.5, depth: 0.05 }, scene);
+        glockBars.position.set(0, 0.2, 0.02);
+        this.baseGlockenspiel = Mesh.MergeMeshes([glockPole, glockBars], true) as Mesh;
         this.baseGlockenspiel.name = "baseGlockenspiel";
         const glockMat = new StandardMaterial("glockMat", scene);
         glockMat.diffuseColor = new Color3(0.8, 0.8, 0.8); // Silver/Metallic
@@ -410,8 +412,8 @@ export class BandMemberFactory {
                     instr.rotation.x = Math.PI / 2;
                     break;
                 case "Glockenspiel":
-                    instr.position.set(0, 1.1, 0.35); // Held in front mechanically (harness)
-                    instr.rotation.x = Math.PI / 16; // Slight tilt forward
+                    instr.position.set(0, 1.4, 0.25); // Held higher like a lyre
+                    instr.rotation.x = -Math.PI / 16; // Slightly tilted back towards player
                     break;
             }
         }
