@@ -1,4 +1,4 @@
-import { Scene, Mesh, MeshBuilder, StandardMaterial, Color3, Matrix, Vector3, InstancedMesh } from "@babylonjs/core";
+import { Scene, Mesh, MeshBuilder, StandardMaterial, Color3, Matrix, InstancedMesh } from "@babylonjs/core";
 
 export type InstrumentType = 
     | "DrumMajor" | "Flute" | "Clarinet" | "Saxophone" 
