@@ -1,4 +1,4 @@
-import { Scene, Mesh, MeshBuilder, StandardMaterial, Color3, Matrix, TransformNode, Vector3, Camera } from "@babylonjs/core";
+import { Scene, Mesh, MeshBuilder, StandardMaterial, Color3, Matrix, Quaternion, TransformNode, Vector3, Camera } from "@babylonjs/core";
 import { WebXRInputSource } from "@babylonjs/core/XR";
 
 export class FirstPersonBody {
@@ -25,22 +25,17 @@ export class FirstPersonBody {
         this.torso.material = uniformMat;
         this.torso.isPickable = false;
         this.torso.parent = this.bodyRoot;
-        this.torso.position.set(0, -0.65, 0.05);
+        this.torso.position.set(0, -0.65, -0.15);
 
-        // Arms are NOT parented to bodyRoot — positioned independently to track controllers
-        // Bake 90° X rotation so the long axis (0.5) aligns with grip forward (forearm direction)
-        // and offset pivot to the hand end
-        this.armL = MeshBuilder.CreateBox("playerArmL", { width: 0.12, height: 0.5, depth: 0.12 }, scene);
-        this.armL.bakeTransformIntoVertices(Matrix.RotationX(-Math.PI / 2).multiply(Matrix.Translation(0, 0, -0.25)));
+        // Arms: height=1 boxes that get dynamically scaled & oriented each frame
+        // to stretch from shoulder to hand (controller or desktop fallback)
+        this.armL = MeshBuilder.CreateBox("playerArmL", { width: 0.12, height: 1, depth: 0.12 }, scene);
         this.armL.material = uniformMat;
         this.armL.isPickable = false;
-        this.armL.position.set(-0.3, -0.35, 0.15);
 
-        this.armR = MeshBuilder.CreateBox("playerArmR", { width: 0.12, height: 0.5, depth: 0.12 }, scene);
-        this.armR.bakeTransformIntoVertices(Matrix.RotationX(-Math.PI / 2).multiply(Matrix.Translation(0, 0, -0.25)));
+        this.armR = MeshBuilder.CreateBox("playerArmR", { width: 0.12, height: 1, depth: 0.12 }, scene);
         this.armR.material = uniformMat;
         this.armR.isPickable = false;
-        this.armR.position.set(0.3, -0.35, 0.15);
 
         this.legL = MeshBuilder.CreateBox("playerLegL", { width: 0.18, height: 1.0, depth: 0.18 }, scene);
         this.legL.bakeTransformIntoVertices(Matrix.Translation(0, -0.5, 0));
@@ -67,9 +62,9 @@ export class FirstPersonBody {
         this.bodyRoot.position.copyFrom(cam.globalPosition);
         this.bodyRoot.rotation.y = cam.absoluteRotation.toEulerAngles().y;
 
-        // Track arms to XR controllers, or fall back to body-relative default
-        this.updateArm(this.armL, this.controllerLeft, cam, -0.3);
-        this.updateArm(this.armR, this.controllerRight, cam, 0.3);
+        // Stretch arms from shoulders to hands (controllers or desktop fallback)
+        this.updateArm(this.armL, this.controllerLeft, cam, -0.3, marchPhase, isMarching);
+        this.updateArm(this.armR, this.controllerRight, cam, 0.3, marchPhase, isMarching);
 
         // Animate legs and arms during march
         if (isMarching) {
@@ -78,20 +73,47 @@ export class FirstPersonBody {
         }
     }
 
-    private updateArm(arm: Mesh, controller: WebXRInputSource | null, cam: Camera, xOffset: number): void {
+    private updateArm(arm: Mesh, controller: WebXRInputSource | null, cam: Camera, xOffset: number, marchPhase: number, isMarching: boolean): void {
+        // Shoulder position: offset from body root at top-of-torso height
+        const right = cam.getDirection(Vector3.Right());
+        const shoulderPos = this.bodyRoot.position.clone()
+            .addInPlace(right.scale(xOffset * 0.75))
+            .addInPlace(Vector3.Up().scale(-0.38));
+
+        // Hand position: VR controller grip or desktop fallback
+        let handPos: Vector3;
         if (controller && controller.grip) {
-            const grip = controller.grip;
-            arm.position.copyFrom(grip.absolutePosition);
-            arm.rotationQuaternion = grip.absoluteRotationQuaternion?.clone() ?? null;
+            handPos = controller.grip.absolutePosition.clone();
         } else {
             const fwd = cam.getDirection(Vector3.Forward());
-            const right = cam.getDirection(Vector3.Right());
-            arm.position.copyFrom(cam.globalPosition)
+            handPos = cam.globalPosition.clone()
                 .addInPlace(right.scale(xOffset))
                 .addInPlace(fwd.scale(0.3))
                 .addInPlace(Vector3.Up().scale(-0.4));
-            arm.rotationQuaternion = null;
-            arm.rotation.set(0, cam.absoluteRotation.toEulerAngles().y, 0);
+            // Swing hands slightly during march on desktop
+            if (isMarching) {
+                const swing = Math.sin(marchPhase) * 0.1 * Math.sign(xOffset);
+                handPos.addInPlace(fwd.scale(swing));
+            }
+        }
+
+        // Position at midpoint, scale Y to distance
+        Vector3.CenterToRef(shoulderPos, handPos, arm.position);
+        const dist = Vector3.Distance(shoulderPos, handPos);
+        arm.scaling.set(1, dist, 1);
+
+        // Orient Y axis from shoulder toward hand
+        const dir = handPos.subtract(shoulderPos).normalize();
+        const yAxis = Vector3.Up();
+        const dot = Vector3.Dot(yAxis, dir);
+        if (Math.abs(dot) > 0.9999) {
+            arm.rotationQuaternion = dot > 0
+                ? Quaternion.Identity()
+                : Quaternion.RotationAxis(Vector3.Right(), Math.PI);
+        } else {
+            const axis = Vector3.Cross(yAxis, dir).normalize();
+            const angle = Math.acos(Math.max(-1, Math.min(1, dot)));
+            arm.rotationQuaternion = Quaternion.RotationAxis(axis, angle);
         }
     }
 }
