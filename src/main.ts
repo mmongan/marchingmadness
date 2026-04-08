@@ -531,22 +531,16 @@ function updateScoreHUD() {
     scoreTex.update();
 }
 
-// === Player Starting Position ===
-// Place player at a random position in the band formation instead of center field
-function getRandomPlayerPosition(): { x: number; z: number } {
-    const randomRow = Math.floor(Math.random() * BAND_ROWS);
-    const randomCol = Math.floor(Math.random() * BAND_COLS);
-    
-    // Calculate formation position using the same formula as band members
-    const startX = (randomCol - BAND_COLS / 2 + 0.5) * SPACING_X;
-    const startZ = BAND_START_Z - randomRow * SPACING_Z;
-    
-    return { x: startX, z: startZ };
-}
+// === Player Starting Position in Drill Formation ===
+// Assign player to a random position in the band formation
+const playerRow = Math.floor(Math.random() * BAND_ROWS);
+const playerCol = Math.floor(Math.random() * BAND_COLS);
+const playerStartX = (playerCol - BAND_COLS / 2 + 0.5) * SPACING_X;
+const playerStartZ = BAND_START_Z - playerRow * SPACING_Z;
 
-const playerFormationPos = getRandomPlayerPosition();
-camera.position = new Vector3(playerFormationPos.x, 1.8, playerFormationPos.z);
-camera.setTarget(new Vector3(playerFormationPos.x, 1.8, playerFormationPos.z + 5));
+// Initialize camera to player's starting drill position
+camera.position = new Vector3(playerStartX, 1.8, playerStartZ);
+camera.setTarget(new Vector3(playerStartX, 1.8, playerStartZ + 5));
 
 // Song selection
 const SONG_LIST = [
@@ -564,7 +558,7 @@ const buttonTextures: DynamicTexture[] = [];
 
 // Title text
 const titleMesh = MeshBuilder.CreatePlane("titleMesh", { width: 3, height: 0.6 }, scene);
-titleMesh.position = new Vector3(playerFormationPos.x, 2.6, playerFormationPos.z + 2);
+titleMesh.position = new Vector3(playerStartX, 2.6, playerStartZ + 2);
 const titleTex = new DynamicTexture("titleTex", { width: 768, height: 128 }, scene, false);
 const titleCtx = titleTex.getContext() as CanvasRenderingContext2D;
 titleCtx.fillStyle = "rgba(0,0,0,0)";
@@ -609,7 +603,7 @@ const songMaterials: StandardMaterial[] = [];
 for (let i = 0; i < SONG_LIST.length; i++) {
     const btn = MeshBuilder.CreatePlane(`songBtn_${i}`, { width: 1.2, height: 0.5 }, scene);
     const xOffset = (i - (SONG_LIST.length - 1) / 2) * 1.4;
-    btn.position = new Vector3(playerFormationPos.x + xOffset, 1.8, playerFormationPos.z + 2);
+    btn.position = new Vector3(playerStartX + xOffset, 1.8, playerStartZ + 2);
     const tex = new DynamicTexture(`songTex_${i}`, { width: 512, height: 256 }, scene, false);
     tex.hasAlpha = true;
     drawSongBtn(tex, SONG_LIST[i].title, SONG_LIST[i].subtitle, i === 0);
@@ -627,7 +621,7 @@ for (let i = 0; i < SONG_LIST.length; i++) {
 
 // 3D VR Start Button
 const startBtnMesh = MeshBuilder.CreatePlane("startBtnMesh", { width: 2, height: 0.7 }, scene);
-startBtnMesh.position = new Vector3(playerFormationPos.x, 1.1, playerFormationPos.z + 2);
+startBtnMesh.position = new Vector3(playerStartX, 1.1, playerStartZ + 2);
 
 const btnTex = new DynamicTexture("btnTex", { width: 512, height: 256 }, scene, false);
 buttonTextures.push(btnTex);
@@ -1013,6 +1007,19 @@ engine.runRenderLoop(() => {
             return getDrillPosition(currentBeat, member.row, member.col, 5, 15, member.startX, member.startZ);
         });
 
+        // Update player camera to follow their drill position
+        const playerDrillPos = getDrillPosition(currentBeat, playerRow, playerCol,
+            BAND_COLS, BAND_ROWS, playerStartX, playerStartZ);
+        const playerTargetX = playerDrillPos.x;
+        const playerTargetZ = playerDrillPos.z - (currentRenderTime * FLY_SPEED);
+        
+        // Smoothly move camera toward drill position
+        const camLerpRate = 0.08;
+        camera.position.x += (playerTargetX - camera.position.x) * camLerpRate;
+        camera.position.z += (playerTargetZ - camera.position.z) * camLerpRate;
+        // Update look target to stay ahead of player's position
+        camera.setTarget(new Vector3(playerTargetX, 1.8, playerTargetZ + 5));
+
         bandLegs.forEach(({ legL, legR, anchor }, index) => {
             const st = stumbleStates[index];
             const isStumbling = st.tilt > 0.3 || st.downTimer > 0;
@@ -1085,8 +1092,8 @@ engine.runRenderLoop(() => {
             const targetBeat = baseBeat + i + 1;
             marker.beatNum = targetBeat;
 
-            const drill = getDrillPosition(targetBeat, PLAYER_DRILL_ROW, PLAYER_DRILL_COL,
-                5, 15, PLAYER_START_X, PLAYER_START_Z);
+            const drill = getDrillPosition(targetBeat, playerRow, playerCol,
+                BAND_COLS, BAND_ROWS, playerStartX, playerStartZ);
             const beatTimeSec = targetBeat * secondsPerBeat;
             const isLeftFoot = targetBeat % 2 === 0;
             const footX = drill.x + (isLeftFoot ? -FOOT_LATERAL : FOOT_LATERAL);
