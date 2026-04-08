@@ -382,7 +382,7 @@ const randomMemberIndex = Math.floor(Math.random() * (BAND_ROWS * BAND_COLS));
 const playerRow = Math.floor(randomMemberIndex / BAND_COLS);
 const playerCol = randomMemberIndex % BAND_COLS;
 const playerStartX = (playerCol - BAND_COLS / 2 + 0.5) * SPACING_X;
-const playerStartZ = BAND_START_Z - playerRow * SPACING_Z;
+const playerStartZ = BAND_START_Z + playerRow * SPACING_Z;
 
 // Create a 100-member marching band in a 10x10 formation
 function buildMarchingBand(scene: Scene) {
@@ -708,6 +708,9 @@ scene.onPointerObservable.add(async (pointerInfo) => {
 
     if (picked === startBtnMesh && !gameStarting) {
         gameStarting = true;
+            // Lock camera to player position (disable mouse/keyboard controls for desktop)
+            camera.detachControl();
+            
             await Tone.start();
             // Load real sampled instruments via SoundFont, routing through spatial PannerNodes
             await loadInstruments();
