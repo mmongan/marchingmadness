@@ -23,6 +23,7 @@ export class FirstPersonBody {
 
         this.torso = MeshBuilder.CreateBox("playerTorso", { width: 0.45, height: 0.6, depth: 0.3 }, scene);
         this.torso.material = uniformMat;
+        this.torso.isPickable = false;
         this.torso.parent = this.bodyRoot;
         this.torso.position.set(0, -0.65, 0.05);
 
@@ -32,22 +33,26 @@ export class FirstPersonBody {
         this.armL = MeshBuilder.CreateBox("playerArmL", { width: 0.12, height: 0.5, depth: 0.12 }, scene);
         this.armL.bakeTransformIntoVertices(Matrix.RotationX(-Math.PI / 2).multiply(Matrix.Translation(0, 0, -0.25)));
         this.armL.material = uniformMat;
+        this.armL.isPickable = false;
         this.armL.position.set(-0.3, -0.35, 0.15);
 
         this.armR = MeshBuilder.CreateBox("playerArmR", { width: 0.12, height: 0.5, depth: 0.12 }, scene);
         this.armR.bakeTransformIntoVertices(Matrix.RotationX(-Math.PI / 2).multiply(Matrix.Translation(0, 0, -0.25)));
         this.armR.material = uniformMat;
+        this.armR.isPickable = false;
         this.armR.position.set(0.3, -0.35, 0.15);
 
         this.legL = MeshBuilder.CreateBox("playerLegL", { width: 0.18, height: 1.0, depth: 0.18 }, scene);
         this.legL.bakeTransformIntoVertices(Matrix.Translation(0, -0.5, 0));
         this.legL.material = pantsMat;
+        this.legL.isPickable = false;
         this.legL.parent = this.bodyRoot;
         this.legL.position.set(-0.12, -0.75, 0);
 
         this.legR = MeshBuilder.CreateBox("playerLegR", { width: 0.18, height: 1.0, depth: 0.18 }, scene);
         this.legR.bakeTransformIntoVertices(Matrix.Translation(0, -0.5, 0));
         this.legR.material = pantsMat;
+        this.legR.isPickable = false;
         this.legR.parent = this.bodyRoot;
         this.legR.position.set(0.12, -0.75, 0);
     }
