@@ -34,9 +34,18 @@ export function startMetronomeAndMusic(
     }, "4n");
 
     // Schedule all instrument notes from the sheet
-    if (osmdSheet) {
-        const instruments = osmdSheet.Instruments;
-        osmdSheet.SourceMeasures.forEach((sourceMeasure: any, mIndex: number) => {
+    if (!osmdSheet) {
+        console.error("osmdSheet is undefined");
+        return;
+    }
+    
+    if (!osmdSheet.SourceMeasures) {
+        console.error("osmdSheet.SourceMeasures is undefined");
+        return;
+    }
+
+    const instruments = osmdSheet.Instruments;
+    osmdSheet.SourceMeasures.forEach((sourceMeasure: any, mIndex: number) => {
             let measureFirstT = 0;
             if (sourceMeasure.VerticalSourceStaffEntryContainers.length > 0 &&
                 sourceMeasure.VerticalSourceStaffEntryContainers[0].Timestamp) {
@@ -68,7 +77,6 @@ export function startMetronomeAndMusic(
                 });
             });
         });
-    }
 
     // Start transport with 2 whole note delay (for band to march in place before music)
     Tone.Transport.start(gameStartTime + 2 * WHOLE_NOTE_DURATION);

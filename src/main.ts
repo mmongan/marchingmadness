@@ -459,13 +459,14 @@ else if (playerRow === 14) playerInstrument = "Cymbals";
 const existingMarcher = bandLegs[playerMarcherIndex];
 const existingChildren = existingMarcher.anchor.getChildMeshes(true);
 for (const child of existingChildren) {
-    // Dispose materials and textures
-    if (child.material) {
-        if (child.material instanceof StandardMaterial) {
-            if (child.material.diffuseTexture) child.material.diffuseTexture.dispose();
-            if (child.material.emissiveTexture) child.material.emissiveTexture.dispose();
+    // Only dispose unique materials (like label textures), not shared materials
+    if (child.name.includes("label")) {
+        if (child.material) {
+            if (child.material instanceof StandardMaterial) {
+                if (child.material.diffuseTexture) child.material.diffuseTexture.dispose();
+            }
+            child.material.dispose();
         }
-        child.material.dispose();
     }
     child.dispose();
 }
@@ -477,9 +478,9 @@ const playerMarcher = factory.createMember(playerRow, playerCol, playerInstrumen
 // Replace the standard marcher with the player marcher
 bandLegs[playerMarcherIndex] = playerMarcher;
 
-// Initialize camera to player's starting drill position
+// Initialize camera to player's starting drill position (facing backwards 180 degrees)
 camera.position = new Vector3(playerStartX, 1.8, playerStartZ);
-camera.setTarget(new Vector3(playerStartX, 1.8, playerStartZ + 5));
+camera.setTarget(new Vector3(playerStartX, 1.8, playerStartZ - 5));
 
 // Position the player's VR body at the marcher location
 playerBody.setBodyPosition(new Vector3(playerStartX, 0, playerStartZ));
@@ -591,12 +592,43 @@ function updateScoreHUD() {
 
 // Song selection
 const SONG_LIST = [
-    { file: "assets/score.xml", title: "MacArthur Park", subtitle: "Brass Quintet" },
+    { file: "assets/fight_song.xml", title: "Fight Song", subtitle: "Public Domain" },
     { file: "assets/saints.xml", title: "When the Saints", subtitle: "Full Band" },
     { file: "assets/stars_and_stripes.xml", title: "Stars & Stripes", subtitle: "Full Band" },
     { file: "assets/battle_hymn.xml", title: "Battle Hymn", subtitle: "Full Band" },
 ];
 let selectedScoreFile = SONG_LIST[0].file;
+
+// === Setup Desktop HTML Buttons ===
+const songButtonsContainer = document.getElementById("songButtons")!;
+const desktopUI = document.getElementById("desktopUI")!;
+const startBtnHTML = document.getElementById("startBtn") as HTMLButtonElement;
+
+const desktopSongButtons: HTMLButtonElement[] = [];
+for (let i = 0; i < SONG_LIST.length; i++) {
+    const btn = document.createElement("button");
+    btn.className = "songBtn";
+    if (i === 0) btn.classList.add("selected");
+    btn.innerHTML = `<strong>${SONG_LIST[i].title}</strong><br><small>${SONG_LIST[i].subtitle}</small>`;
+    btn.addEventListener("click", () => {
+        // Update HTML button selection UI
+        for (const b of desktopSongButtons) b.classList.remove("selected");
+        btn.classList.add("selected");
+        // Update 3D button selection (will redraw when clicked)
+        selectedScoreFile = SONG_LIST[i].file;
+    });
+    songButtonsContainer.appendChild(btn);
+    desktopSongButtons.push(btn);
+}
+
+// Add event listener for HTML start button
+startBtnHTML.addEventListener("click", async () => {
+    if (!gameStarting) {
+        gameStarting = true;
+        desktopUI.classList.add("hidden");
+        await startGameplay();
+    }
+});
 
 // === UI Button Meshes and Materials (organized in arrays for easier disposal) ===
 const buttonMeshes: Mesh[] = [];
@@ -699,6 +731,52 @@ for (const buttonMesh of buttonMeshes) {
     buttonMesh.position.z += 0.4;
 }
 
+// Shared game startup function (called by both HTML and 3D buttons)
+async function startGameplay() {
+    // Lock camera to player position (disable mouse/keyboard controls for desktop)
+    camera.detachControl();
+    
+    await Tone.start();
+    // Load real sampled instruments via SoundFont, routing through spatial PannerNodes
+    await loadInstruments();
+
+    // Load the selected song's sheet music
+    await initSheetMusic();
+
+    // Sync Tone.Transport to our 80 BPM and schedule all parts with correct transposition
+    // The musicManager handles PlaybackTranspose for all instruments (e.g., -2 for Bb, -7 for Horn in F)
+    Tone.Transport.bpm.value = BPM;
+    gameStartTime = Tone.now();
+    
+    if (osmd && osmd.Sheet) {
+        startMetronomeAndMusic(osmd.Sheet, gameStartTime);
+    } else {
+        console.error("OSMD or Sheet not initialized");
+        return;
+    }
+
+    beatIndicator.isVisible = true;
+    scoreHUD.isVisible = true;
+    formationQuality = 100;
+    marchersKnockedDown = 0;
+    // Reset footstep scoring state
+    lastScoredBeat = -1;
+    stepStreak = 0;
+    totalStepsScored = 0;
+    perfectSteps = 0;
+    goodSteps = 0;
+    missedSteps = 0;
+    updateScoreHUD();
+    // Start the metronome and music specifically delayed by 2 whole notes
+    Tone.Transport.start(gameStartTime + 2 * WHOLE_NOTE_DURATION);
+    
+    // Dispose all UI buttons, materials, and textures
+    for (const buttonMesh of buttonMeshes) buttonMesh.dispose();
+    for (const mat of buttonMaterials) mat.dispose();
+    for (const tex of buttonTextures) tex.dispose();
+    titleMesh.dispose();
+}
+
 let gameStarting = false;
 scene.onPointerObservable.add(async (pointerInfo) => {
     if (pointerInfo.type !== PointerEventTypes.POINTERDOWN || !pointerInfo.pickInfo?.hit) return;
@@ -718,42 +796,7 @@ scene.onPointerObservable.add(async (pointerInfo) => {
 
     if (picked === startBtnMesh && !gameStarting) {
         gameStarting = true;
-            // Lock camera to player position (disable mouse/keyboard controls for desktop)
-            camera.detachControl();
-            
-            await Tone.start();
-            // Load real sampled instruments via SoundFont, routing through spatial PannerNodes
-            await loadInstruments();
-
-            // Load the selected song's sheet music
-            await initSheetMusic();
-        
-            // Sync Tone.Transport to our 80 BPM and schedule all parts with correct transposition
-            // The musicManager handles PlaybackTranspose for all instruments (e.g., -2 for Bb, -7 for Horn in F)
-            Tone.Transport.bpm.value = BPM;
-            gameStartTime = Tone.now();
-            startMetronomeAndMusic(osmd!, gameStartTime);
-    
-            beatIndicator.isVisible = true;
-            scoreHUD.isVisible = true;
-            formationQuality = 100;
-            marchersKnockedDown = 0;
-            // Reset footstep scoring state
-            lastScoredBeat = -1;
-            stepStreak = 0;
-            totalStepsScored = 0;
-            perfectSteps = 0;
-            goodSteps = 0;
-            missedSteps = 0;
-            updateScoreHUD();
-            // Start the metronome and music specifically delayed by 2 whole notes
-            Tone.Transport.start(gameStartTime + 2 * WHOLE_NOTE_DURATION);
-            
-            // Dispose all UI buttons, materials, and textures
-            for (const buttonMesh of buttonMeshes) buttonMesh.dispose();
-            for (const mat of buttonMaterials) mat.dispose();
-            for (const tex of buttonTextures) tex.dispose();
-            titleMesh.dispose();
+        await startGameplay();
     }
 });
 
@@ -1219,15 +1262,26 @@ engine.runRenderLoop(() => {
     // --- Player-to-marcher collision: stumble / fall ---
     let obstaclePushX = 0;
     let obstaclePushZ = 0;
+    let playerIsDown = false; // Track if player is stumbling/falling
+    
     if (scene.activeCamera) {
         const playerPos = scene.activeCamera.globalPosition;
         const frameDt = engine.getDeltaTime() / 1000;
         const BROAD_RADIUS = 5.0;
         const broadRadiusSq = BROAD_RADIUS * BROAD_RADIUS;
 
+        // Get player's stumble state to check if they're down
+        const playerStumbleState = stumbleStates[playerMarcherIndex];
+        playerIsDown = playerStumbleState.tilt >= MAX_TILT * 0.8; // down when significantly tilted
+
         bandLegs.forEach(({ anchor }, index) => {
             const st = stumbleStates[index];
             const isDown = st.tilt >= MAX_TILT * 0.95;
+
+            // Skip collision checks when player is stumbling/falling
+            if (playerIsDown && index !== playerMarcherIndex) {
+                return;
+            }
 
             // Broad-phase: skip marchers far from player
             const bx = playerPos.x - anchor.position.x;
@@ -1471,8 +1525,8 @@ engine.runRenderLoop(() => {
         if (movement.lengthSquared() > 0) {
             scene.activeCamera.position.addInPlace(movement);
         }
-        // Push player away from fallen obstacle marchers
-        if (Math.abs(obstaclePushX) > 0.001 || Math.abs(obstaclePushZ) > 0.001) {
+        // Push player away from fallen obstacle marchers (only if player is not stumbling)
+        if (!playerIsDown && (Math.abs(obstaclePushX) > 0.001 || Math.abs(obstaclePushZ) > 0.001)) {
             scene.activeCamera.position.x += obstaclePushX;
             scene.activeCamera.position.z += obstaclePushZ;
         }

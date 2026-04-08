@@ -26,6 +26,73 @@
         border-radius: 5px;
         font-family: sans-serif;
       }
+      #desktopUI {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        text-align: center;
+        z-index: 100;
+        background: rgba(0, 0, 0, 0.9);
+        padding: 20px;
+        border-radius: 15px;
+        min-width: 300px;
+      }
+      #desktopUI.hidden {
+        display: none;
+      }
+      #desktopUI h1 {
+        color: #FFD700;
+        font-size: 24px;
+        margin: 0 0 15px 0;
+        font-family: Arial, sans-serif;
+      }
+      #songButtons {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+      .songBtn {
+        padding: 8px 12px;
+        font-size: 12px;
+        border: 2px solid #333366;
+        background-color: #333366;
+        color: white;
+        cursor: pointer;
+        border-radius: 8px;
+        transition: all 0.3s ease;
+        min-width: 90px;
+        font-weight: bold;
+      }
+      .songBtn:hover {
+        background-color: #4444aa;
+        border-color: #5555bb;
+      }
+      .songBtn.selected {
+        background-color: #1155aa;
+        border-color: #FFD700;
+        border-width: 3px;
+      }
+      #startBtn {
+        padding: 10px 30px;
+        font-size: 16px;
+        font-weight: bold;
+        background-color: #228822;
+        color: white;
+        border: none;
+        cursor: pointer;
+        border-radius: 8px;
+        transition: all 0.3s ease;
+      }
+      #startBtn:hover {
+        background-color: #33aa33;
+        transform: scale(1.05);
+      }
+      #startBtn:active {
+        transform: scale(0.95);
+      }
     </style>
     <!-- Load Ammo.js script directly as it often works best globally for Babylon -->
     <script src="https://rawcdn.githack.com/kripken/ammo.js/99d0ec0b1e26d7ccc13e013caba8e8a5c98d953b/builds/ammo.wasm.js"></script>
@@ -33,6 +100,12 @@
   <body>
     <div id="nav">
 
+    </div>
+    <div id="desktopUI">
+      <h1>MARCHING MADNESS</h1>
+      <div style="margin-bottom: 15px; color: #aaaaaa; font-size: 12px;">Select a song and click START</div>
+      <div id="songButtons"></div>
+      <button id="startBtn">START GAME</button>
     </div>
     <canvas id="renderCanvas" touch-action="none"></canvas>
     <script type="module" src="/src/main.ts"></script>
