@@ -23,10 +23,11 @@ Modular TypeScript + Babylon.js structure with separated concerns:
 - **`src/gameConstants.ts`** — Shared constants (BPM, physics, scoring thresholds, band layout)
 - **`src/drillMath.ts`** — Pure drill math (formation shapes, position interpolation, grading)
 - **`src/environment.ts`** — Skybox and football field rendering
-- **`src/audioSystem.ts`** — Instrument loading, metronome, collision sounds, spatial audio
+- **`src/audioSystem.ts`** — SoundFont instrument loading, collision sounds, spatial audio
+- **`src/musicManager.ts`** — Metronome synth, Tone.Transport setup, instrument scheduling from OSMD
 - **`src/collisionSystem.ts`** — Player-marcher collisions, domino cascade, particle effects
 - **`src/bandMemberFactory.ts`** — Band member mesh creation and instrument assignment
-- **`src/firstPersonBody.ts`** — Player body animat ion, treadmill locomotion, haptics
+- **`src/firstPersonBody.ts`** — Player body animation, treadmill locomotion, haptics
 
 ### Build & Test
 
