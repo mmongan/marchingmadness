@@ -478,9 +478,9 @@ const playerMarcher = factory.createMember(playerRow, playerCol, playerInstrumen
 // Replace the standard marcher with the player marcher
 bandLegs[playerMarcherIndex] = playerMarcher;
 
-// Initialize camera to player's starting drill position (facing backwards 180 degrees)
+// Initialize camera to player's starting drill position
 camera.position = new Vector3(playerStartX, 1.8, playerStartZ);
-camera.setTarget(new Vector3(playerStartX, 1.8, playerStartZ - 5));
+camera.setTarget(new Vector3(playerStartX, 1.8, playerStartZ + 5));
 
 // Position the player's VR body at the marcher location
 playerBody.setBodyPosition(new Vector3(playerStartX, 0, playerStartZ));

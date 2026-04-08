@@ -12,6 +12,13 @@ export class FirstPersonBody {
     private controllerLeft: WebXRInputSource | null = null;
     private controllerRight: WebXRInputSource | null = null;
 
+    // Desktop keyboard input state
+    private keysPressed: { [key: string]: boolean } = {};
+    private lastMouseX = 0;
+    private lastMouseY = 0;
+    private desktopMouseTurnX = 0;
+    private desktopMouseTurnY = 0;
+
     // Treadmill / Walking-in-Place locomotion tracking
     private prevGripPosL: Vector3 | null = null;
     private prevGripPosR: Vector3 | null = null;
@@ -26,6 +33,7 @@ export class FirstPersonBody {
     private readonly ACCEL = 5.0;           // speed ramp-up rate
     private readonly FRICTION = 4.0;        // speed decay rate
     private readonly TURN_FRICTION = 6.0;   // turn decay rate
+    private readonly DESKTOP_MOUSE_SENSITIVITY = 0.005;  // mouse look sensitivity
 
     constructor(scene: Scene) {
         const uniformMat = new StandardMaterial("playerUniformMat", scene);
@@ -65,6 +73,24 @@ export class FirstPersonBody {
         this.legR.isPickable = false;
         this.legR.parent = this.bodyRoot;
         this.legR.position.set(0.12, -0.75, 0);
+
+        // Add desktop keyboard and mouse input listeners
+        document.addEventListener("keydown", (e) => {
+            this.keysPressed[e.key.toLowerCase()] = true;
+        });
+        document.addEventListener("keyup", (e) => {
+            this.keysPressed[e.key.toLowerCase()] = false;
+        });
+        document.addEventListener("mousemove", (e) => {
+            const deltaX = e.clientX - this.lastMouseX;
+            const deltaY = e.clientY - this.lastMouseY;
+            this.lastMouseX = e.clientX;
+            this.lastMouseY = e.clientY;
+            if (document.pointerLockElement === document.body || document.pointerLockElement === document.documentElement) {
+                this.desktopMouseTurnX += deltaX * this.DESKTOP_MOUSE_SENSITIVITY;
+                this.desktopMouseTurnY += deltaY * this.DESKTOP_MOUSE_SENSITIVITY;
+            }
+        });
     }
 
     public setController(handedness: "left" | "right", controller: WebXRInputSource | null): void {
@@ -146,7 +172,15 @@ export class FirstPersonBody {
     }
 
     private computeTreadmillLocomotion(cam: Camera, dt: number): { movement: Vector3; turnY: number } {
-        // Compute per-controller velocity from frame deltas
+        // Check if VR controllers are connected
+        const hasVRInput = this.controllerLeft !== null || this.controllerRight !== null;
+
+        if (!hasVRInput) {
+            // Desktop fallback: use keyboard and mouse input
+            return this.computeDesktopLocomotion(cam, dt);
+        }
+
+        // VR mode: compute per-controller velocity from frame deltas
         const velL = this.gripVelocity(this.controllerLeft, this.prevGripPosL, dt);
         this.prevGripPosL = this.controllerLeft?.grip
             ? this.controllerLeft.grip.absolutePosition.clone() : null;
@@ -199,6 +233,64 @@ export class FirstPersonBody {
             fwd.normalize();
             movement = fwd.scale(this.moveSpeed * dt);
         }
+
+        return { movement, turnY: this.turnSpeed * dt };
+    }
+
+    private computeDesktopLocomotion(cam: Camera, dt: number): { movement: Vector3; turnY: number } {
+        // WASD / Arrow keys for movement, mouse look for turning
+        const moveForward = this.keysPressed['w'] || this.keysPressed['arrowup'];
+        const moveBackward = this.keysPressed['s'] || this.keysPressed['arrowdown'];
+        const moveLeft = this.keysPressed['a'] || this.keysPressed['arrowleft'];
+        const moveRight = this.keysPressed['d'] || this.keysPressed['arrowright'];
+
+        // Compute desired speed: forward is negative X in standard FPS, but positive Z is forward
+        let targetSpeed = 0;
+        if (moveForward) targetSpeed = 2.5; // Default movement speed
+        else if (moveBackward) targetSpeed = -1.5;
+
+        // Update forward speed with acceleration
+        const speedDiff = targetSpeed - this.moveSpeed;
+        if (Math.abs(speedDiff) > 0.01) {
+            this.moveSpeed += speedDiff * Math.min(1, this.ACCEL * dt);
+        } else {
+            this.moveSpeed = targetSpeed;
+        }
+
+        // Strafing with A/D or arrow keys
+        let strafeDir = 0;
+        if (moveLeft) strafeDir = -1;
+        else if (moveRight) strafeDir = 1;
+
+        // Compute movement vector
+        let movement = Vector3.Zero();
+        if (Math.abs(this.moveSpeed) > 0.01 || strafeDir !== 0) {
+            const fwd = cam.getDirection(Vector3.Forward());
+            fwd.y = 0;
+            fwd.normalize();
+            
+            const right = Vector3.Cross(Vector3.Up(), fwd);
+            right.normalize();
+
+            movement = fwd.scale(this.moveSpeed * dt).add(right.scale(strafeDir * 2.0 * dt));
+        }
+
+        // Mouse turn or Q/E for manual turn
+        let targetTurn = this.desktopMouseTurnX;
+        if (this.keysPressed['q']) targetTurn -= 1.0 * dt;
+        if (this.keysPressed['e']) targetTurn += 1.0 * dt;
+
+        // Apply turn acceleration
+        const turnDiff = targetTurn - this.turnSpeed;
+        if (Math.abs(turnDiff) > 0.01) {
+            this.turnSpeed += turnDiff * Math.min(1, this.ACCEL * dt);
+        } else {
+            this.turnSpeed = targetTurn;
+        }
+
+        // Reset mouse deltas
+        this.desktopMouseTurnX *= 0.8;
+        this.desktopMouseTurnY *= 0.8;
 
         return { movement, turnY: this.turnSpeed * dt };
     }
