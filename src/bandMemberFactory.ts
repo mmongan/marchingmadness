@@ -47,10 +47,10 @@ export class BandMemberFactory {
         this.skinMat.diffuseColor = new Color3(0.9, 0.75, 0.6);
 
         this.uniformMat = new StandardMaterial("uniformMat", scene);
-        this.uniformMat.diffuseColor = new Color3(0.8, 0.1, 0.1);
+        this.uniformMat.diffuseColor = new Color3(0.1, 0.2, 0.8); // Changed to blue
 
         this.pantsMat = new StandardMaterial("pantsMat", scene);
-        this.pantsMat.diffuseColor = new Color3(0.1, 0.1, 0.3);
+        this.pantsMat.diffuseColor = new Color3(0.1, 0.2, 0.8); // Changed to same blue as uniform
 
         this.hatMat = new StandardMaterial("hatMat", scene);
         this.hatMat.diffuseColor = new Color3(0.95, 0.95, 0.95);
