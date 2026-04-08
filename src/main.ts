@@ -1,6 +1,7 @@
 import { BandMemberFactory, InstrumentType, BandMemberData } from "./bandMemberFactory";
 import { FirstPersonBody } from "./firstPersonBody";
 import { Engine, Scene, FreeCamera, Vector3, HemisphericLight, MeshBuilder, StandardMaterial, DynamicTexture, Color3, Texture, CubeTexture, PointerEventTypes } from "@babylonjs/core";
+import "@babylonjs/loaders/glTF";
 import { OpenSheetMusicDisplay } from "opensheetmusicdisplay";
 import * as Tone from "tone";
 import { Soundfont } from "smplr";
@@ -52,13 +53,19 @@ scene.createDefaultXRExperienceAsync({
         xrCamera.position.y = 1.8;
     });
 
-    // Track controllers for arm positioning
+    // Track physical controllers for arm positioning (skip hand-tracking inputs)
     xr.input.onControllerAddedObservable.add((controller) => {
-        console.log(`XR controller connected: ${controller.inputSource.handedness}, profile: ${controller.inputSource.profiles.join(", ")}`);
+        const profiles = controller.inputSource.profiles;
+        const isHandTracking = profiles.some(p => p.includes("hand"));
+        if (isHandTracking) return; // hand-tracking has no grip useful for arm-swing
+        console.log(`XR controller connected: ${controller.inputSource.handedness}, profile: ${profiles.join(", ")}`);
         if (controller.inputSource.handedness === "left") playerBody.setController("left", controller);
         if (controller.inputSource.handedness === "right") playerBody.setController("right", controller);
     });
     xr.input.onControllerRemovedObservable.add((controller) => {
+        const profiles = controller.inputSource.profiles;
+        const isHandTracking = profiles.some(p => p.includes("hand"));
+        if (isHandTracking) return;
         if (controller.inputSource.handedness === "left") playerBody.setController("left", null);
         if (controller.inputSource.handedness === "right") playerBody.setController("right", null);
     });
