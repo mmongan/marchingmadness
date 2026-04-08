@@ -137,13 +137,13 @@ export class BandMemberFactory {
 
         // Cymbals
         const cymbalL = MeshBuilder.CreateCylinder("cymbalL", { diameter: 0.5, height: 0.01 }, scene);
-        cymbalL.position.set(-0.15, 0, 0);
+        cymbalL.position.set(-0.1, 0, 0);
         cymbalL.rotation.z = Math.PI / 2;
-        cymbalL.rotation.y = Math.PI / 8;
+        cymbalL.rotation.y = 0; // Parallel
         const cymbalR = MeshBuilder.CreateCylinder("cymbalR", { diameter: 0.5, height: 0.01 }, scene);
-        cymbalR.position.set(0.15, 0, 0);
+        cymbalR.position.set(0.1, 0, 0);
         cymbalR.rotation.z = Math.PI / 2;
-        cymbalR.rotation.y = -Math.PI / 8;
+        cymbalR.rotation.y = 0; // Parallel
         this.baseCymbals = Mesh.MergeMeshes([cymbalL, cymbalR], true) as Mesh;
         this.baseCymbals.name = "baseCymbals";
         this.baseCymbals.material = this.brassMat;
@@ -189,7 +189,7 @@ export class BandMemberFactory {
 
         // Forward-facing prominent Bell
         const sousaBell = MeshBuilder.CreateCylinder("sousaBell", { diameterTop: 0.8, diameterBottom: 0.16, height: 0.7 }, scene);
-        sousaBell.position.set(-0.4, 0.5, 0.2); // Positioned high over the left shoulder
+        sousaBell.position.set(-0.4, 0.7, 0.1); // Positioned high above the torus ring
         sousaBell.rotation.x = Math.PI / 2; // Face forward
         sousaBell.rotation.y = -Math.PI / 16; // Slight outward flare
 
