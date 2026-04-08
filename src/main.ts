@@ -1,33 +1,13 @@
 import { BandMemberFactory, InstrumentType, BandMemberData } from "./bandMemberFactory";
 import { FirstPersonBody } from "./firstPersonBody";
+import { startMetronomeAndMusic } from "./musicManager";
+import { sfPanners, playStumbleSound, playCrashSound, loadInstruments, updateAudioListener, updateSpatialAudio } from "./audioSystem";
 import { Engine, Scene, FreeCamera, Vector3, HemisphericLight, MeshBuilder, StandardMaterial, DynamicTexture, Color3, Texture, CubeTexture, PointerEventTypes, ParticleSystem, Color4, AbstractMesh } from "@babylonjs/core";
 import "@babylonjs/loaders/glTF";
 import { OpenSheetMusicDisplay } from "opensheetmusicdisplay";
 import * as Tone from "tone";
-import { Soundfont } from "smplr";
 
-// Real sampled instrument voices via General MIDI SoundFont
-// Index: 0=trumpet, 1=trumpet2, 2=french_horn, 3=trombone, 4=tuba, 5=flute, 6=clarinet, 7=alto_sax, 8=glockenspiel
-const GM_INSTRUMENT_NAMES = ["trumpet", "trumpet", "french_horn", "trombone", "tuba", "flute", "clarinet", "alto_sax", "glockenspiel"];
-const GM_INSTRUMENT_VOLUMES = [100, 90, 85, 95, 100, 80, 85, 85, 75]; // MIDI velocity 0-127
-const sfInstruments: Map<number, Soundfont> = new Map();
-const sfPanners: Map<number, PannerNode> = new Map();
-const SPATIAL_RADIUS = 20; // only consider marchers within 20m
-const SPATIAL_RADIUS_SQ = SPATIAL_RADIUS * SPATIAL_RADIUS;
-
-let metronomeSynth: Tone.MembraneSynth | null = null;
-function getMetronomeSynth() {
-    if (!metronomeSynth) {
-        metronomeSynth = new Tone.MembraneSynth({
-            pitchDecay: 0.01,
-            octaves: 2,
-            envelope: { attack: 0.001, decay: 0.1, sustain: 0, release: 0.1 }
-        }).toDestination();
-        metronomeSynth.volume.value = -10;
-    }
-    return metronomeSynth;
-}
-
+// Real sampled instrument voices - definitions now in gameConstants.ts
 const canvas = document.getElementById("renderCanvas") as HTMLCanvasElement;
 const engine = new Engine(canvas, true, { audioEngine: false });
 
@@ -402,71 +382,6 @@ function emitDustBurst(position: Vector3) {
     ps.start();
 }
 
-// Map marcher row to sfInstruments index (null = no melodic instrument)
-const ROW_TO_SF_INDEX: (number | null)[] = [
-    null, // 0  DrumMajor
-    5,    // 1  Flute       → flute
-    6,    // 2  Clarinet    → clarinet
-    7,    // 3  Saxophone   → alto_sax
-    2,    // 4  Mellophone  → french_horn
-    0,    // 5  Trumpet     → trumpet
-    1,    // 6  Trumpet     → trumpet2
-    3,    // 7  Trombone    → trombone
-    3,    // 8  Euphonium   → trombone
-    4,    // 9  Sousaphone  → tuba
-    8,    // 10 Glockenspiel→ glockenspiel
-    null, // 11 SnareDrum
-    null, // 12 TomTom
-    null, // 13 BassDrum
-    null, // 14 Cymbals
-];
-
-// Crash/noise synth for falling
-let crashSynth: Tone.NoiseSynth | null = null;
-function getCrashSynth() {
-    if (!crashSynth) {
-        crashSynth = new Tone.NoiseSynth({
-            noise: { type: "white" },
-            envelope: { attack: 0.01, decay: 0.4, sustain: 0, release: 0.1 },
-            volume: -12,
-        }).toDestination();
-    }
-    return crashSynth;
-}
-
-function playStumbleSound(row: number) {
-    const sfIdx = ROW_TO_SF_INDEX[row];
-    if (sfIdx == null) {
-        // Percussion rows: play crash synth instead
-        getCrashSynth().triggerAttackRelease("16n");
-        return;
-    }
-    const sf = sfInstruments.get(sfIdx);
-    if (!sf) return;
-    // Out-of-tune: random detuned note near middle range
-    // Higher instruments get higher base notes
-    const baseNote = sfIdx === 4 ? 40 : sfIdx === 3 ? 48 : sfIdx === 5 ? 72 : sfIdx === 8 ? 76 : 60;
-    const detune = Math.floor(Math.random() * 5) - 2; // -2 to +2 semitones off
-    sf.start({ note: baseNote + detune, duration: 0.25 });
-}
-
-function playCrashSound(row: number) {
-    const sfIdx = ROW_TO_SF_INDEX[row];
-    if (sfIdx == null) {
-        // Percussion: play big noise crash
-        getCrashSynth().triggerAttackRelease("4n");
-        return;
-    }
-    const sf = sfInstruments.get(sfIdx);
-    if (!sf) return;
-    
-    // Crash: play a cluster of dissonant notes for that instrument
-    const baseNote = sfIdx === 4 ? 40 : sfIdx === 3 ? 48 : sfIdx === 5 ? 72 : sfIdx === 8 ? 76 : 60;
-    sf.start({ note: baseNote - 1, duration: 0.1 });
-    sf.start({ note: baseNote + 1, duration: 0.1 });
-    sf.start({ note: baseNote + 6, duration: 0.1 });
-}
-
 // Create a 100-member marching band in a 10x10 formation
 function buildMarchingBand(scene: Scene) {
     const factory = new BandMemberFactory(scene);
@@ -745,79 +660,17 @@ scene.onPointerObservable.add(async (pointerInfo) => {
         gameStarting = true;
             await Tone.start();
             // Load real sampled instruments via SoundFont, routing through spatial PannerNodes
-            const rawCtx = Tone.getContext().rawContext as AudioContext;
-            for (let i = 0; i < GM_INSTRUMENT_NAMES.length; i++) {
-                // Create a PannerNode per instrument group for spatial positioning
-                const panner = rawCtx.createPanner();
-                panner.panningModel = "HRTF";
-                panner.distanceModel = "inverse";
-                panner.refDistance = 2;
-                panner.maxDistance = 50;
-                panner.rolloffFactor = 1;
-                panner.coneOuterGain = 0.4;
-                panner.connect(rawCtx.destination);
-                sfPanners.set(i, panner);
-
-                const sf = new Soundfont(rawCtx, {
-                    instrument: GM_INSTRUMENT_NAMES[i] as any,
-                    destination: panner,
-                });
-                await sf.load;
-                sf.output.setVolume(GM_INSTRUMENT_VOLUMES[i]);
-                sfInstruments.set(i, sf);
-            }
-            getMetronomeSynth();
+            await loadInstruments();
 
             // Load the selected song's sheet music
             await initSheetMusic();
         
-            // Sync Tone.Transport to our 80 BPM and start a repeating metronome click
+            // Sync Tone.Transport to our 80 BPM and schedule all parts with correct transposition
+            // The musicManager handles PlaybackTranspose for all instruments (e.g., -2 for Bb, -7 for Horn in F)
             Tone.Transport.bpm.value = BPM;
-            Tone.Transport.scheduleRepeat((time) => {
-                getMetronomeSynth().triggerAttackRelease("C5", "32n", time);
-            }, "4n");
-        
-            // Schedule ALL instrument parts onto the Transport timeline
-            if (osmd && osmd.Sheet) {
-                const instruments = osmd.Sheet.Instruments;
-                osmd.Sheet.SourceMeasures.forEach((sourceMeasure, mIndex) => {
-                    let measureFirstT = 0;
-                    if (sourceMeasure.VerticalSourceStaffEntryContainers.length > 0 && sourceMeasure.VerticalSourceStaffEntryContainers[0].Timestamp) {
-                        measureFirstT = sourceMeasure.VerticalSourceStaffEntryContainers[0].Timestamp.RealValue;
-                    }
-
-                    sourceMeasure.VerticalSourceStaffEntryContainers.forEach(container => {
-                        if (!container.Timestamp) return;
-                        const timeInMeasure = (container.Timestamp.RealValue - measureFirstT) * WHOLE_NOTE_DURATION;
-                    
-                        container.StaffEntries.forEach(entry => {
-                            // Find which instrument index this entry belongs to
-                            const instrIndex = instruments.findIndex(inst => inst.Id === entry.ParentStaff.ParentInstrument.Id);
-                            if (instrIndex < 0) return;
-
-                            const sf = sfInstruments.get(instrIndex);
-                            entry.VoiceEntries.forEach(ve => {
-                                ve.Notes.forEach(note => {
-                                    if (note.halfTone) {
-                                        // halfTone is the WRITTEN pitch as MIDI number.
-                                        // PlaybackTranspose is the MusicXML <chromatic> value
-                                        // (e.g. -2 for Bb instruments, -7 for Horn in F)
-                                        const transpose = (instruments[instrIndex] as any).PlaybackTranspose || 0;
-                                        const midiNote = note.halfTone + transpose;
-                                        const duration = note.Length.RealValue * WHOLE_NOTE_DURATION;
-                                        const scheduleTime = (mIndex * WHOLE_NOTE_DURATION) + timeInMeasure;
-                                        Tone.Transport.schedule((time) => {
-                                            sf?.start({ note: midiNote, time, duration });
-                                        }, scheduleTime);
-                                    }
-                                });
-                            });
-                        });
-                    });
-                });
-            }
-    
             gameStartTime = Tone.now();
+            startMetronomeAndMusic(osmd!, gameStartTime);
+    
             beatIndicator.isVisible = true;
             scoreHUD.isVisible = true;
             formationQuality = 100;
@@ -1515,79 +1368,17 @@ engine.runRenderLoop(() => {
     }
 
     // Sync Web Audio API listener to camera for correct spatial orientation
-    if (scene.activeCamera && sfPanners.size > 0) {
-        const rawCtx = Tone.getContext().rawContext as AudioContext;
-        const listener = rawCtx.listener;
+    if (scene.activeCamera) {
         const camPos = scene.activeCamera.globalPosition;
         const camFwd = scene.activeCamera.getDirection(Vector3.Forward());
-        if (listener.positionX !== undefined) {
-            listener.positionX.value = camPos.x;
-            listener.positionY.value = camPos.y;
-            listener.positionZ.value = camPos.z;
-            listener.forwardX.value = camFwd.x;
-            listener.forwardY.value = camFwd.y;
-            listener.forwardZ.value = camFwd.z;
-            listener.upX.value = 0;
-            listener.upY.value = 1;
-            listener.upZ.value = 0;
-        }
+        updateAudioListener(camPos, camFwd);
     }
 
     // Update spatial audio panners — weighted centroid of nearby marchers per instrument group
     // Also count stumbling/down members per group for dynamic volume dropout
     if (scene.activeCamera && sfPanners.size > 0) {
         const listenerPos = scene.activeCamera.globalPosition;
-        // Accumulate weighted position per instrument group index
-        const groupSumX: number[] = new Array(GM_INSTRUMENT_NAMES.length).fill(0);
-        const groupSumZ: number[] = new Array(GM_INSTRUMENT_NAMES.length).fill(0);
-        const groupWeight: number[] = new Array(GM_INSTRUMENT_NAMES.length).fill(0);
-        const groupTotal: number[] = new Array(GM_INSTRUMENT_NAMES.length).fill(0);
-        const groupDown: number[] = new Array(GM_INSTRUMENT_NAMES.length).fill(0);
-
-        for (let m = 0; m < bandLegs.length; m++) {
-            const sfIdx = ROW_TO_SF_INDEX[bandLegs[m].row];
-            if (sfIdx == null) continue;
-            groupTotal[sfIdx]++;
-            const st = stumbleStates[m];
-            if (st.tilt > 0.3 || st.downTimer > 0) groupDown[sfIdx]++;
-
-            const ax = bandLegs[m].anchor.position.x;
-            const az = bandLegs[m].anchor.position.z;
-            const dx = ax - listenerPos.x;
-            const dz = az - listenerPos.z;
-            const distSq = dx * dx + dz * dz;
-            if (distSq > SPATIAL_RADIUS_SQ) continue;
-            const w = 1 / (1 + distSq); // inverse-distance-squared weight
-            groupSumX[sfIdx] += ax * w;
-            groupSumZ[sfIdx] += az * w;
-            groupWeight[sfIdx] += w;
-        }
-
-        for (let g = 0; g < GM_INSTRUMENT_NAMES.length; g++) {
-            const panner = sfPanners.get(g);
-            if (!panner) continue;
-
-            // Dynamic volume: fade instrument group as members go down
-            const sf = sfInstruments.get(g);
-            if (sf && groupTotal[g] > 0) {
-                const activeRatio = 1 - (groupDown[g] / groupTotal[g]);
-                // Scale from full volume down to 15% when entire section is down
-                const vol = Math.round(GM_INSTRUMENT_VOLUMES[g] * (0.15 + 0.85 * activeRatio));
-                sf.output.setVolume(vol);
-            }
-            if (groupWeight[g] > 0) {
-                const cx = groupSumX[g] / groupWeight[g];
-                const cz = groupSumZ[g] / groupWeight[g];
-                panner.positionX.value = cx;
-                panner.positionY.value = 1.5;
-                panner.positionZ.value = cz;
-            } else {
-                // No nearby marchers — place at listener so sound is centered
-                panner.positionX.value = scene.activeCamera!.globalPosition.x;
-                panner.positionY.value = 1.5;
-                panner.positionZ.value = scene.activeCamera!.globalPosition.z + 1;
-            }
-        }
+        updateSpatialAudio(listenerPos, bandLegs, stumbleStates);
     }
 
     // Update player body with march animation and treadmill locomotion
