@@ -334,7 +334,7 @@ function buildMarchingBand(scene: Scene) {
     const cols = 5;
     const spacingX = 2.0; // 2 meters between columns
     const spacingZ = 2.0; // 2 meters between rows
-    const startZ = 60;
+    const startZ = 15; // Start near midfield so all 15 rows (28m deep) stay on the field
 
     for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
@@ -454,7 +454,10 @@ startBtnMesh.actionManager.registerAction(
                             entry.VoiceEntries.forEach(ve => {
                                 ve.Notes.forEach(note => {
                                     if (note.halfTone) {
-                                        const frequency = Tone.Frequency(note.halfTone, "midi").toFrequency();
+                                        // Apply instrument transposition: halfTone is written pitch,
+                                        // Transpose gives the chromatic offset to get sounding pitch
+                                        const transpose = instruments[instrIndex].Transpose || 0;
+                                        const frequency = Tone.Frequency(note.halfTone + transpose, "midi").toFrequency();
                                         const duration = note.Length.RealValue * WHOLE_NOTE_DURATION;
                                         const scheduleTime = (mIndex * WHOLE_NOTE_DURATION) + timeInMeasure;
                                         Tone.Transport.schedule((time) => {
