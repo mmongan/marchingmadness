@@ -190,7 +190,7 @@ const bandLegs: BandMemberData[] = [];
 function buildMarchingBand(scene: Scene) {
     const factory = new BandMemberFactory(scene);
 
-    const rows = 16;
+    const rows = 17;
     const cols = 10;
     const spacingX = 2.0; // 2 meters between columns
     const spacingZ = 2.0; // 2 meters between rows
@@ -210,6 +210,7 @@ function buildMarchingBand(scene: Scene) {
             const isEuphonium = (r === 13);
             const isTrombone = (r === 14);
             const isSousaphone = (r === 15);
+            const isGlockenspiel = (r === 16);
 
             let type: InstrumentType = "DrumMajor";
             if (isFlute) type = "Flute";
@@ -224,6 +225,7 @@ function buildMarchingBand(scene: Scene) {
             else if (isEuphonium) type = "Euphonium";
             else if (isTrombone) type = "Trombone";
             else if (isSousaphone) type = "Sousaphone";
+            else if (isGlockenspiel) type = "Glockenspiel";
 
             const xPos = (c - cols / 2 + 0.5) * spacingX;
             const zPos = startZ + r * spacingZ;

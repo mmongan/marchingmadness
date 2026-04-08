@@ -3,7 +3,7 @@ import { Scene, Mesh, MeshBuilder, StandardMaterial, Color3, Matrix, Vector3, In
 export type InstrumentType = 
     | "DrumMajor" | "Flute" | "Clarinet" | "Saxophone" 
     | "TomTom" | "SnareDrum" | "BassDrum" | "Cymbals" 
-    | "Trumpet" | "Mellophone" | "Euphonium" | "Trombone" | "Sousaphone";
+    | "Trumpet" | "Mellophone" | "Euphonium" | "Trombone" | "Sousaphone" | "Glockenspiel";
 
 export interface BandMemberData {
     legL: InstancedMesh | Mesh;
@@ -48,6 +48,7 @@ export class BandMemberFactory {
     private baseMellophone!: Mesh;
     private baseEuphonium!: Mesh;
     private baseMace!: Mesh;
+    private baseGlockenspiel!: Mesh;
 
     private firstPlaced: Record<InstrumentType, boolean>;
     private firstBodyPlaced = false;
@@ -67,7 +68,8 @@ export class BandMemberFactory {
             Mellophone: false,
             Euphonium: false,
             Trombone: false,
-            Sousaphone: false
+            Sousaphone: false,
+            Glockenspiel: false
         };
 
         this.initMaterialsAndMeshes();
@@ -262,6 +264,18 @@ export class BandMemberFactory {
         this.maceMat.diffuseColor = new Color3(0.9, 0.9, 0.9);
         this.maceMat.specularColor = new Color3(1, 1, 1);
         this.baseMace.material = this.maceMat;
+
+        // Glockenspiel
+        const glockHolder = MeshBuilder.CreateBox("glockHolder", { width: 0.05, height: 0.3, depth: 0.2 }, scene);
+        glockHolder.position.set(0, -0.15, 0); 
+        const glockBars = MeshBuilder.CreateBox("glockBars", { width: 0.5, height: 0.05, depth: 0.2 }, scene);
+        glockBars.position.set(0, 0, 0);
+        this.baseGlockenspiel = Mesh.MergeMeshes([glockHolder, glockBars], true) as Mesh;
+        this.baseGlockenspiel.name = "baseGlockenspiel";
+        const glockMat = new StandardMaterial("glockMat", scene);
+        glockMat.diffuseColor = new Color3(0.8, 0.8, 0.8); // Silver/Metallic
+        glockMat.specularColor = new Color3(1, 1, 1);
+        this.baseGlockenspiel.material = glockMat;
     }
 
     public createMember(r: number, c: number, type: InstrumentType, xPos: number, zPos: number): BandMemberData {
@@ -328,6 +342,7 @@ export class BandMemberFactory {
             case "Trumpet": baseInstr = this.baseTrumpet; break;
             case "Mellophone": baseInstr = this.baseMellophone; break;
             case "Euphonium": baseInstr = this.baseEuphonium; break;
+            case "Glockenspiel": baseInstr = this.baseGlockenspiel; break;
         }
 
         if (baseInstr) {
@@ -387,6 +402,10 @@ export class BandMemberFactory {
                 case "Euphonium":
                     instr.position.set(0, 1.45, 0.15);
                     instr.rotation.x = Math.PI / 2;
+                    break;
+                case "Glockenspiel":
+                    instr.position.set(0, 1.1, 0.35); // Held in front mechanically (harness)
+                    instr.rotation.x = Math.PI / 16; // Slight tilt forward
                     break;
             }
         }
