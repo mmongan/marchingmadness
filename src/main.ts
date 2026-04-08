@@ -458,7 +458,17 @@ else if (playerRow === 14) playerInstrument = "Cymbals";
 // Dispose the standard marcher at this position
 const existingMarcher = bandLegs[playerMarcherIndex];
 const existingChildren = existingMarcher.anchor.getChildMeshes(true);
-for (const child of existingChildren) child.dispose();
+for (const child of existingChildren) {
+    // Dispose materials and textures
+    if (child.material) {
+        if (child.material instanceof StandardMaterial) {
+            if (child.material.diffuseTexture) child.material.diffuseTexture.dispose();
+            if (child.material.emissiveTexture) child.material.emissiveTexture.dispose();
+        }
+        child.material.dispose();
+    }
+    child.dispose();
+}
 existingMarcher.anchor.dispose();
 
 // Create player marcher with distinct appearance (lighter color to stand out)
