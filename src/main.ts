@@ -597,7 +597,7 @@ engine.runRenderLoop(() => {
             // Show it when it's coming from the horizon, vanish it after its duration has fully passed
             const vanishDistance = arrivalZ - (WHOLE_NOTE_DURATION * FLY_SPEED);
             if (currentZ < 150 && currentZ > vanishDistance) {
-                block.mesh.isVisible = true;
+                block.mesh.isVisible = false; // Hidden per user request
             } else {
                 block.mesh.isVisible = false;
             }
