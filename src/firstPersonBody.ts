@@ -16,7 +16,8 @@ export class FirstPersonBody {
     private prevGripPosL: Vector3 | null = null;
     private prevGripPosR: Vector3 | null = null;
     private swingSpeed = 0;
-    private walkPhase = 0;
+    private armSwingL = 0; // current forward/back offset of left arm
+    private armSwingR = 0; // current forward/back offset of right arm
     private readonly SWING_DECAY = 0.85;
     private readonly SWING_GAIN = 2.5;
     private readonly MOVE_SPEED = 3.0;  // meters per second at full swing
@@ -82,15 +83,10 @@ export class FirstPersonBody {
         // Arm-swing locomotion: detect pumping motion from controllers
         const movement = this.computeArmSwingLocomotion(cam, deltaTime);
 
-        // Legs move only from actual arm swing motion
-        if (this.swingSpeed > 0.05) {
-            const amplitude = Math.min(1, this.swingSpeed) * 0.6;
-            this.legL.rotation.x = Math.sin(this.walkPhase) * amplitude;
-            this.legR.rotation.x = -Math.sin(this.walkPhase) * amplitude;
-        } else {
-            this.legL.rotation.x = 0;
-            this.legR.rotation.x = 0;
-        }
+        // Legs directly track opposite arm's forward/back position
+        // Left arm forward → right leg forward (natural gait)
+        this.legR.rotation.x = -this.armSwingL * 3.0;
+        this.legL.rotation.x = -this.armSwingR * 3.0;
 
         return movement;
     }
@@ -103,15 +99,19 @@ export class FirstPersonBody {
             const pos = this.controllerLeft.grip.absolutePosition;
             if (this.prevGripPosL) {
                 const delta = pos.subtract(this.prevGripPosL);
-                // Project onto camera forward to measure forward/back pump
                 const fwd = cam.getDirection(Vector3.Forward());
-                totalSwing += Math.abs(Vector3.Dot(delta, fwd));
-                // Also count vertical motion (arms go up/down naturally when swinging)
+                const fwdDot = Vector3.Dot(delta, fwd);
+                totalSwing += Math.abs(fwdDot);
                 totalSwing += Math.abs(delta.y) * 0.5;
             }
+            // Track arm's forward offset relative to shoulder
+            const fwd = cam.getDirection(Vector3.Forward());
+            const shoulderL = cam.globalPosition.clone().addInPlace(Vector3.Up().scale(-0.38));
+            this.armSwingL = Vector3.Dot(pos.subtract(shoulderL), fwd);
             this.prevGripPosL = pos.clone();
         } else {
             this.prevGripPosL = null;
+            this.armSwingL *= 0.8; // decay toward zero
         }
 
         if (this.controllerRight?.grip) {
@@ -122,17 +122,18 @@ export class FirstPersonBody {
                 totalSwing += Math.abs(Vector3.Dot(delta, fwd));
                 totalSwing += Math.abs(delta.y) * 0.5;
             }
+            const fwd = cam.getDirection(Vector3.Forward());
+            const shoulderR = cam.globalPosition.clone().addInPlace(Vector3.Up().scale(-0.38));
+            this.armSwingR = Vector3.Dot(pos.subtract(shoulderR), fwd);
             this.prevGripPosR = pos.clone();
         } else {
             this.prevGripPosR = null;
+            this.armSwingR *= 0.8;
         }
 
         // Smooth the swing speed: ramp up with gain, decay when idle
         this.swingSpeed = this.swingSpeed * this.SWING_DECAY + totalSwing * this.SWING_GAIN;
         this.swingSpeed = Math.min(this.swingSpeed, 1.0); // clamp to max
-
-        // Advance walk phase proportional to swing speed (legs match arm tempo)
-        this.walkPhase += this.swingSpeed * deltaTime * Math.PI * 4;
 
         // Move forward in the camera's facing direction (Y flattened)
         if (this.swingSpeed > 0.02) {
