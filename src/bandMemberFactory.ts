@@ -71,7 +71,7 @@ export class BandMemberFactory {
         this.basePlume = MeshBuilder.CreateCylinder("basePlume", { diameter: 0.1, height: 0.3, tessellation: 3 }, scene);
         this.basePlume.material = this.plumeMat;
 
-        this.baseArm = MeshBuilder.CreateCylinder("baseArm", { diameter: 0.12, height: 0.5 }, scene);
+        this.baseArm = MeshBuilder.CreateBox("baseArm", { width: 0.12, height: 0.5, depth: 0.12 }, scene);
         this.baseArm.material = this.uniformMat;
     }
 
