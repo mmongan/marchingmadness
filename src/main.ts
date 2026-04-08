@@ -713,15 +713,49 @@ engine.runRenderLoop(() => {
         });
 
         bandLegs.forEach(({ legL, legR, anchor }, index) => {
-            // Swing legs back and forth like pendulums
-            legL.rotation.x = Math.sin(marchPhase) * 0.6;
-            legR.rotation.x = -Math.sin(marchPhase) * 0.6;
+            const st = stumbleStates[index];
+            const isStumbling = st.tilt > 0.3 || st.downTimer > 0;
 
             const targetPos = drillPositions[index];
+            const targetX = targetPos.x;
+            const targetZ = targetPos.z - (currentRenderTime * FLY_SPEED);
 
-            // Allow members to point in the direction they march (simple approach)
-            const dx = targetPos.x - anchor.position.x;
-            const dz = targetPos.z - (anchor.position.z + currentRenderTime * FLY_SPEED);
+            if (isStumbling) {
+                // Fallen/stumbling: stop legs, freeze in place
+                legL.rotation.x = 0;
+                legR.rotation.x = 0;
+            } else {
+                // Normal marching legs
+                legL.rotation.x = Math.sin(marchPhase) * 0.6;
+                legR.rotation.x = -Math.sin(marchPhase) * 0.6;
+
+                // Catch-up: lerp toward drill position
+                // Distance to target determines hustle speed
+                const dx = targetX - anchor.position.x;
+                const dz = targetZ - anchor.position.z;
+                const gap = Math.sqrt(dx * dx + dz * dz);
+
+                if (gap > 0.05) {
+                    // Hustle factor: farther behind = faster catch-up (up to 3x normal lerp)
+                    const hustleFactor = Math.min(3.0, 1.0 + gap * 0.5);
+                    const lerpRate = Math.min(1, 0.05 * hustleFactor);
+                    anchor.position.x += dx * lerpRate;
+                    anchor.position.z += dz * lerpRate;
+
+                    // Faster leg swing when hustling
+                    const hustleSwing = Math.min(1.0, gap * 0.3) * 0.4;
+                    legL.rotation.x = Math.sin(marchPhase * hustleFactor) * (0.6 + hustleSwing);
+                    legR.rotation.x = -Math.sin(marchPhase * hustleFactor) * (0.6 + hustleSwing);
+                } else {
+                    // Close enough: snap to position
+                    anchor.position.x = targetX;
+                    anchor.position.z = targetZ;
+                }
+            }
+
+            // Face direction of movement / drill target
+            const dx = targetX - anchor.position.x;
+            const dz = targetZ - anchor.position.z;
 
             if (Math.abs(dx) > 0.05 || Math.abs(dz) > 0.05) {
                 const lateralAngle = Math.atan2(dx, dz);
@@ -732,12 +766,9 @@ engine.runRenderLoop(() => {
                 } else {
                     anchor.rotation.y += (targetRotationY - anchor.rotation.y) * 0.1;
                 }
-            } else {
+            } else if (!isStumbling) {
                 anchor.rotation.y = Math.PI;
             }
-
-            anchor.position.x = targetPos.x;
-            anchor.position.z = targetPos.z - (currentRenderTime * FLY_SPEED);
         });
     } else {
         bandLegs.forEach(({ legL, legR }) => {
