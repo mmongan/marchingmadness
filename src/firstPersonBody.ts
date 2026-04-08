@@ -72,6 +72,21 @@ export class FirstPersonBody {
         if (handedness === "right") this.controllerRight = controller;
     }
 
+    /** Pulse haptics on both controllers (intensity 0-1, duration in ms). */
+    public pulseHaptics(intensity: number, durationMs: number): void {
+        for (const ctrl of [this.controllerLeft, this.controllerRight]) {
+            if (!ctrl) continue;
+            const gp = ctrl.inputSource.gamepad;
+            if ((gp as any)?.hapticActuators?.[0]) {
+                (gp as any).hapticActuators[0].pulse(intensity, durationMs);
+            } else if ((gp as any)?.vibrationActuator) {
+                (gp as any).vibrationActuator.playEffect("dual-rumble", {
+                    duration: durationMs, strongMagnitude: intensity, weakMagnitude: intensity * 0.5
+                });
+            }
+        }
+    }
+
     /** Returns the left arm mesh for attaching wrist UI elements. */
     public getLeftArm(): Mesh {
         return this.armL;

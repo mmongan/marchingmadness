@@ -1,14 +1,15 @@
 import { BandMemberFactory, InstrumentType, BandMemberData } from "./bandMemberFactory";
 import { FirstPersonBody } from "./firstPersonBody";
-import { Engine, Scene, FreeCamera, Vector3, HemisphericLight, MeshBuilder, StandardMaterial, DynamicTexture, Color3, Texture, CubeTexture, PointerEventTypes, ParticleSystem, Color4 } from "@babylonjs/core";
+import { Engine, Scene, FreeCamera, Vector3, HemisphericLight, MeshBuilder, StandardMaterial, DynamicTexture, Color3, Texture, CubeTexture, PointerEventTypes, ParticleSystem, Color4, AbstractMesh } from "@babylonjs/core";
 import "@babylonjs/loaders/glTF";
 import { OpenSheetMusicDisplay } from "opensheetmusicdisplay";
 import * as Tone from "tone";
 import { Soundfont } from "smplr";
 
 // Real sampled instrument voices via General MIDI SoundFont
-const GM_INSTRUMENT_NAMES = ["trumpet", "trumpet", "french_horn", "trombone", "tuba"];
-const GM_INSTRUMENT_VOLUMES = [100, 90, 85, 95, 100]; // MIDI velocity 0-127
+// Index: 0=trumpet, 1=trumpet2, 2=french_horn, 3=trombone, 4=tuba, 5=flute, 6=clarinet, 7=alto_sax, 8=glockenspiel
+const GM_INSTRUMENT_NAMES = ["trumpet", "trumpet", "french_horn", "trombone", "tuba", "flute", "clarinet", "alto_sax", "glockenspiel"];
+const GM_INSTRUMENT_VOLUMES = [100, 90, 85, 95, 100, 80, 85, 85, 75]; // MIDI velocity 0-127
 const sfInstruments: Map<number, Soundfont> = new Map();
 const sfPanners: Map<number, PannerNode> = new Map();
 const SPATIAL_RADIUS = 20; // only consider marchers within 20m
@@ -312,6 +313,73 @@ const OBSTACLE_RADIUS = 1.2;    // metres – fallen marcher blocks the player
 const OBSTACLE_PUSH = 3.0;      // m/s push-back strength
 const MARCHER_COLLISION_RADIUS = 1.5; // metres – stumbling/fallen marcher knocks neighbors
 
+// Scattered hat tracking
+interface ScatteredHat {
+    mesh: AbstractMesh;
+    velX: number; velY: number; velZ: number;
+    rotVelX: number; rotVelZ: number;
+    timer: number; // seconds remaining before disposal
+}
+const scatteredHats: ScatteredHat[] = [];
+
+function scatterHat(anchor: AbstractMesh, pushDirX: number, pushDirZ: number) {
+    // Find the hat mesh among anchor's children
+    const children = anchor.getChildMeshes(true);
+    const hat = children.find(c => c.name.startsWith("hat") || c.name.startsWith("baseHat"));
+    const plume = children.find(c => c.name.startsWith("plume") || c.name.startsWith("basePlume"));
+    if (!hat) return;
+
+    // Detach hat from anchor and place at its world position
+    const worldPos = hat.getAbsolutePosition().clone();
+    hat.parent = null;
+    hat.position.copyFrom(worldPos);
+    
+    // Also detach plume (moves with hat)
+    if (plume) {
+        plume.parent = hat;
+        plume.position.set(0, 0.2, 0);
+    }
+
+    // Launch velocity: mostly upward + outward in push direction
+    const speed = 2 + Math.random() * 2;
+    scatteredHats.push({
+        mesh: hat,
+        velX: pushDirX * speed + (Math.random() - 0.5) * 1.5,
+        velY: 3 + Math.random() * 2,
+        velZ: pushDirZ * speed + (Math.random() - 0.5) * 1.5,
+        rotVelX: (Math.random() - 0.5) * 8,
+        rotVelZ: (Math.random() - 0.5) * 8,
+        timer: 6 // seconds before cleanup
+    });
+}
+
+function updateScatteredHats(dt: number) {
+    for (let i = scatteredHats.length - 1; i >= 0; i--) {
+        const h = scatteredHats[i];
+        h.velY -= 9.8 * dt; // gravity
+        h.mesh.position.x += h.velX * dt;
+        h.mesh.position.y += h.velY * dt;
+        h.mesh.position.z += h.velZ * dt;
+        h.mesh.rotation.x += h.rotVelX * dt;
+        h.mesh.rotation.z += h.rotVelZ * dt;
+
+        // Bounce off ground
+        if (h.mesh.position.y < 0.1) {
+            h.mesh.position.y = 0.1;
+            h.velY = Math.abs(h.velY) * 0.3;
+            h.velX *= 0.7;
+            h.velZ *= 0.7;
+            h.rotVelX *= 0.5;
+            h.rotVelZ *= 0.5;
+        }
+        h.timer -= dt;
+        if (h.timer <= 0) {
+            h.mesh.dispose();
+            scatteredHats.splice(i, 1);
+        }
+    }
+}
+
 // Dust particle burst when a marcher hits the ground
 function emitDustBurst(position: Vector3) {
     const ps = new ParticleSystem("dust", 30, scene);
@@ -337,16 +405,16 @@ function emitDustBurst(position: Vector3) {
 // Map marcher row to sfInstruments index (null = no melodic instrument)
 const ROW_TO_SF_INDEX: (number | null)[] = [
     null, // 0  DrumMajor
-    0,    // 1  Flute       → trumpet (closest available)
-    0,    // 2  Clarinet    → trumpet
-    0,    // 3  Saxophone   → trumpet
+    5,    // 1  Flute       → flute
+    6,    // 2  Clarinet    → clarinet
+    7,    // 3  Saxophone   → alto_sax
     2,    // 4  Mellophone  → french_horn
     0,    // 5  Trumpet     → trumpet
-    1,    // 6  Trumpet     → trumpet
+    1,    // 6  Trumpet     → trumpet2
     3,    // 7  Trombone    → trombone
     3,    // 8  Euphonium   → trombone
     4,    // 9  Sousaphone  → tuba
-    0,    // 10 Glockenspiel→ trumpet
+    8,    // 10 Glockenspiel→ glockenspiel
     null, // 11 SnareDrum
     null, // 12 TomTom
     null, // 13 BassDrum
@@ -376,15 +444,16 @@ function playStumbleSound(row: number) {
     const sf = sfInstruments.get(sfIdx);
     if (!sf) return;
     // Out-of-tune: random detuned note near middle range
-    const baseNote = sfIdx === 4 ? 40 : sfIdx === 3 ? 48 : 60; // tuba low, trombone mid, others higher
+    // Higher instruments get higher base notes
+    const baseNote = sfIdx === 4 ? 40 : sfIdx === 3 ? 48 : sfIdx === 5 ? 72 : sfIdx === 8 ? 76 : 60;
     const detune = Math.floor(Math.random() * 5) - 2; // -2 to +2 semitones off
     sf.start({ note: baseNote + detune, duration: 0.25 });
 }
 
 function playCrashSound(row: number) {
     const sfIdx = ROW_TO_SF_INDEX[row];
-    if (sfIdx == null || sfIdx === 4) {
-        // Percussion/Tuba: play big noise crash
+    if (sfIdx == null) {
+        // Percussion: play big noise crash
         getCrashSynth().triggerAttackRelease("4n");
         return;
     }
@@ -392,7 +461,7 @@ function playCrashSound(row: number) {
     if (!sf) return;
     
     // Crash: play a cluster of dissonant notes for that instrument
-    const baseNote = sfIdx === 3 ? 48 : 60; 
+    const baseNote = sfIdx === 4 ? 40 : sfIdx === 3 ? 48 : sfIdx === 5 ? 72 : sfIdx === 8 ? 76 : 60;
     sf.start({ note: baseNote - 1, duration: 0.1 });
     sf.start({ note: baseNote + 1, duration: 0.1 });
     sf.start({ note: baseNote + 6, duration: 0.1 });
@@ -452,6 +521,22 @@ buildMarchingBand(scene);
 for (let i = 0; i < bandLegs.length; i++) {
     stumbleStates.push({ tilt: 0, tiltDirX: 0, tiltDirZ: 0, recovering: false, downTimer: 0, playedStumble: false, playedFall: false });
 }
+
+// Ground shadow discs under each marcher
+const shadowMat = new StandardMaterial("shadowMat", scene);
+shadowMat.diffuseColor = new Color3(0, 0, 0);
+shadowMat.specularColor = new Color3(0, 0, 0);
+shadowMat.alpha = 0.35;
+const shadowDiscs: AbstractMesh[] = [];
+const baseShadow = MeshBuilder.CreateDisc("shadow_base", { radius: 0.5, tessellation: 16 }, scene);
+baseShadow.rotation.x = Math.PI / 2; // lay flat
+baseShadow.material = shadowMat;
+baseShadow.isPickable = false;
+for (let i = 0; i < bandLegs.length; i++) {
+    const disc = i === 0 ? baseShadow : baseShadow.createInstance(`shadow_${i}`);
+    disc.position.set(bandLegs[i].anchor.position.x, 0.02, bandLegs[i].anchor.position.z);
+    shadowDiscs.push(disc as any);
+}
 // Keep reference to blocks
 const measureBlocks: any[] = [];
 const gameBlocks: { mesh: any, arrivalTime: number, startX: number, startY: number, boxHeight: number, noteFractions: number[], firstT: number }[] = [];
@@ -510,9 +595,78 @@ function updateScoreHUD() {
     scoreTex.update();
 }
 
+// Song selection
+const SONG_LIST = [
+    { file: "assets/score.xml", title: "MacArthur Park", subtitle: "Brass Quintet" },
+    { file: "assets/saints.xml", title: "When the Saints", subtitle: "Full Band" },
+    { file: "assets/stars_and_stripes.xml", title: "Stars & Stripes", subtitle: "Full Band" },
+    { file: "assets/battle_hymn.xml", title: "Battle Hymn", subtitle: "Full Band" },
+];
+let selectedScoreFile = SONG_LIST[0].file;
+
+// Title text
+const titleMesh = MeshBuilder.CreatePlane("titleMesh", { width: 3, height: 0.6 }, scene);
+titleMesh.position = new Vector3(0, 2.6, 2);
+const titleTex = new DynamicTexture("titleTex", { width: 768, height: 128 }, scene, false);
+const titleCtx = titleTex.getContext() as CanvasRenderingContext2D;
+titleCtx.fillStyle = "rgba(0,0,0,0)";
+titleCtx.clearRect(0, 0, 768, 128);
+titleCtx.fillStyle = "#FFD700";
+titleCtx.font = "bold 64px Arial";
+titleCtx.textAlign = "center";
+titleCtx.fillText("MARCHING MADNESS", 384, 80);
+titleTex.update();
+titleTex.hasAlpha = true;
+const titleMat = new StandardMaterial("titleMat", scene);
+titleMat.diffuseTexture = titleTex;
+titleMat.emissiveColor = new Color3(1, 1, 1);
+titleMat.backFaceCulling = false;
+titleMesh.material = titleMat;
+
+// Song selection buttons
+const songBtns: ReturnType<typeof MeshBuilder.CreatePlane>[] = [];
+function drawSongBtn(tex: DynamicTexture, title: string, subtitle: string, selected: boolean) {
+    const ctx = tex.getContext() as CanvasRenderingContext2D;
+    ctx.clearRect(0, 0, 512, 256);
+    ctx.fillStyle = selected ? "#1155aa" : "#333366";
+    ctx.roundRect(4, 4, 504, 248, 16);
+    ctx.fill();
+    if (selected) {
+        ctx.strokeStyle = "#FFD700";
+        ctx.lineWidth = 4;
+        ctx.roundRect(4, 4, 504, 248, 16);
+        ctx.stroke();
+    }
+    ctx.fillStyle = "white";
+    ctx.font = "bold 44px Arial";
+    ctx.textAlign = "center";
+    ctx.fillText(title, 256, 110);
+    ctx.fillStyle = "#aaaaaa";
+    ctx.font = "28px Arial";
+    ctx.fillText(subtitle, 256, 170);
+    tex.update();
+}
+
+const songTextures: DynamicTexture[] = [];
+for (let i = 0; i < SONG_LIST.length; i++) {
+    const btn = MeshBuilder.CreatePlane(`songBtn_${i}`, { width: 1.2, height: 0.5 }, scene);
+    const xOffset = (i - (SONG_LIST.length - 1) / 2) * 1.4;
+    btn.position = new Vector3(xOffset, 1.8, 2);
+    const tex = new DynamicTexture(`songTex_${i}`, { width: 512, height: 256 }, scene, false);
+    tex.hasAlpha = true;
+    drawSongBtn(tex, SONG_LIST[i].title, SONG_LIST[i].subtitle, i === 0);
+    songTextures.push(tex);
+    const mat = new StandardMaterial(`songMat_${i}`, scene);
+    mat.diffuseTexture = tex;
+    mat.emissiveColor = new Color3(1, 1, 1);
+    mat.backFaceCulling = false;
+    btn.material = mat;
+    songBtns.push(btn);
+}
+
 // 3D VR Start Button
-const startBtnMesh = MeshBuilder.CreatePlane("startBtnMesh", { width: 2, height: 1 }, scene);
-startBtnMesh.position = new Vector3(0, 1.5, 2);
+const startBtnMesh = MeshBuilder.CreatePlane("startBtnMesh", { width: 2, height: 0.7 }, scene);
+startBtnMesh.position = new Vector3(0, 1.1, 2);
 
 const btnTex = new DynamicTexture("btnTex", { width: 512, height: 256 }, scene, false);
 const btnCtx = btnTex.getContext() as CanvasRenderingContext2D;
@@ -531,10 +685,22 @@ startBtnMesh.material = btnMat;
 
 let gameStarting = false;
 scene.onPointerObservable.add(async (pointerInfo) => {
-    if (pointerInfo.type === PointerEventTypes.POINTERDOWN &&
-        pointerInfo.pickInfo?.hit &&
-        pointerInfo.pickInfo.pickedMesh === startBtnMesh &&
-        !gameStarting) {
+    if (pointerInfo.type !== PointerEventTypes.POINTERDOWN || !pointerInfo.pickInfo?.hit) return;
+    const picked = pointerInfo.pickInfo.pickedMesh;
+
+    // Song selection: check if a song button was clicked
+    for (let i = 0; i < songBtns.length; i++) {
+        if (picked === songBtns[i]) {
+            selectedScoreFile = SONG_LIST[i].file;
+            // Redraw all buttons to reflect selection
+            for (let j = 0; j < songBtns.length; j++) {
+                drawSongBtn(songTextures[j], SONG_LIST[j].title, SONG_LIST[j].subtitle, j === i);
+            }
+            return;
+        }
+    }
+
+    if (picked === startBtnMesh && !gameStarting) {
         gameStarting = true;
             await Tone.start();
             // Load real sampled instruments via SoundFont, routing through spatial PannerNodes
@@ -560,6 +726,9 @@ scene.onPointerObservable.add(async (pointerInfo) => {
                 sfInstruments.set(i, sf);
             }
             getMetronomeSynth();
+
+            // Load the selected song's sheet music
+            await initSheetMusic();
         
             // Sync Tone.Transport to our 80 BPM and start a repeating metronome click
             Tone.Transport.bpm.value = BPM;
@@ -615,9 +784,65 @@ scene.onPointerObservable.add(async (pointerInfo) => {
             updateScoreHUD();
             // Start the metronome and music specifically delayed by 2 whole notes
             Tone.Transport.start(gameStartTime + 2 * WHOLE_NOTE_DURATION);
-            startBtnMesh.dispose(); // Remove the button after starting
+            startBtnMesh.dispose();
+            titleMesh.dispose();
+            for (const btn of songBtns) btn.dispose();
     }
 });
+
+// Results screen — shown when the song finishes
+let gameOver = false;
+let totalSongDuration = 0; // seconds, computed after OSMD loads
+const resultsMesh = MeshBuilder.CreatePlane("resultsMesh", { width: 3, height: 2 }, scene);
+resultsMesh.position = new Vector3(0, 1.6, 2.5);
+resultsMesh.isVisible = false;
+resultsMesh.isPickable = false;
+const resultsTex = new DynamicTexture("resultsTex", { width: 768, height: 512 }, scene, false);
+const resultsMat = new StandardMaterial("resultsMat", scene);
+resultsMat.diffuseTexture = resultsTex;
+resultsMat.emissiveColor = new Color3(1, 1, 1);
+resultsMat.backFaceCulling = false;
+resultsMesh.material = resultsMat;
+
+function showResults() {
+    if (gameOver) return;
+    gameOver = true;
+    Tone.Transport.stop();
+    beatIndicator.isVisible = false;
+    scoreHUD.isVisible = false;
+    resultsMesh.isVisible = true;
+
+    const grade = formationQuality >= 90 ? "A" : formationQuality >= 80 ? "B"
+        : formationQuality >= 70 ? "C" : formationQuality >= 60 ? "D" : "F";
+    const ctx = resultsTex.getContext() as CanvasRenderingContext2D;
+    ctx.clearRect(0, 0, 768, 512);
+    // Background
+    ctx.fillStyle = "rgba(0,0,0,0.85)";
+    ctx.roundRect(8, 8, 752, 496, 20);
+    ctx.fill();
+    // Title
+    ctx.fillStyle = "#FFD700";
+    ctx.font = "bold 56px Arial";
+    ctx.textAlign = "center";
+    ctx.fillText("PERFORMANCE REVIEW", 384, 70);
+    // Grade
+    const gradeColor = formationQuality >= 80 ? "#44ff44" : formationQuality >= 60 ? "#ffcc00" : "#ff4444";
+    ctx.fillStyle = gradeColor;
+    ctx.font = "bold 120px Arial";
+    ctx.fillText(grade, 384, 210);
+    // Stats
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "36px Arial";
+    ctx.fillText(`Formation: ${Math.round(formationQuality)}%`, 384, 290);
+    ctx.fillText(`Marchers Down: ${marchersKnockedDown}`, 384, 340);
+    const survived = bandLegs.length - marchersKnockedDown;
+    ctx.fillText(`Still Standing: ${survived} / ${bandLegs.length}`, 384, 390);
+    // Footer
+    ctx.fillStyle = "#aaaaaa";
+    ctx.font = "28px Arial";
+    ctx.fillText("Reload to play again", 384, 470);
+    resultsTex.update();
+}
 
 let osmdContainer: HTMLDivElement | null = null;
 let osmd: OpenSheetMusicDisplay | null = null;
@@ -645,7 +870,7 @@ async function initSheetMusic() {
     });
 
     try {
-        await osmd.load("assets/score.xml");
+        await osmd.load(selectedScoreFile);
 
         // Only show the 1st instrument (Trumpet 1) part
         if (osmd.Sheet && osmd.Sheet.Instruments) {
@@ -655,7 +880,8 @@ async function initSheetMusic() {
         }
 
         measureCount = osmd.Sheet?.SourceMeasures.length || 10;
-        console.log(`Found ${measureCount} measures. Starting dynamic generation...`);
+        totalSongDuration = measureCount * WHOLE_NOTE_DURATION;
+        console.log(`Found ${measureCount} measures (${totalSongDuration.toFixed(1)}s). Starting dynamic generation...`);
         checkAndGenerateMeasures();
     } catch (err) {
         console.error("Failed to load and render Music XML:", err);
@@ -830,8 +1056,8 @@ async function checkAndGenerateMeasures() {
     }
 }
 
-// Start loading the Music XML file
-initSheetMusic();
+// Sheet music will be loaded when the game starts (after song selection)
+// initSheetMusic() is called from the start button handler
 
 engine.runRenderLoop(() => {
     // Prevent the actively driven camera from clipping under the ground plane or crouching too low
@@ -916,6 +1142,13 @@ engine.runRenderLoop(() => {
                 }
             } else if (!isStumbling) {
                 anchor.rotation.y = Math.PI;
+            }
+
+            // Update ground shadow to follow marcher
+            const shadow = shadowDiscs[index];
+            if (shadow) {
+                shadow.position.x = anchor.position.x;
+                shadow.position.z = anchor.position.z;
             }
         });
     } else {
@@ -1004,6 +1237,7 @@ engine.runRenderLoop(() => {
                     const row = bandLegs[index].row;
                     playStumbleSound(row);
                     formationQuality = Math.max(0, formationQuality - 2); // stumble penalty
+                    playerBody.pulseHaptics(0.4, 100); // light haptic bump
                 }
 
                 // Crash sound when fully fallen
@@ -1015,6 +1249,8 @@ engine.runRenderLoop(() => {
                         formationQuality = Math.max(0, formationQuality - 5); // fall penalty
                         marchersKnockedDown++;
                         emitDustBurst(anchor.position);
+                        playerBody.pulseHaptics(0.8, 200); // strong haptic crash
+                        scatterHat(anchor, st.tiltDirX, st.tiltDirZ);
                     }
                 }
             } else if (st.downTimer > 0) {
@@ -1103,6 +1339,7 @@ engine.runRenderLoop(() => {
                                 formationQuality = Math.max(0, formationQuality - 5);
                                 marchersKnockedDown++;
                                 emitDustBurst(bandLegs[j].anchor.position);
+                                scatterHat(bandLegs[j].anchor, sj.tiltDirX, sj.tiltDirZ);
                             }
                         }
                     }
@@ -1111,13 +1348,48 @@ engine.runRenderLoop(() => {
         }
     }
 
+    // Formation bonus: player marching with the band near a drill slot earns points
     // Slowly recover formation quality when nobody is stumbling (0.5% per second)
     if (gameStartTime !== null) {
+        const fDt = engine.getDeltaTime() / 1000;
         const anyStumbling = stumbleStates.some(s => s.tilt > 0.1 || s.downTimer > 0);
         if (!anyStumbling) {
-            formationQuality = Math.min(100, formationQuality + 0.5 * (engine.getDeltaTime() / 1000));
+            formationQuality = Math.min(100, formationQuality + 0.5 * fDt);
+        }
+
+        // Award formation bonus: if player is within 2m of any open drill slot
+        // and roughly moving with the band, grant +1%/s
+        if (scene.activeCamera) {
+            const pp = scene.activeCamera.globalPosition;
+            let nearSlot = false;
+            for (let m = 0; m < bandLegs.length; m++) {
+                const a = bandLegs[m].anchor.position;
+                const dx = pp.x - a.x;
+                const dz = pp.z - a.z;
+                if (dx * dx + dz * dz < 4) { // within 2m
+                    nearSlot = true;
+                    break;
+                }
+            }
+            if (nearSlot) {
+                formationQuality = Math.min(100, formationQuality + 1.0 * fDt);
+            }
         }
         updateScoreHUD();
+
+        // Check if the song has ended
+        if (totalSongDuration > 0 && !gameOver) {
+            const elapsed = Tone.now() - gameStartTime;
+            // Song end: all scheduled measures played + 2-beat grace period
+            if (elapsed > totalSongDuration + 2 * WHOLE_NOTE_DURATION + 2) {
+                showResults();
+            }
+        }
+    }
+
+    // Update scattered hats (physics simulation)
+    if (scatteredHats.length > 0) {
+        updateScatteredHats(engine.getDeltaTime() / 1000);
     }
 
     // Sync Web Audio API listener to camera for correct spatial orientation
