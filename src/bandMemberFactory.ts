@@ -181,10 +181,19 @@ export class BandMemberFactory {
         // Sousaphone
         const sousaPath: Vector3[] = [];
         
-        // Add mouthpiece extension reaching the mouth (mouth local pos: 0, 0.2, 0.05)
-        sousaPath.push(new Vector3(0, 0.2, 0.05));
-        sousaPath.push(new Vector3(-0.2, 0.1, 0.0)); // bend down
-        sousaPath.push(new Vector3(-0.35, -0.2, 0.0)); // continue bending
+        // Add smooth curve for mouthpiece extension reaching the mouth (mouth local pos: 0, 0.2, 0.05)
+        const mouthPos = new Vector3(0, 0.2, 0.05);
+        const controlPos = new Vector3(-0.35, 0.2, 0.0);
+        const spiralStart = new Vector3(-0.4, -0.4, 0.0);
+        
+        for (let i = 0; i < 20; i++) {
+            const t = i / 20;
+            const invT = 1 - t;
+            const x = invT * invT * mouthPos.x + 2 * invT * t * controlPos.x + t * t * spiralStart.x;
+            const y = invT * invT * mouthPos.y + 2 * invT * t * controlPos.y + t * t * spiralStart.y;
+            const z = invT * invT * mouthPos.z + 2 * invT * t * controlPos.z + t * t * spiralStart.z;
+            sousaPath.push(new Vector3(x, y, z));
+        }
 
         for (let i = 0; i <= 60; i++) {
             const t = i / 60;
