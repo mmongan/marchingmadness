@@ -185,18 +185,18 @@ export class BandMemberFactory {
         const sousaBody = MeshBuilder.CreateTorus("sousaBody", { diameter: 0.9, thickness: 0.16, tessellation: 32 }, scene);
         sousaBody.position.set(0, -0.1, 0); // Centered a bit lower than the anchor
         sousaBody.rotation.x = -Math.PI / 8; // Tilt so the back is higher than the front
-        sousaBody.rotation.z = Math.PI / 6;  // Tilt so the left side wraps over the shoulder, right side under the arm
+        sousaBody.rotation.z = -Math.PI / 6;  // Tilt so the right side wraps over the shoulder, left side under the arm
 
         // Forward-facing prominent Bell
         const sousaBell = MeshBuilder.CreateCylinder("sousaBell", { diameterTop: 0.8, diameterBottom: 0.16, height: 0.7 }, scene);
-        sousaBell.position.set(-0.4, 0.7, 0.1); // Positioned high above the torus ring
+        sousaBell.position.set(0.4, 0.7, 0.1); // Positioned high above the torus ring
         sousaBell.rotation.x = Math.PI / 2; // Face forward
-        sousaBell.rotation.y = -Math.PI / 16; // Slight outward flare
+        sousaBell.rotation.y = Math.PI / 16; // Slight outward flare
 
         // Mouthpiece tube connecting the main body to the mouth (mouth local: 0, 0.2, 0.05)
         const sousaMouthpipe = MeshBuilder.CreateCylinder("sousaMouthpipe", { diameter: 0.04, height: 0.5 }, scene);
-        sousaMouthpipe.position.set(-0.15, 0.05, 0.15); // Bridging the gap
-        sousaMouthpipe.rotation.z = -Math.PI / 4; // Angle up to the mouth
+        sousaMouthpipe.position.set(0.15, 0.05, 0.15); // Bridging the gap
+        sousaMouthpipe.rotation.z = Math.PI / 4; // Angle up to the mouth
         sousaMouthpipe.rotation.x = Math.PI / 8;
 
         this.baseSousaphone = Mesh.MergeMeshes([sousaBody, sousaBell, sousaMouthpipe], true) as Mesh;
@@ -220,7 +220,7 @@ export class BandMemberFactory {
         tptValves.position.set(0, 0.15, 0.04);
         this.baseTrumpet = Mesh.MergeMeshes([tptBody, tptValves], true) as Mesh;
         this.baseTrumpet.name = "baseTrumpet";
-        this.baseTrumpet.material = this.brassMat;
+        this.baseTrumpet.material = this.fluteMat; // Use silver/flute material for trumpet as requested
 
         // Mellophone
         const melloBody = MeshBuilder.CreateCylinder("melloBody", { diameterTop: 0.18, diameterBottom: 0.02, height: 0.45 }, scene);
@@ -285,7 +285,7 @@ export class BandMemberFactory {
         legL.parent = anchor;
         legL.position.set(-0.12, 0.8, 0);
 
-        const legR = isBase ? this.baseLeg.clone(`legR_${r}_${c}`) : this.baseLeg.createInstance(`legR_${r}_${c}`);
+        const legR = isBase ? this.baseLeg.createInstance(`legR_${r}_${c}`) : this.baseLeg.createInstance(`legR_${r}_${c}`);
         legR.parent = anchor;
         legR.position.set(0.12, 0.8, 0);
 
@@ -307,7 +307,7 @@ export class BandMemberFactory {
         armL.rotation.x = Math.PI / 4;
         armL.rotation.y = isDrum ? Math.PI / 4 : Math.PI / 8;
 
-        const armR = isBase ? this.baseArm.clone(`armR_${r}_${c}`) : this.baseArm.createInstance(`armR_${r}_${c}`);
+        const armR = isBase ? this.baseArm.createInstance(`armR_${r}_${c}`) : this.baseArm.createInstance(`armR_${r}_${c}`);
         armR.parent = anchor;
         armR.position.set(0.3, 1.25, 0.15);
         armR.rotation.x = Math.PI / 4; 
