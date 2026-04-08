@@ -4,7 +4,8 @@ import { BandMemberData } from "./bandMemberFactory";
 import { FirstPersonBody } from "./firstPersonBody";
 import {
     COLLISION_RADIUS, STUMBLE_RECOVERY, MAX_TILT, DOWN_DURATION,
-    OBSTACLE_RADIUS, OBSTACLE_PUSH, MARCHER_COLLISION_RADIUS
+    OBSTACLE_RADIUS, OBSTACLE_PUSH, MARCHER_COLLISION_RADIUS,
+    HITS_TO_FALL, HIT_COUNT_RESET_TIME
 } from "./gameConstants";
 import { playStumbleSound, playCrashSound } from "./audioSystem";
 import type { StumbleState } from "./gameConstants";
@@ -130,6 +131,15 @@ export function updateCollisions(
         const st = stumbleStates[index];
         const isDown = st.tilt >= MAX_TILT * 0.95;
 
+        // Decay hit count over time when not being hit repeatedly
+        if (st.hitCount > 0) {
+            st.hitCountTimer += frameDt;
+            if (st.hitCountTimer >= HIT_COUNT_RESET_TIME) {
+                st.hitCount = 0;
+                st.hitCountTimer = 0;
+            }
+        }
+
         const bx = playerPos.x - anchor.position.x;
         const bz = playerPos.z - anchor.position.z;
         const bDistSq = bx * bx + bz * bz;
@@ -143,6 +153,9 @@ export function updateCollisions(
             if (st.tilt <= 0.001) {
                 anchor.rotation.x = 0;
                 anchor.rotation.z = 0;
+                // Reset hit tracking when fully recovered
+                st.hitCount = 0;
+                st.hitCountTimer = 0;
             }
             return;
         }
@@ -179,6 +192,12 @@ export function updateCollisions(
             st.tiltDirX = -closestDx / dist;
             st.tiltDirZ = -closestDz / dist;
 
+            // Increment hit count on new collision (when not already down)
+            if (!isDown) {
+                st.hitCount++;
+                st.hitCountTimer = 0; // reset decay timer
+            }
+
             const overlap = 1 - dist / COLLISION_RADIUS;
             const impact = overlap * 3.0;
             st.tilt = Math.min(MAX_TILT, st.tilt + impact * frameDt * 8);
@@ -192,6 +211,11 @@ export function updateCollisions(
                 playerBody.pulseHaptics(0.4, 100);
             }
 
+            // Auto-fall if hit multiple times while stumbling (reduces getting stuck)
+            if (st.hitCount >= HITS_TO_FALL && st.tilt < MAX_TILT * 0.95) {
+                st.tilt = MAX_TILT;
+            }
+
             if (st.tilt >= MAX_TILT * 0.95) {
                 st.downTimer = DOWN_DURATION;
                 if (!st.playedFall) {
@@ -202,6 +226,9 @@ export function updateCollisions(
                     emitDustBurst(scene, anchor.position);
                     playerBody.pulseHaptics(0.8, 200);
                     scatterHat(anchor, st.tiltDirX, st.tiltDirZ);
+                    // Reset hit count once fallen
+                    st.hitCount = 0;
+                    st.hitCountTimer = 0;
                 }
             }
         } else if (st.downTimer > 0) {
@@ -212,6 +239,9 @@ export function updateCollisions(
             if (st.tilt <= 0.001) {
                 st.playedStumble = false;
                 st.playedFall = false;
+                // Reset hit count when fully recovered
+                st.hitCount = 0;
+                st.hitCountTimer = 0;
             }
         }
 
@@ -271,12 +301,22 @@ export function updateCollisions(
                     sj.tiltDirX = dx / dist;
                     sj.tiltDirZ = dz / dist;
                     sj.recovering = false;
+                    
+                    // Track hits from domino cascade
+                    sj.hitCount++;
+                    sj.hitCountTimer = 0;
 
                     if (!sj.playedStumble && sj.tilt > 0.3) {
                         sj.playedStumble = true;
                         playStumbleSound(bandLegs[j].row);
                         penaltyThisFrame += 2;
                     }
+                    
+                    // Auto-fall if hit enough times during cascade
+                    if (sj.hitCount >= HITS_TO_FALL && sj.tilt < MAX_TILT * 0.95) {
+                        sj.tilt = MAX_TILT;
+                    }
+                    
                     if (sj.tilt >= MAX_TILT * 0.95) {
                         sj.downTimer = DOWN_DURATION;
                         if (!sj.playedFall) {
@@ -286,6 +326,9 @@ export function updateCollisions(
                             knockedThisFrame++;
                             emitDustBurst(scene, bandLegs[j].anchor.position);
                             scatterHat(bandLegs[j].anchor, sj.tiltDirX, sj.tiltDirZ);
+                            // Reset hit count once fallen
+                            sj.hitCount = 0;
+                            sj.hitCountTimer = 0;
                         }
                     }
                 }

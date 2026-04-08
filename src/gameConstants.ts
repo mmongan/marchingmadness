@@ -86,8 +86,18 @@ export interface StumbleState {
     downTimer: number;
     playedStumble: boolean;
     playedFall: boolean;
+    hitCount: number;              // number of times hit during current stumble
+    hitCountTimer: number;         // time since last hit (resets on new hit)
 }
 
 export function createStumbleState(): StumbleState {
-    return { tilt: 0, tiltDirX: 0, tiltDirZ: 0, recovering: false, downTimer: 0, playedStumble: false, playedFall: false };
+    return { 
+        tilt: 0, tiltDirX: 0, tiltDirZ: 0, recovering: false, 
+        downTimer: 0, playedStumble: false, playedFall: false,
+        hitCount: 0, hitCountTimer: 0
+    };
 }
+
+// Stumble thresholds
+export const HITS_TO_FALL = 2;          // number of hits required to fall while stumbling
+export const HIT_COUNT_RESET_TIME = 1.5; // seconds without hit to reset counter

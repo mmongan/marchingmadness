@@ -2,6 +2,13 @@ import { BandMemberFactory, InstrumentType, BandMemberData } from "./bandMemberF
 import { FirstPersonBody } from "./firstPersonBody";
 import { startMetronomeAndMusic } from "./musicManager";
 import { sfPanners, playStumbleSound, playCrashSound, loadInstruments, updateAudioListener, updateSpatialAudio } from "./audioSystem";
+import { 
+    StumbleState, createStumbleState, BPM, WHOLE_NOTE_DURATION, FLY_SPEED,
+    COLLISION_RADIUS, STUMBLE_RECOVERY, MAX_TILT, DOWN_DURATION,
+    OBSTACLE_RADIUS, OBSTACLE_PUSH, MARCHER_COLLISION_RADIUS,
+    PLAYER_DRILL_ROW, PLAYER_DRILL_COL, PLAYER_START_X, PLAYER_START_Z, 
+    STEP_LOOK_AHEAD, STEP_HIT_PERFECT, STEP_HIT_GOOD, FOOT_LATERAL
+} from "./gameConstants";
 import { Engine, Scene, FreeCamera, Vector3, HemisphericLight, MeshBuilder, StandardMaterial, DynamicTexture, Color3, Texture, CubeTexture, PointerEventTypes, ParticleSystem, Color4, AbstractMesh } from "@babylonjs/core";
 import "@babylonjs/loaders/glTF";
 import { OpenSheetMusicDisplay } from "opensheetmusicdisplay";
@@ -274,24 +281,10 @@ function getDrillPosition(currentBeat: number, r: number, c: number, cols: numbe
 
 const bandLegs: BandMemberData[] = [];
 
-// Stumble state per band member: tilt angle (radians) and tilt direction (x,z)
-interface StumbleState {
-    tilt: number;       // current tilt angle in radians (0 = upright, ~π/2 = fallen)
-    tiltDirX: number;   // world-space push direction X
-    tiltDirZ: number;   // world-space push direction Z
-    recovering: boolean;
-    downTimer: number;  // seconds remaining on the ground before recovery starts
-    playedStumble: boolean;  // already played stumble sound this collision
-    playedFall: boolean;     // already played crash sound this fall
-}
+// Stumble state per band member (imported from gameConstants)
 const stumbleStates: StumbleState[] = [];
-const COLLISION_RADIUS = 1.0;   // metres – how close player must be to collide
-const STUMBLE_RECOVERY = 0.5;   // rad/s – how fast members stand back up (slower)
-const MAX_TILT = Math.PI / 2;   // fully fallen over
-const DOWN_DURATION = 4.0;      // seconds a fully-fallen marcher stays down
-const OBSTACLE_RADIUS = 1.2;    // metres – fallen marcher blocks the player
-const OBSTACLE_PUSH = 3.0;      // m/s push-back strength
-const MARCHER_COLLISION_RADIUS = 1.5; // metres – stumbling/fallen marcher knocks neighbors
+
+// Physics and collision constants (imported from gameConstants)
 
 // Scattered hat tracking
 interface ScatteredHat {
@@ -434,7 +427,7 @@ function buildMarchingBand(scene: Scene) {
 buildMarchingBand(scene);
 // Initialize stumble state for each band member
 for (let i = 0; i < bandLegs.length; i++) {
-    stumbleStates.push({ tilt: 0, tiltDirX: 0, tiltDirZ: 0, recovering: false, downTimer: 0, playedStumble: false, playedFall: false });
+    stumbleStates.push(createStumbleState());
 }
 
 // Ground shadow discs under each marcher
@@ -453,15 +446,7 @@ for (let i = 0; i < bandLegs.length; i++) {
     shadowDiscs.push(disc as any);
 }
 // === PLAYER DRILL FOOTSTEP TARGETS ===
-// The player has an assigned drill slot and must hit each beat's ground marker
-const PLAYER_DRILL_ROW = 0;   // drum major row (front of band)
-const PLAYER_DRILL_COL = 2;   // center column
-const PLAYER_START_X = (PLAYER_DRILL_COL - 5 / 2 + 0.5) * 2.0; // 0.0
-const PLAYER_START_Z = 15;    // same Z offset as row 0
-const STEP_LOOK_AHEAD = 12;   // show 12 upcoming footsteps
-const STEP_HIT_PERFECT = 1.0; // metres
-const STEP_HIT_GOOD = 2.0;    // metres
-const FOOT_LATERAL = 0.18;    // L/R offset from drill center
+// Constants imported from gameConstants
 
 interface StepMarker {
     mesh: AbstractMesh;
@@ -496,12 +481,6 @@ let missedSteps = 0;
 const measureBlocks: any[] = [];
 const gameBlocks: { mesh: any, arrivalTime: number, startX: number, startY: number, boxHeight: number, noteFractions: number[], firstT: number }[] = [];
 let gameStartTime: number | null = null;
-const BPM = 80;
-const WHOLE_NOTE_DURATION = (60 / BPM) * 4;
-
-// 8 steps per 5 yards: 5 yards = 5 * (109.7/120) meters = 4.5708m. 8 beats = 4.5708m.
-// 1 beat = 4.5708 / 8 = 0.57135m. At BPM, speed = 0.57135 * (BPM / 60) m/s.
-const FLY_SPEED = 0.57135 * (BPM / 60);
 
 // Visual beat indicator - a glowing sphere that flashes on each beat
 const beatIndicator = MeshBuilder.CreateSphere("beatIndicator", { diameter: 0.15 }, scene);
