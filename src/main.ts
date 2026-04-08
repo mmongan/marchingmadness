@@ -46,7 +46,11 @@ const light = new HemisphericLight("light", new Vector3(0, 1, 0), scene);
 light.intensity = 0.8;
 
 // Enable WebXR/VR
-scene.createDefaultXRExperienceAsync().then((xr) => {
+scene.createDefaultXRExperienceAsync({
+    inputOptions: {
+        forceInputProfile: "meta-quest-3"
+    }
+}).then((xr) => {
     // If the device doesn't supply a real-world vertical tracking offset (3DoF/Emulators),
     // this ensures the player eyes sit exactly at 1.8 meters from the floor.
     xr.baseExperience.onInitialXRPoseSetObservable.add((xrCamera) => {
@@ -285,8 +289,8 @@ const bandLegs: BandMemberData[] = [];
 function buildMarchingBand(scene: Scene) {
     const factory = new BandMemberFactory(scene);
 
-    const rows = 17;
-    const cols = 10;
+    const rows = 15;
+    const cols = 5;
     const spacingX = 2.0; // 2 meters between columns
     const spacingZ = 2.0; // 2 meters between rows
     const startZ = 60;
