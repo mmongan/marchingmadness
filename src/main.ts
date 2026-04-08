@@ -376,6 +376,14 @@ function emitDustBurst(position: Vector3) {
     ps.start();
 }
 
+// === Player Starting Position in Drill Formation ===
+// Assign player to replace a random band member position
+const randomMemberIndex = Math.floor(Math.random() * (BAND_ROWS * BAND_COLS));
+const playerRow = Math.floor(randomMemberIndex / BAND_COLS);
+const playerCol = randomMemberIndex % BAND_COLS;
+const playerStartX = (playerCol - BAND_COLS / 2 + 0.5) * SPACING_X;
+const playerStartZ = BAND_START_Z - playerRow * SPACING_Z;
+
 // Create a 100-member marching band in a 10x10 formation
 function buildMarchingBand(scene: Scene) {
     const factory = new BandMemberFactory(scene);
@@ -426,6 +434,46 @@ function buildMarchingBand(scene: Scene) {
     }
 }
 buildMarchingBand(scene);
+
+// Create player marcher at the assigned position and replace the standard marcher there
+const factory = new BandMemberFactory(scene);
+const playerMarcherIndex = playerRow * BAND_COLS + playerCol;
+
+// Get the instrument type for this row
+let playerInstrument: InstrumentType = "DrumMajor";
+if (playerRow === 1) playerInstrument = "Flute";
+else if (playerRow === 2) playerInstrument = "Clarinet";
+else if (playerRow === 3) playerInstrument = "Saxophone";
+else if (playerRow === 4) playerInstrument = "Mellophone";
+else if (playerRow === 5 || playerRow === 6) playerInstrument = "Trumpet";
+else if (playerRow === 7) playerInstrument = "Trombone";
+else if (playerRow === 8) playerInstrument = "Euphonium";
+else if (playerRow === 9) playerInstrument = "Sousaphone";
+else if (playerRow === 10) playerInstrument = "Glockenspiel";
+else if (playerRow === 11) playerInstrument = "SnareDrum";
+else if (playerRow === 12) playerInstrument = "TomTom";
+else if (playerRow === 13) playerInstrument = "BassDrum";
+else if (playerRow === 14) playerInstrument = "Cymbals";
+
+// Dispose the standard marcher at this position
+const existingMarcher = bandLegs[playerMarcherIndex];
+const existingChildren = existingMarcher.anchor.getChildMeshes(true);
+for (const child of existingChildren) child.dispose();
+existingMarcher.anchor.dispose();
+
+// Create player marcher with distinct appearance (lighter color to stand out)
+const playerMarcher = factory.createMember(playerRow, playerCol, playerInstrument, playerStartX, playerStartZ);
+
+// Replace the standard marcher with the player marcher
+bandLegs[playerMarcherIndex] = playerMarcher;
+
+// Initialize camera to player's starting drill position
+camera.position = new Vector3(playerStartX, 1.8, playerStartZ);
+camera.setTarget(new Vector3(playerStartX, 1.8, playerStartZ + 5));
+
+// Position the player's VR body at the marcher location
+playerBody.setBodyPosition(new Vector3(playerStartX, 0, playerStartZ));
+
 // Initialize stumble state for each band member
 for (let i = 0; i < bandLegs.length; i++) {
     stumbleStates.push(createStumbleState());
@@ -530,17 +578,6 @@ function updateScoreHUD() {
     ctx.fillText(text, 256, 82);
     scoreTex.update();
 }
-
-// === Player Starting Position in Drill Formation ===
-// Assign player to a random position in the band formation
-const playerRow = Math.floor(Math.random() * BAND_ROWS);
-const playerCol = Math.floor(Math.random() * BAND_COLS);
-const playerStartX = (playerCol - BAND_COLS / 2 + 0.5) * SPACING_X;
-const playerStartZ = BAND_START_Z - playerRow * SPACING_Z;
-
-// Initialize camera to player's starting drill position
-camera.position = new Vector3(playerStartX, 1.8, playerStartZ);
-camera.setTarget(new Vector3(playerStartX, 1.8, playerStartZ + 5));
 
 // Song selection
 const SONG_LIST = [
@@ -1019,6 +1056,9 @@ engine.runRenderLoop(() => {
         camera.position.z += (playerTargetZ - camera.position.z) * camLerpRate;
         // Update look target to stay ahead of player's position
         camera.setTarget(new Vector3(playerTargetX, 1.8, playerTargetZ + 5));
+        
+        // Keep player body at the same position (for collision/arm tracking)
+        playerBody.setBodyPosition(new Vector3(playerTargetX, 0, playerTargetZ));
 
         bandLegs.forEach(({ legL, legR, anchor }, index) => {
             const st = stumbleStates[index];

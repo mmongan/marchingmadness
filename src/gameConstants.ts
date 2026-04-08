@@ -78,6 +78,25 @@ export const SONG_LIST = [
     { file: "assets/battle_hymn.xml", title: "Battle Hymn", subtitle: "Full Band" },
 ];
 
+// Instrument list - selectable by player
+export const INSTRUMENT_LIST = [
+    { row: 1, name: "Flute", display: "🪈 Flute" },
+    { row: 2, name: "Clarinet", display: "🎷 Clarinet" },
+    { row: 3, name: "Saxophone", display: "🎷 Saxophone" },
+    { row: 4, name: "Mellophone", display: "🎺 Mellophone" },
+    { row: 5, name: "Trumpet", display: "🎺 Trumpet" },
+    { row: 7, name: "Trombone", display: "🎺 Trombone" },
+    { row: 9, name: "Sousaphone", display: "🥁 Sousaphone" },
+    { row: 10, name: "Glockenspiel", display: "🎵 Glockenspiel" },
+];
+
+// Percussion options for the player
+export const PERCUSSION_LIST = [
+    { row: 11, name: "Snare Drum", display: "🥁 Snare Drum" },
+    { row: 13, name: "Bass Drum", display: "🥁 Bass Drum" },
+    { row: 14, name: "Cymbals", display: "🥁 Cymbals" },
+];
+
 // Stumble state per band member (shared between collision and audio systems)
 export interface StumbleState {
     tilt: number;

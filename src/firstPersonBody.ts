@@ -108,6 +108,11 @@ export class FirstPersonBody {
         ];
     }
 
+    /** Set the body root position (for placing player in the formation). */
+    public setBodyPosition(pos: Vector3): void {
+        this.bodyRoot.position.copyFrom(pos);
+    }
+
     /**
      * Returns movement vector and turn angle driven by treadmill arm-pump locomotion.
      * The caller should apply movement to camera position and turnY to camera rotation.
