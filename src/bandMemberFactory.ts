@@ -8,6 +8,9 @@ export interface BandMemberData {
     legR: InstancedMesh | Mesh;
     anchor: Mesh;
     startZ: number;
+    startX: number;
+    row: number;
+    col: number;
 }
 
 export class BandMemberFactory {
@@ -124,6 +127,6 @@ export class BandMemberFactory {
 
         this.instrumentFactory.createInstrument(type, r, c, anchor);
 
-        return { legL, legR, anchor, startZ: zPos };
+        return { legL, legR, anchor, startZ: zPos, startX: xPos, row: r, col: c };
     }
 }
