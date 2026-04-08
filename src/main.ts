@@ -721,9 +721,14 @@ engine.runRenderLoop(() => {
         });
     }
 
-    // Update player body with march animation
+    // Update player body with march animation and arm-swing locomotion
     if (scene.activeCamera) {
-        playerBody.update(scene.activeCamera, marchPhase, gameStartTime !== null);
+        const dt = engine.getDeltaTime() / 1000;
+        const movement = playerBody.update(scene.activeCamera, marchPhase, gameStartTime !== null, dt);
+        // Apply arm-swing locomotion to camera position (VR and desktop)
+        if (movement.lengthSquared() > 0) {
+            scene.activeCamera.position.addInPlace(movement);
+        }
     }
 
     // Continuously poll to ensure the queue processes upcoming measures during gameplay

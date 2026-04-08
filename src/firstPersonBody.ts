@@ -12,6 +12,14 @@ export class FirstPersonBody {
     private controllerLeft: WebXRInputSource | null = null;
     private controllerRight: WebXRInputSource | null = null;
 
+    // Arm-swing locomotion tracking
+    private prevGripPosL: Vector3 | null = null;
+    private prevGripPosR: Vector3 | null = null;
+    private swingSpeed = 0;
+    private readonly SWING_DECAY = 0.85;
+    private readonly SWING_GAIN = 2.5;
+    private readonly MOVE_SPEED = 3.0;  // meters per second at full swing
+
     constructor(scene: Scene) {
         const uniformMat = new StandardMaterial("playerUniformMat", scene);
         uniformMat.diffuseColor = new Color3(0.1, 0.2, 0.8);
@@ -57,7 +65,11 @@ export class FirstPersonBody {
         if (handedness === "right") this.controllerRight = controller;
     }
 
-    public update(cam: Camera, marchPhase: number, isMarching: boolean): void {
+    /**
+     * Returns a world-space movement vector driven by arm-swing locomotion.
+     * The caller should apply this to the XR camera rig position.
+     */
+    public update(cam: Camera, marchPhase: number, isMarching: boolean, deltaTime: number): Vector3 {
         // Body root follows camera position and Y rotation
         this.bodyRoot.position.copyFrom(cam.globalPosition);
         this.bodyRoot.rotation.y = cam.absoluteRotation.toEulerAngles().y;
@@ -66,11 +78,69 @@ export class FirstPersonBody {
         this.updateArm(this.armL, this.controllerLeft, cam, -0.3, marchPhase, isMarching);
         this.updateArm(this.armR, this.controllerRight, cam, 0.3, marchPhase, isMarching);
 
-        // Animate legs and arms during march
+        // Animate legs during march
         if (isMarching) {
             this.legL.rotation.x = Math.sin(marchPhase) * 0.6;
             this.legR.rotation.x = -Math.sin(marchPhase) * 0.6;
         }
+
+        // Arm-swing locomotion: detect pumping motion from controllers
+        const movement = this.computeArmSwingLocomotion(cam, deltaTime);
+
+        // Animate legs from swing speed when not game-marching
+        if (!isMarching && this.swingSpeed > 0.05) {
+            const walkPhase = performance.now() / 1000 * Math.PI * 4 * this.swingSpeed;
+            this.legL.rotation.x = Math.sin(walkPhase) * 0.6 * Math.min(1, this.swingSpeed);
+            this.legR.rotation.x = -Math.sin(walkPhase) * 0.6 * Math.min(1, this.swingSpeed);
+        }
+
+        return movement;
+    }
+
+    private computeArmSwingLocomotion(cam: Camera, deltaTime: number): Vector3 {
+        let totalSwing = 0;
+
+        // Measure how fast each grip is swinging along the forward/back axis
+        if (this.controllerLeft?.grip) {
+            const pos = this.controllerLeft.grip.absolutePosition;
+            if (this.prevGripPosL) {
+                const delta = pos.subtract(this.prevGripPosL);
+                // Project onto camera forward to measure forward/back pump
+                const fwd = cam.getDirection(Vector3.Forward());
+                totalSwing += Math.abs(Vector3.Dot(delta, fwd));
+                // Also count vertical motion (arms go up/down naturally when swinging)
+                totalSwing += Math.abs(delta.y) * 0.5;
+            }
+            this.prevGripPosL = pos.clone();
+        } else {
+            this.prevGripPosL = null;
+        }
+
+        if (this.controllerRight?.grip) {
+            const pos = this.controllerRight.grip.absolutePosition;
+            if (this.prevGripPosR) {
+                const delta = pos.subtract(this.prevGripPosR);
+                const fwd = cam.getDirection(Vector3.Forward());
+                totalSwing += Math.abs(Vector3.Dot(delta, fwd));
+                totalSwing += Math.abs(delta.y) * 0.5;
+            }
+            this.prevGripPosR = pos.clone();
+        } else {
+            this.prevGripPosR = null;
+        }
+
+        // Smooth the swing speed: ramp up with gain, decay when idle
+        this.swingSpeed = this.swingSpeed * this.SWING_DECAY + totalSwing * this.SWING_GAIN;
+        this.swingSpeed = Math.min(this.swingSpeed, 1.0); // clamp to max
+
+        // Move forward in the camera's facing direction (Y flattened)
+        if (this.swingSpeed > 0.02) {
+            const fwd = cam.getDirection(Vector3.Forward());
+            fwd.y = 0;
+            fwd.normalize();
+            return fwd.scale(this.swingSpeed * this.MOVE_SPEED * deltaTime);
+        }
+        return Vector3.Zero();
     }
 
     private updateArm(arm: Mesh, controller: WebXRInputSource | null, cam: Camera, xOffset: number, marchPhase: number, isMarching: boolean): void {
