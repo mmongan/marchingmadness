@@ -211,7 +211,9 @@ export class BandMemberFactory {
         sousaBell.rotation.x = Math.PI / 2;
         this.baseSousaphone = Mesh.MergeMeshes([sousaBody, sousaBell], true) as Mesh;
         this.baseSousaphone.name = "baseSousaphone";
-        this.baseSousaphone.material = this.brassMat;
+        const sousaMat = new StandardMaterial("sousaMat", scene);
+        sousaMat.diffuseColor = new Color3(0.95, 0.95, 0.95); // White fiberglass body
+        this.baseSousaphone.material = sousaMat;
 
         // Flute
         this.baseFlute = MeshBuilder.CreateCylinder("baseFlute", { diameter: 0.02, height: 0.6 }, scene);
