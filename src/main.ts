@@ -1155,27 +1155,25 @@ engine.runRenderLoop(() => {
                 legL.rotation.x = Math.sin(marchPhase) * 0.6;
                 legR.rotation.x = -Math.sin(marchPhase) * 0.6;
 
-                // Catch-up: lerp toward drill position
-                // Distance to target determines hustle speed
+                // Smooth movement toward drill position
                 const dx = targetX - anchor.position.x;
                 const dz = targetZ - anchor.position.z;
                 const gap = Math.sqrt(dx * dx + dz * dz);
 
-                if (gap > 0.05) {
-                    // Hustle factor: farther behind = faster catch-up (up to 3x normal lerp)
-                    const hustleFactor = Math.min(3.0, 1.0 + gap * 0.5);
-                    const lerpRate = Math.min(1, 0.05 * hustleFactor);
-                    anchor.position.x += dx * lerpRate;
-                    anchor.position.z += dz * lerpRate;
+                // Constant smooth lerp: always move toward target
+                // Base lerp rate with hustle boost for catch-up
+                const baseRate = 0.04; // smooth base rate (down from 0.05)
+                const hustleFactor = gap > 0.05 ? Math.min(2.5, 1.0 + gap * 0.3) : 1.0;
+                const lerpRate = Math.min(0.2, baseRate * hustleFactor);
+                
+                anchor.position.x += dx * lerpRate;
+                anchor.position.z += dz * lerpRate;
 
-                    // Faster leg swing when hustling
-                    const hustleSwing = Math.min(1.0, gap * 0.3) * 0.4;
+                // Faster leg swing when hustling
+                if (gap > 0.1) {
+                    const hustleSwing = Math.min(1.0, gap * 0.2) * 0.3;
                     legL.rotation.x = Math.sin(marchPhase * hustleFactor) * (0.6 + hustleSwing);
                     legR.rotation.x = -Math.sin(marchPhase * hustleFactor) * (0.6 + hustleSwing);
-                } else {
-                    // Close enough: snap to position
-                    anchor.position.x = targetX;
-                    anchor.position.z = targetZ;
                 }
             }
 

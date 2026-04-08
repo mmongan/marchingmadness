@@ -295,7 +295,7 @@ export function updateCollisions(
 
     // Separation pass: push apart marchers who are both stumbling/down to prevent mesh overlap
     const SEPARATION_RADIUS = MARCHER_COLLISION_RADIUS + 0.1;
-    const SEPARATION_FORCE = 1.0; // m/s² separation acceleration
+    const SEPARATION_FORCE = 0.4; // m/s² separation acceleration (reduced from 1.0)
     for (let i = 0; i < bandLegs.length; i++) {
         const si = stumbleStates[i];
         if (si.tilt <= 0.3 && si.downTimer <= 0) continue; // only stumbling/down marchers
