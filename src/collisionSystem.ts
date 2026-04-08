@@ -3,7 +3,7 @@ import { Scene, Vector3, ParticleSystem, Color4, AbstractMesh } from "@babylonjs
 import { BandMemberData } from "./bandMemberFactory";
 import { FirstPersonBody } from "./firstPersonBody";
 import {
-    COLLISION_RADIUS, STUMBLE_RECOVERY, MAX_TILT, DOWN_DURATION,
+    COLLISION_RADIUS, STUMBLE_RECOVERY, MAX_TILT, DOWN_DURATION, STAND_UP_DURATION,
     OBSTACLE_RADIUS, OBSTACLE_PUSH, MARCHER_COLLISION_RADIUS,
     HITS_TO_FALL, HIT_COUNT_RESET_TIME
 } from "./gameConstants";
@@ -146,6 +146,23 @@ export function updateCollisions(
         if (bDistSq > broadRadiusSq) {
             if (st.downTimer > 0) {
                 st.downTimer = Math.max(0, st.downTimer - frameDt);
+                // Transition to standing up when down time expires
+                if (st.downTimer <= 0) {
+                    st.standingUp = true;
+                    st.standingUpTimer = 0;
+                }
+            } else if (st.standingUp) {
+                // Animate stand-up: smooth interpolation from lying flat to vertical
+                st.standingUpTimer += frameDt;
+                const progress = Math.min(1.0, st.standingUpTimer / STAND_UP_DURATION);
+                // Ease-out cubic for natural sit-up motion
+                const easeProgress = 1 - Math.pow(1 - progress, 3);
+                st.tilt = MAX_TILT * (1 - easeProgress);
+                
+                if (st.standingUpTimer >= STAND_UP_DURATION) {
+                    st.standingUp = false;
+                    st.tilt = 0;
+                }
             } else if (st.tilt > 0) {
                 st.recovering = true;
                 st.tilt = Math.max(0, st.tilt - STUMBLE_RECOVERY * frameDt);
@@ -233,6 +250,28 @@ export function updateCollisions(
             }
         } else if (st.downTimer > 0) {
             st.downTimer = Math.max(0, st.downTimer - frameDt);
+            // Transition to standing up when down time expires
+            if (st.downTimer <= 0) {
+                st.standingUp = true;
+                st.standingUpTimer = 0;
+            }
+        } else if (st.standingUp) {
+            // Animate stand-up: smooth interpolation from lying flat to vertical
+            st.standingUpTimer += frameDt;
+            const progress = Math.min(1.0, st.standingUpTimer / STAND_UP_DURATION);
+            // Ease-out cubic for natural sit-up motion
+            const easeProgress = 1 - Math.pow(1 - progress, 3);
+            st.tilt = MAX_TILT * (1 - easeProgress);
+            
+            if (st.standingUpTimer >= STAND_UP_DURATION) {
+                st.standingUp = false;
+                st.tilt = 0;
+                st.playedStumble = false;
+                st.playedFall = false;
+                // Reset hit count when fully recovered
+                st.hitCount = 0;
+                st.hitCountTimer = 0;
+            }
         } else if (st.tilt > 0) {
             st.recovering = true;
             st.tilt = Math.max(0, st.tilt - STUMBLE_RECOVERY * frameDt);
