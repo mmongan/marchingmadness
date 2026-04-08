@@ -12,19 +12,22 @@ export class FirstPersonBody {
     private controllerLeft: WebXRInputSource | null = null;
     private controllerRight: WebXRInputSource | null = null;
 
-    // Arm-swing locomotion tracking (Gorilla Tag style)
+    // Ski-pole / Nordic Walking locomotion tracking
     private prevGripPosL: Vector3 | null = null;
     private prevGripPosR: Vector3 | null = null;
     private velocityL = Vector3.Zero();
     private velocityR = Vector3.Zero();
     private moveSpeed = 0;
+    private turnSpeed = 0;
     private walkPhase = 0;
 
     // Tuning constants
-    private readonly VEL_THRESHOLD = 0.4;   // m/s minimum swing to count
+    private readonly VEL_THRESHOLD = 0.3;   // m/s minimum push to count
     private readonly MAX_SPEED = 4.0;       // m/s top movement speed
-    private readonly ACCEL = 8.0;           // how fast moveSpeed ramps up
-    private readonly FRICTION = 5.0;        // how fast moveSpeed decays
+    private readonly MAX_TURN = 2.0;        // rad/s max turn rate
+    private readonly ACCEL = 6.0;           // speed ramp-up rate
+    private readonly FRICTION = 4.0;        // speed decay rate
+    private readonly TURN_FRICTION = 6.0;   // turn decay rate
 
     constructor(scene: Scene) {
         const uniformMat = new StandardMaterial("playerUniformMat", scene);
@@ -72,10 +75,10 @@ export class FirstPersonBody {
     }
 
     /**
-     * Returns a world-space movement vector driven by arm-swing locomotion.
-     * The caller should apply this to the XR camera rig position.
+     * Returns movement vector and turn angle driven by ski-pole locomotion.
+     * The caller should apply movement to camera position and turnY to camera rotation.
      */
-    public update(cam: Camera, marchPhase: number, isMarching: boolean, deltaTime: number): Vector3 {
+    public update(cam: Camera, marchPhase: number, isMarching: boolean, deltaTime: number): { movement: Vector3; turnY: number } {
         // Body root follows camera position and Y rotation
         this.bodyRoot.position.copyFrom(cam.globalPosition);
         this.bodyRoot.rotation.y = cam.absoluteRotation.toEulerAngles().y;
@@ -84,28 +87,26 @@ export class FirstPersonBody {
         this.updateArm(this.armL, this.controllerLeft, cam, -0.3, marchPhase, isMarching);
         this.updateArm(this.armR, this.controllerRight, cam, 0.3, marchPhase, isMarching);
 
-        // Arm-swing locomotion: Gorilla Tag style
-        const movement = this.computeArmSwingLocomotion(cam, deltaTime);
+        // Ski-pole locomotion: push down+back to move, differential for turning
+        const result = this.computeSkiPoleLocomotion(cam, deltaTime);
 
-        // Animate legs from movement speed
-        if (this.moveSpeed > 0.1) {
-            this.walkPhase += deltaTime * this.moveSpeed * 3.5;
-            const amplitude = Math.min(1, this.moveSpeed / 2.0) * 0.6;
-            this.legL.rotation.x = Math.sin(this.walkPhase) * amplitude;
-            this.legR.rotation.x = -Math.sin(this.walkPhase) * amplitude;
+        // Animate legs from absolute movement speed
+        const absSpeed = Math.abs(this.moveSpeed);
+        if (absSpeed > 0.1) {
+            this.walkPhase += deltaTime * absSpeed * 3.5;
+            const amplitude = Math.min(1, absSpeed / 2.0) * 0.6;
+            const dir = this.moveSpeed >= 0 ? 1 : -1;
+            this.legL.rotation.x = Math.sin(this.walkPhase) * amplitude * dir;
+            this.legR.rotation.x = -Math.sin(this.walkPhase) * amplitude * dir;
         } else {
             this.legL.rotation.x = 0;
             this.legR.rotation.x = 0;
         }
 
-        return movement;
+        return result;
     }
 
-    private computeArmSwingLocomotion(cam: Camera, dt: number): Vector3 {
-        const fwd = cam.getDirection(Vector3.Forward());
-        fwd.y = 0;
-        fwd.normalize();
-
+    private computeSkiPoleLocomotion(cam: Camera, dt: number): { movement: Vector3; turnY: number } {
         // Compute per-controller velocity from frame deltas
         this.velocityL = this.gripVelocity(this.controllerLeft, this.prevGripPosL, dt);
         this.prevGripPosL = this.controllerLeft?.grip
@@ -115,32 +116,66 @@ export class FirstPersonBody {
         this.prevGripPosR = this.controllerRight?.grip
             ? this.controllerRight.grip.absolutePosition.clone() : null;
 
-        // Measure backward swing intensity for each hand.
-        // Gorilla Tag style: pushing hands backward propels you forward.
-        // Negative dot with camera forward = hand moving backward.
+        // Ski-pole: measure downward + backward push for each hand
+        // Backward push (negative dot with head forward) = forward thrust
+        // Forward push (positive dot) = reverse thrust
+        // Downward push also counts (planting the pole)
         const headFwd = cam.getDirection(Vector3.Forward());
-        const swingL = Math.max(0, -Vector3.Dot(this.velocityL, headFwd));
-        const swingR = Math.max(0, -Vector3.Dot(this.velocityR, headFwd));
 
-        // Apply velocity threshold — ignore tiny idle jitter
-        const effectiveL = swingL > this.VEL_THRESHOLD ? swingL : 0;
-        const effectiveR = swingR > this.VEL_THRESHOLD ? swingR : 0;
-        const totalSwing = effectiveL + effectiveR;
+        const backL = -Vector3.Dot(this.velocityL, headFwd);
+        const downL = Math.max(0, -this.velocityL.y);
+        const rawL = backL + downL * 0.5;
 
-        // Ramp speed up when swinging, friction when not
-        if (totalSwing > 0) {
-            // Nonlinear: stronger swings accelerate faster
-            const targetSpeed = Math.min(this.MAX_SPEED, totalSwing * 2.0);
+        const backR = -Vector3.Dot(this.velocityR, headFwd);
+        const downR = Math.max(0, -this.velocityR.y);
+        const rawR = backR + downR * 0.5;
+
+        // Apply threshold to eliminate jitter (but preserve sign for reverse)
+        const pushL = Math.abs(rawL) > this.VEL_THRESHOLD ? rawL : 0;
+        const pushR = Math.abs(rawR) > this.VEL_THRESHOLD ? rawR : 0;
+
+        // Forward/reverse: average of both pushes
+        const totalPush = pushL + pushR;
+
+        // Differential turning: difference between sides
+        // Left arm pushes harder → turn right (positive Y rotation)
+        const turnPush = pushL - pushR;
+
+        // Update forward speed with acceleration/friction
+        if (Math.abs(totalPush) > 0) {
+            const targetSpeed = Math.max(-this.MAX_SPEED, Math.min(this.MAX_SPEED, totalPush * 1.5));
             this.moveSpeed += (targetSpeed - this.moveSpeed) * Math.min(1, this.ACCEL * dt);
         } else {
-            this.moveSpeed -= this.moveSpeed * Math.min(1, this.FRICTION * dt);
-            if (this.moveSpeed < 0.01) this.moveSpeed = 0;
+            // Friction decay toward zero
+            if (Math.abs(this.moveSpeed) < 0.05) {
+                this.moveSpeed = 0;
+            } else {
+                this.moveSpeed -= Math.sign(this.moveSpeed) * Math.min(Math.abs(this.moveSpeed), this.FRICTION * dt);
+            }
         }
 
-        if (this.moveSpeed > 0) {
-            return fwd.scale(this.moveSpeed * dt);
+        // Update turn speed with acceleration/friction
+        if (Math.abs(turnPush) > 0) {
+            const targetTurn = Math.max(-this.MAX_TURN, Math.min(this.MAX_TURN, turnPush * 1.0));
+            this.turnSpeed += (targetTurn - this.turnSpeed) * Math.min(1, this.ACCEL * dt);
+        } else {
+            if (Math.abs(this.turnSpeed) < 0.05) {
+                this.turnSpeed = 0;
+            } else {
+                this.turnSpeed -= Math.sign(this.turnSpeed) * Math.min(Math.abs(this.turnSpeed), this.TURN_FRICTION * dt);
+            }
         }
-        return Vector3.Zero();
+
+        // Compute movement in head-forward direction (Y-flattened)
+        let movement = Vector3.Zero();
+        if (Math.abs(this.moveSpeed) > 0.01) {
+            const fwd = cam.getDirection(Vector3.Forward());
+            fwd.y = 0;
+            fwd.normalize();
+            movement = fwd.scale(this.moveSpeed * dt);
+        }
+
+        return { movement, turnY: this.turnSpeed * dt };
     }
 
     private gripVelocity(controller: WebXRInputSource | null, prevPos: Vector3 | null, dt: number): Vector3 {

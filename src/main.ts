@@ -728,13 +728,16 @@ engine.runRenderLoop(() => {
         });
     }
 
-    // Update player body with march animation and arm-swing locomotion
+    // Update player body with march animation and ski-pole locomotion
     if (scene.activeCamera) {
         const dt = engine.getDeltaTime() / 1000;
-        const movement = playerBody.update(scene.activeCamera, marchPhase, gameStartTime !== null, dt);
-        // Apply arm-swing locomotion to camera position (VR and desktop)
+        const { movement, turnY } = playerBody.update(scene.activeCamera, marchPhase, gameStartTime !== null, dt);
+        // Apply ski-pole locomotion to camera position and rotation
         if (movement.lengthSquared() > 0) {
             scene.activeCamera.position.addInPlace(movement);
+        }
+        if (Math.abs(turnY) > 0.0001 && "rotation" in scene.activeCamera) {
+            (scene.activeCamera as any).rotation.y += turnY;
         }
     }
 
