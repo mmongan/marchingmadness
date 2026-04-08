@@ -35,6 +35,14 @@ export const SPACING_X = 2.0;
 export const SPACING_Z = 2.0;
 export const BAND_START_Z = 15;
 
+// Field bounds (American football field scaled to 109.7m × 48.8m)
+// X ranges from -54.85 to +54.85 (109.7m width), leave 2m buffer: [-52.85, +52.85]
+// Z ranges from 0 to ~48.8 (depthZ), leave 1m buffer: [1, 47.8]
+export const FIELD_MIN_X = -52.85;
+export const FIELD_MAX_X = 52.85;
+export const FIELD_MIN_Z = 1.0;
+export const FIELD_MAX_Z = 47.8;
+
 // Instrument mapping: row → SoundFont instrument index (null = percussion)
 export const ROW_TO_SF_INDEX: (number | null)[] = [
     null, // 0  DrumMajor

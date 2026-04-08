@@ -293,6 +293,51 @@ export function updateCollisions(
         }
     }
 
+    // Separation pass: push apart marchers who are both stumbling/down to prevent mesh overlap
+    const SEPARATION_RADIUS = MARCHER_COLLISION_RADIUS + 0.1;
+    const SEPARATION_FORCE = 1.0; // m/s² separation acceleration
+    for (let i = 0; i < bandLegs.length; i++) {
+        const si = stumbleStates[i];
+        if (si.tilt <= 0.3 && si.downTimer <= 0) continue; // only stumbling/down marchers
+
+        const ai = bandLegs[i].anchor.position;
+        const cx = (ai.x * INV_CELL) | 0;
+        const cz = (ai.z * INV_CELL) | 0;
+
+        for (let ox = -1; ox <= 1; ox++) {
+            for (let oz = -1; oz <= 1; oz++) {
+                const key = (cx + ox) * 73856093 + (cz + oz) * 19349663;
+                const bucket = grid.get(key);
+                if (!bucket) continue;
+
+                for (const j of bucket) {
+                    if (i >= j) continue; // avoid double-processing
+                    const sj = stumbleStates[j];
+                    if (sj.tilt <= 0.3 && sj.downTimer <= 0) continue; // only if j is also stumbling/down
+
+                    const aj = bandLegs[j].anchor.position;
+                    const dx = aj.x - ai.x;
+                    const dz = aj.z - ai.z;
+                    const distSq = dx * dx + dz * dz;
+                    const sepRadiusSq = SEPARATION_RADIUS * SEPARATION_RADIUS;
+                    if (distSq >= sepRadiusSq || distSq < 0.001) continue;
+
+                    const dist = Math.sqrt(distSq);
+                    const overlap = SEPARATION_RADIUS - dist;
+                    const pushForce = overlap * SEPARATION_FORCE * frameDt;
+                    const pushX = (dx / dist) * pushForce;
+                    const pushZ = (dz / dist) * pushForce;
+
+                    // Push both marchers apart equally
+                    ai.x -= pushX * 0.5;
+                    ai.z -= pushZ * 0.5;
+                    aj.x += pushX * 0.5;
+                    aj.z += pushZ * 0.5;
+                }
+            }
+        }
+    }
+
     return {
         obstaclePushX,
         obstaclePushZ,

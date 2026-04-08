@@ -1,4 +1,5 @@
 // Pure math/logic extracted from main.ts for testability
+import { FIELD_MIN_X, FIELD_MAX_X, FIELD_MIN_Z, FIELD_MAX_Z } from "./gameConstants";
 
 export type DrillShape = (r: number, c: number, cols: number, rows: number, startX: number, startZ: number) => {x: number, z: number};
 
@@ -10,27 +11,39 @@ export const drillShapes: DrillShape[] = [
     // 0: Original Block
     (_r, _c, _cols, _rows, startX, startZ) => ({ x: startX, z: startZ }),
 
-    // 1: Expanded Block
-    (_r, _c, _cols, _rows, startX, startZ) => ({ x: startX * 2.0, z: startZ }),
+    // 1: Expanded Block - constrained to field bounds
+    (_r, _c, _cols, _rows, startX, startZ) => {
+        const expandedX = startX * 1.5;
+        // Clamp X to field bounds
+        const clampedX = Math.max(FIELD_MIN_X, Math.min(FIELD_MAX_X, expandedX));
+        return { x: clampedX, z: startZ };
+    },
 
     // 2: Wedge (Arrowhead) - Z shifts based on column distance from center
     (_r, c, cols, _rows, startX, startZ) => {
         const centerCol = (cols - 1) / 2;
         const distFromCenter = Math.abs(c - centerCol);
-        return { x: startX * 1.5, z: startZ - distFromCenter * 3.0 };
+        const newZ = startZ - distFromCenter * 2.0; // reduced from 3.0
+        const clampedX = Math.max(FIELD_MIN_X, Math.min(FIELD_MAX_X, startX * 1.2));
+        const clampedZ = Math.max(FIELD_MIN_Z, Math.min(FIELD_MAX_Z, newZ));
+        return { x: clampedX, z: clampedZ };
     },
 
     // 3: Diamond Bow - X stretches outward in the middle rows
     (r, _c, _cols, rows, startX, startZ) => {
         const rowPhase = (r / (rows - 1)) * Math.PI;
-        const stretch = 1.0 + 1.2 * Math.sin(rowPhase);
-        return { x: startX * stretch, z: startZ };
+        const stretch = 1.0 + Math.sin(rowPhase) * 0.8; // reduced from 1.2
+        const newX = startX * stretch;
+        const clampedX = Math.max(FIELD_MIN_X, Math.min(FIELD_MAX_X, newX));
+        return { x: clampedX, z: startZ };
     },
 
     // 4: S-Curve Wave - Entire band slithers left and right down the field
     (_r, _c, _cols, _rows, startX, startZ) => {
-        const waveShift = Math.sin(startZ / 5.0) * 3.0;
-        return { x: startX * 1.5 + waveShift, z: startZ };
+        const waveShift = Math.sin(startZ / 5.0) * 2.0; // reduced from 3.0
+        const newX = startX * 1.5 + waveShift;
+        const clampedX = Math.max(FIELD_MIN_X, Math.min(FIELD_MAX_X, newX));
+        return { x: clampedX, z: startZ };
     }
 ];
 
@@ -60,7 +73,11 @@ export function getDrillPosition(currentBeat: number, r: number, c: number, cols
     const currentPhase = drillTimeline[currentIndex];
 
     if (currentIndex === drillTimeline.length - 1) {
-        return drillShapes[currentPhase.shape](r, c, cols, rows, startX, startZ);
+        const pos = drillShapes[currentPhase.shape](r, c, cols, rows, startX, startZ);
+        return {
+            x: Math.max(FIELD_MIN_X, Math.min(FIELD_MAX_X, pos.x)),
+            z: Math.max(FIELD_MIN_Z, Math.min(FIELD_MAX_Z, pos.z))
+        };
     }
 
     const nextPhase = drillTimeline[currentIndex + 1];
@@ -70,9 +87,15 @@ export function getDrillPosition(currentBeat: number, r: number, c: number, cols
     const p2 = drillShapes[nextPhase.shape](r, c, cols, rows, startX, startZ);
     const s = smoothstep(progress);
 
-    return {
+    const finalPos = {
         x: p1.x + (p2.x - p1.x) * s,
         z: p1.z + (p2.z - p1.z) * s
+    };
+    
+    // Final clamp to ensure no marchers go outside field
+    return {
+        x: Math.max(FIELD_MIN_X, Math.min(FIELD_MAX_X, finalPos.x)),
+        z: Math.max(FIELD_MIN_Z, Math.min(FIELD_MAX_Z, finalPos.z))
     };
 }
 
