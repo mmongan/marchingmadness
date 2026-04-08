@@ -72,6 +72,11 @@ export class FirstPersonBody {
         if (handedness === "right") this.controllerRight = controller;
     }
 
+    /** Returns the left arm mesh for attaching wrist UI elements. */
+    public getLeftArm(): Mesh {
+        return this.armL;
+    }
+
     /** Returns world positions of all body-part meshes for collision checks. */
     public getBodyPartPositions(): Vector3[] {
         return [

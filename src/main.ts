@@ -1,6 +1,6 @@
 import { BandMemberFactory, InstrumentType, BandMemberData } from "./bandMemberFactory";
 import { FirstPersonBody } from "./firstPersonBody";
-import { Engine, Scene, FreeCamera, Vector3, HemisphericLight, MeshBuilder, StandardMaterial, DynamicTexture, Color3, Texture, CubeTexture, PointerEventTypes } from "@babylonjs/core";
+import { Engine, Scene, FreeCamera, Vector3, HemisphericLight, MeshBuilder, StandardMaterial, DynamicTexture, Color3, Texture, CubeTexture, PointerEventTypes, ParticleSystem, Color4 } from "@babylonjs/core";
 import "@babylonjs/loaders/glTF";
 import { OpenSheetMusicDisplay } from "opensheetmusicdisplay";
 import * as Tone from "tone";
@@ -10,6 +10,9 @@ import { Soundfont } from "smplr";
 const GM_INSTRUMENT_NAMES = ["trumpet", "trumpet", "french_horn", "trombone", "tuba"];
 const GM_INSTRUMENT_VOLUMES = [100, 90, 85, 95, 100]; // MIDI velocity 0-127
 const sfInstruments: Map<number, Soundfont> = new Map();
+const sfPanners: Map<number, PannerNode> = new Map();
+const SPATIAL_RADIUS = 20; // only consider marchers within 20m
+const SPATIAL_RADIUS_SQ = SPATIAL_RADIUS * SPATIAL_RADIUS;
 
 let metronomeSynth: Tone.MembraneSynth | null = null;
 function getMetronomeSynth() {
@@ -297,6 +300,8 @@ interface StumbleState {
     tiltDirZ: number;   // world-space push direction Z
     recovering: boolean;
     downTimer: number;  // seconds remaining on the ground before recovery starts
+    playedStumble: boolean;  // already played stumble sound this collision
+    playedFall: boolean;     // already played crash sound this fall
 }
 const stumbleStates: StumbleState[] = [];
 const COLLISION_RADIUS = 1.0;   // metres – how close player must be to collide
@@ -305,6 +310,93 @@ const MAX_TILT = Math.PI / 2;   // fully fallen over
 const DOWN_DURATION = 4.0;      // seconds a fully-fallen marcher stays down
 const OBSTACLE_RADIUS = 1.2;    // metres – fallen marcher blocks the player
 const OBSTACLE_PUSH = 3.0;      // m/s push-back strength
+const MARCHER_COLLISION_RADIUS = 1.5; // metres – stumbling/fallen marcher knocks neighbors
+
+// Dust particle burst when a marcher hits the ground
+function emitDustBurst(position: Vector3) {
+    const ps = new ParticleSystem("dust", 30, scene);
+    ps.createPointEmitter(new Vector3(-0.5, 0, -0.5), new Vector3(0.5, 0.3, 0.5));
+    ps.emitter = position.clone();
+    ps.emitter.y = 0.05;
+    ps.minSize = 0.05;
+    ps.maxSize = 0.2;
+    ps.minLifeTime = 0.3;
+    ps.maxLifeTime = 0.8;
+    ps.emitRate = 0; // manual burst only
+    ps.color1 = new Color4(0.6, 0.5, 0.35, 0.8);
+    ps.color2 = new Color4(0.5, 0.4, 0.3, 0.6);
+    ps.colorDead = new Color4(0.4, 0.35, 0.25, 0);
+    ps.gravity = new Vector3(0, -1, 0);
+    ps.blendMode = ParticleSystem.BLENDMODE_STANDARD;
+    ps.manualEmitCount = 30;
+    ps.targetStopDuration = 1.0;
+    ps.disposeOnStop = true;
+    ps.start();
+}
+
+// Map marcher row to sfInstruments index (null = no melodic instrument)
+const ROW_TO_SF_INDEX: (number | null)[] = [
+    null, // 0  DrumMajor
+    0,    // 1  Flute       → trumpet (closest available)
+    0,    // 2  Clarinet    → trumpet
+    0,    // 3  Saxophone   → trumpet
+    2,    // 4  Mellophone  → french_horn
+    0,    // 5  Trumpet     → trumpet
+    1,    // 6  Trumpet     → trumpet
+    3,    // 7  Trombone    → trombone
+    3,    // 8  Euphonium   → trombone
+    4,    // 9  Sousaphone  → tuba
+    0,    // 10 Glockenspiel→ trumpet
+    null, // 11 SnareDrum
+    null, // 12 TomTom
+    null, // 13 BassDrum
+    null, // 14 Cymbals
+];
+
+// Crash/noise synth for falling
+let crashSynth: Tone.NoiseSynth | null = null;
+function getCrashSynth() {
+    if (!crashSynth) {
+        crashSynth = new Tone.NoiseSynth({
+            noise: { type: "white" },
+            envelope: { attack: 0.01, decay: 0.4, sustain: 0, release: 0.1 },
+            volume: -12,
+        }).toDestination();
+    }
+    return crashSynth;
+}
+
+function playStumbleSound(row: number) {
+    const sfIdx = ROW_TO_SF_INDEX[row];
+    if (sfIdx == null) {
+        // Percussion rows: play crash synth instead
+        getCrashSynth().triggerAttackRelease("16n");
+        return;
+    }
+    const sf = sfInstruments.get(sfIdx);
+    if (!sf) return;
+    // Out-of-tune: random detuned note near middle range
+    const baseNote = sfIdx === 4 ? 40 : sfIdx === 3 ? 48 : 60; // tuba low, trombone mid, others higher
+    const detune = Math.floor(Math.random() * 5) - 2; // -2 to +2 semitones off
+    sf.start({ note: baseNote + detune, duration: 0.25 });
+}
+
+function playCrashSound(row: number) {
+    const sfIdx = ROW_TO_SF_INDEX[row];
+    if (sfIdx == null || sfIdx === 4) {
+        // Percussion/Tuba: play big noise crash
+        getCrashSynth().triggerAttackRelease("4n");
+        return;
+    }
+    const sf = sfInstruments.get(sfIdx);
+    if (!sf) return;
+    
+    // Crash: play a cluster of dissonant notes for that instrument
+    const baseNote = sfIdx === 3 ? 48 : 60; 
+    sf.start({ note: baseNote - 1, duration: 0.1 });
+    sf.start({ note: baseNote + 1, duration: 0.1 });
+    sf.start({ note: baseNote + 6, duration: 0.1 });
+}
 
 // Create a 100-member marching band in a 10x10 formation
 function buildMarchingBand(scene: Scene) {
@@ -358,7 +450,7 @@ function buildMarchingBand(scene: Scene) {
 buildMarchingBand(scene);
 // Initialize stumble state for each band member
 for (let i = 0; i < bandLegs.length; i++) {
-    stumbleStates.push({ tilt: 0, tiltDirX: 0, tiltDirZ: 0, recovering: false, downTimer: 0 });
+    stumbleStates.push({ tilt: 0, tiltDirX: 0, tiltDirZ: 0, recovering: false, downTimer: 0, playedStumble: false, playedFall: false });
 }
 // Keep reference to blocks
 const measureBlocks: any[] = [];
@@ -379,6 +471,44 @@ beatMat.emissiveColor = new Color3(1, 0.8, 0);
 beatMat.disableLighting = true;
 beatIndicator.material = beatMat;
 beatIndicator.isVisible = false;
+
+// Formation Quality HUD — wrist-mounted display on left arm
+const scoreHUD = MeshBuilder.CreatePlane("scoreHUD", { width: 0.18, height: 0.06 }, scene);
+scoreHUD.parent = playerBody.getLeftArm();
+// Position on the inner forearm: offset slightly forward along arm (+Y = toward hand)
+// and outward (+Z = face up/outward so you can glance down at it)
+scoreHUD.position.set(0, -0.25, 0.08);
+scoreHUD.rotation.set(Math.PI / 2, 0, 0); // face outward from the arm
+scoreHUD.isPickable = false;
+const scoreTex = new DynamicTexture("scoreTex", { width: 512, height: 128 }, scene, false);
+const scoreMat = new StandardMaterial("scoreMat", scene);
+scoreMat.diffuseTexture = scoreTex;
+scoreMat.emissiveColor = new Color3(1, 1, 1);
+scoreMat.backFaceCulling = false;
+scoreHUD.material = scoreMat;
+scoreHUD.isVisible = false;
+let formationQuality = 100;   // 0-100 percentage
+let marchersKnockedDown = 0;
+let lastScoreText = "";
+
+function updateScoreHUD() {
+    const grade = formationQuality >= 90 ? "A" : formationQuality >= 80 ? "B"
+        : formationQuality >= 70 ? "C" : formationQuality >= 60 ? "D" : "F";
+    const text = `${Math.round(formationQuality)}% ${grade}  KO:${marchersKnockedDown}`;
+    if (text === lastScoreText) return; // avoid redrawing every frame
+    lastScoreText = text;
+    const ctx = scoreTex.getContext() as CanvasRenderingContext2D;
+    ctx.clearRect(0, 0, 512, 128);
+    ctx.fillStyle = "rgba(0,0,0,0.7)";
+    ctx.roundRect(4, 4, 504, 120, 12);
+    ctx.fill();
+    const color = formationQuality >= 80 ? "#44ff44" : formationQuality >= 60 ? "#ffcc00" : "#ff4444";
+    ctx.fillStyle = color;
+    ctx.font = "bold 48px Arial";
+    ctx.textAlign = "center";
+    ctx.fillText(text, 256, 82);
+    scoreTex.update();
+}
 
 // 3D VR Start Button
 const startBtnMesh = MeshBuilder.CreatePlane("startBtnMesh", { width: 2, height: 1 }, scene);
@@ -407,10 +537,24 @@ scene.onPointerObservable.add(async (pointerInfo) => {
         !gameStarting) {
         gameStarting = true;
             await Tone.start();
-            // Load real sampled instruments via SoundFont
+            // Load real sampled instruments via SoundFont, routing through spatial PannerNodes
             const rawCtx = Tone.getContext().rawContext as AudioContext;
             for (let i = 0; i < GM_INSTRUMENT_NAMES.length; i++) {
-                const sf = new Soundfont(rawCtx, { instrument: GM_INSTRUMENT_NAMES[i] as any });
+                // Create a PannerNode per instrument group for spatial positioning
+                const panner = rawCtx.createPanner();
+                panner.panningModel = "HRTF";
+                panner.distanceModel = "inverse";
+                panner.refDistance = 2;
+                panner.maxDistance = 50;
+                panner.rolloffFactor = 1;
+                panner.coneOuterGain = 0.4;
+                panner.connect(rawCtx.destination);
+                sfPanners.set(i, panner);
+
+                const sf = new Soundfont(rawCtx, {
+                    instrument: GM_INSTRUMENT_NAMES[i] as any,
+                    destination: panner,
+                });
                 await sf.load;
                 sf.output.setVolume(GM_INSTRUMENT_VOLUMES[i]);
                 sfInstruments.set(i, sf);
@@ -465,6 +609,10 @@ scene.onPointerObservable.add(async (pointerInfo) => {
     
             gameStartTime = Tone.now();
             beatIndicator.isVisible = true;
+            scoreHUD.isVisible = true;
+            formationQuality = 100;
+            marchersKnockedDown = 0;
+            updateScoreHUD();
             // Start the metronome and music specifically delayed by 2 whole notes
             Tone.Transport.start(gameStartTime + 2 * WHOLE_NOTE_DURATION);
             startBtnMesh.dispose(); // Remove the button after starting
@@ -850,9 +998,24 @@ engine.runRenderLoop(() => {
                 st.recovering = false;
                 st.downTimer = 0; // reset while still being hit
 
-                // Start down timer once fully fallen
+                // Out-of-tune sound on first stumble contact
+                if (!st.playedStumble && st.tilt > 0.3) {
+                    st.playedStumble = true;
+                    const row = bandLegs[index].row;
+                    playStumbleSound(row);
+                    formationQuality = Math.max(0, formationQuality - 2); // stumble penalty
+                }
+
+                // Crash sound when fully fallen
                 if (st.tilt >= MAX_TILT * 0.95) {
                     st.downTimer = DOWN_DURATION;
+                    if (!st.playedFall) {
+                        st.playedFall = true;
+                        playCrashSound(bandLegs[index].row);
+                        formationQuality = Math.max(0, formationQuality - 5); // fall penalty
+                        marchersKnockedDown++;
+                        emitDustBurst(anchor.position);
+                    }
                 }
             } else if (st.downTimer > 0) {
                 // Stay on the ground, count down
@@ -860,6 +1023,11 @@ engine.runRenderLoop(() => {
             } else if (st.tilt > 0) {
                 st.recovering = true;
                 st.tilt = Math.max(0, st.tilt - STUMBLE_RECOVERY * frameDt);
+                if (st.tilt <= 0.001) {
+                    // Fully recovered — allow sounds to play again on next collision
+                    st.playedStumble = false;
+                    st.playedFall = false;
+                }
             }
 
             if (st.tilt > 0.001) {
@@ -870,6 +1038,162 @@ engine.runRenderLoop(() => {
                 anchor.rotation.z = 0;
             }
         });
+
+        // Marcher-to-marcher domino collisions via spatial grid (O(n) instead of O(n²))
+        const MARCHER_COL_SQ = MARCHER_COLLISION_RADIUS * MARCHER_COLLISION_RADIUS;
+        const GRID_CELL = 2.0; // cell size >= MARCHER_COLLISION_RADIUS
+        const INV_CELL = 1 / GRID_CELL;
+        const grid = new Map<number, number[]>();
+
+        // Build grid — hash each marcher into a cell
+        for (let j = 0; j < bandLegs.length; j++) {
+            const p = bandLegs[j].anchor.position;
+            const cx = (p.x * INV_CELL) | 0;
+            const cz = (p.z * INV_CELL) | 0;
+            const key = cx * 73856093 + cz * 19349663; // spatial hash
+            const bucket = grid.get(key);
+            if (bucket) bucket.push(j); else grid.set(key, [j]);
+        }
+
+        // Only check stumbling/fallen marchers against their neighboring cells
+        for (let i = 0; i < bandLegs.length; i++) {
+            const si = stumbleStates[i];
+            if (si.tilt < 0.4 && si.downTimer <= 0) continue;
+
+            const ai = bandLegs[i].anchor.position;
+            const cx = (ai.x * INV_CELL) | 0;
+            const cz = (ai.z * INV_CELL) | 0;
+
+            // Check 3×3 neighborhood
+            for (let ox = -1; ox <= 1; ox++) {
+                for (let oz = -1; oz <= 1; oz++) {
+                    const key = (cx + ox) * 73856093 + (cz + oz) * 19349663;
+                    const bucket = grid.get(key);
+                    if (!bucket) continue;
+
+                    for (const j of bucket) {
+                        if (i === j) continue;
+                        const sj = stumbleStates[j];
+                        if (sj.tilt > 0.3 || sj.downTimer > 0) continue;
+
+                        const aj = bandLegs[j].anchor.position;
+                        const dx = aj.x - ai.x;
+                        const dz = aj.z - ai.z;
+                        const distSq = dx * dx + dz * dz;
+                        if (distSq >= MARCHER_COL_SQ || distSq < 0.001) continue;
+
+                        const dist = Math.sqrt(distSq);
+                        const overlap = 1 - dist / MARCHER_COLLISION_RADIUS;
+                        const transferFactor = (si.tilt / MAX_TILT) * overlap * 1.5;
+                        sj.tilt = Math.min(MAX_TILT, sj.tilt + transferFactor * frameDt * 6);
+                        sj.tiltDirX = dx / dist;
+                        sj.tiltDirZ = dz / dist;
+                        sj.recovering = false;
+
+                        if (!sj.playedStumble && sj.tilt > 0.3) {
+                            sj.playedStumble = true;
+                            playStumbleSound(bandLegs[j].row);
+                            formationQuality = Math.max(0, formationQuality - 2);
+                        }
+                        if (sj.tilt >= MAX_TILT * 0.95) {
+                            sj.downTimer = DOWN_DURATION;
+                            if (!sj.playedFall) {
+                                sj.playedFall = true;
+                                playCrashSound(bandLegs[j].row);
+                                formationQuality = Math.max(0, formationQuality - 5);
+                                marchersKnockedDown++;
+                                emitDustBurst(bandLegs[j].anchor.position);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Slowly recover formation quality when nobody is stumbling (0.5% per second)
+    if (gameStartTime !== null) {
+        const anyStumbling = stumbleStates.some(s => s.tilt > 0.1 || s.downTimer > 0);
+        if (!anyStumbling) {
+            formationQuality = Math.min(100, formationQuality + 0.5 * (engine.getDeltaTime() / 1000));
+        }
+        updateScoreHUD();
+    }
+
+    // Sync Web Audio API listener to camera for correct spatial orientation
+    if (scene.activeCamera && sfPanners.size > 0) {
+        const rawCtx = Tone.getContext().rawContext as AudioContext;
+        const listener = rawCtx.listener;
+        const camPos = scene.activeCamera.globalPosition;
+        const camFwd = scene.activeCamera.getDirection(Vector3.Forward());
+        if (listener.positionX !== undefined) {
+            listener.positionX.value = camPos.x;
+            listener.positionY.value = camPos.y;
+            listener.positionZ.value = camPos.z;
+            listener.forwardX.value = camFwd.x;
+            listener.forwardY.value = camFwd.y;
+            listener.forwardZ.value = camFwd.z;
+            listener.upX.value = 0;
+            listener.upY.value = 1;
+            listener.upZ.value = 0;
+        }
+    }
+
+    // Update spatial audio panners — weighted centroid of nearby marchers per instrument group
+    // Also count stumbling/down members per group for dynamic volume dropout
+    if (scene.activeCamera && sfPanners.size > 0) {
+        const listenerPos = scene.activeCamera.globalPosition;
+        // Accumulate weighted position per instrument group index
+        const groupSumX: number[] = new Array(GM_INSTRUMENT_NAMES.length).fill(0);
+        const groupSumZ: number[] = new Array(GM_INSTRUMENT_NAMES.length).fill(0);
+        const groupWeight: number[] = new Array(GM_INSTRUMENT_NAMES.length).fill(0);
+        const groupTotal: number[] = new Array(GM_INSTRUMENT_NAMES.length).fill(0);
+        const groupDown: number[] = new Array(GM_INSTRUMENT_NAMES.length).fill(0);
+
+        for (let m = 0; m < bandLegs.length; m++) {
+            const sfIdx = ROW_TO_SF_INDEX[bandLegs[m].row];
+            if (sfIdx == null) continue;
+            groupTotal[sfIdx]++;
+            const st = stumbleStates[m];
+            if (st.tilt > 0.3 || st.downTimer > 0) groupDown[sfIdx]++;
+
+            const ax = bandLegs[m].anchor.position.x;
+            const az = bandLegs[m].anchor.position.z;
+            const dx = ax - listenerPos.x;
+            const dz = az - listenerPos.z;
+            const distSq = dx * dx + dz * dz;
+            if (distSq > SPATIAL_RADIUS_SQ) continue;
+            const w = 1 / (1 + distSq); // inverse-distance-squared weight
+            groupSumX[sfIdx] += ax * w;
+            groupSumZ[sfIdx] += az * w;
+            groupWeight[sfIdx] += w;
+        }
+
+        for (let g = 0; g < GM_INSTRUMENT_NAMES.length; g++) {
+            const panner = sfPanners.get(g);
+            if (!panner) continue;
+
+            // Dynamic volume: fade instrument group as members go down
+            const sf = sfInstruments.get(g);
+            if (sf && groupTotal[g] > 0) {
+                const activeRatio = 1 - (groupDown[g] / groupTotal[g]);
+                // Scale from full volume down to 15% when entire section is down
+                const vol = Math.round(GM_INSTRUMENT_VOLUMES[g] * (0.15 + 0.85 * activeRatio));
+                sf.output.setVolume(vol);
+            }
+            if (groupWeight[g] > 0) {
+                const cx = groupSumX[g] / groupWeight[g];
+                const cz = groupSumZ[g] / groupWeight[g];
+                panner.positionX.value = cx;
+                panner.positionY.value = 1.5;
+                panner.positionZ.value = cz;
+            } else {
+                // No nearby marchers — place at listener so sound is centered
+                panner.positionX.value = scene.activeCamera!.globalPosition.x;
+                panner.positionY.value = 1.5;
+                panner.positionZ.value = scene.activeCamera!.globalPosition.z + 1;
+            }
+        }
     }
 
     // Update player body with march animation and treadmill locomotion
@@ -927,7 +1251,7 @@ engine.runRenderLoop(() => {
             // Show it when it's coming from the horizon, vanish it after its duration has fully passed
             const vanishDistance = arrivalZ - (WHOLE_NOTE_DURATION * FLY_SPEED);
             if (currentZ < 150 && currentZ > vanishDistance) {
-                block.mesh.isVisible = false; // Hidden per user request
+                block.mesh.isVisible = true;
             } else {
                 block.mesh.isVisible = false;
             }
