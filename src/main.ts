@@ -1643,12 +1643,8 @@ engine.runRenderLoop(() => {
             block.mesh.rotation.x = (Math.PI / 8) + (Math.PI / 4) * distanceFraction;
 
             // Show it when it's coming from the horizon, vanish it after its duration has fully passed
-            const vanishDistance = arrivalZ - (WHOLE_NOTE_DURATION * FLY_SPEED);
-            if (currentZ < 150 && currentZ > vanishDistance) {
-                block.mesh.isVisible = true;
-            } else {
-                block.mesh.isVisible = false;
-            }
+            // FLYING MUSIC HIDDEN
+            block.mesh.isVisible = false;
         });
     }
 
