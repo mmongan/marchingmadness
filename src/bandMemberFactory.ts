@@ -412,8 +412,8 @@ export class BandMemberFactory {
                     instr.rotation.x = Math.PI / 2;
                     break;
                 case "Glockenspiel":
-                    instr.position.set(0, 1.4, 0.25); // Held higher like a lyre
-                    instr.rotation.x = -Math.PI / 16; // Slightly tilted back towards player
+                    instr.position.set(0, 1.35, 0.3); // Held higher like a lyre, slightly pushed out
+                    instr.rotation.x = Math.PI / 8; // Tilted away from the player's face
                     break;
             }
         }
