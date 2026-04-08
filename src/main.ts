@@ -290,6 +290,18 @@ function getDrillPosition(currentBeat: number, r: number, c: number, cols: numbe
 
 const bandLegs: BandMemberData[] = [];
 
+// Stumble state per band member: tilt angle (radians) and tilt direction (x,z)
+interface StumbleState {
+    tilt: number;       // current tilt angle in radians (0 = upright, ~π/2 = fallen)
+    tiltDirX: number;   // world-space push direction X
+    tiltDirZ: number;   // world-space push direction Z
+    recovering: boolean;
+}
+const stumbleStates: StumbleState[] = [];
+const COLLISION_RADIUS = 1.0;   // metres – how close player must be to collide
+const STUMBLE_RECOVERY = 0.8;   // rad/s – how fast members stand back up
+const MAX_TILT = Math.PI / 2;   // fully fallen over
+
 // Create a 100-member marching band in a 10x10 formation
 function buildMarchingBand(scene: Scene) {
     const factory = new BandMemberFactory(scene);
@@ -340,7 +352,10 @@ function buildMarchingBand(scene: Scene) {
     }
 }
 buildMarchingBand(scene);
-
+// Initialize stumble state for each band member
+for (let i = 0; i < bandLegs.length; i++) {
+    stumbleStates.push({ tilt: 0, tiltDirX: 0, tiltDirZ: 0, recovering: false });
+}
 // Keep reference to blocks
 const measureBlocks: any[] = [];
 const gameBlocks: { mesh: any, arrivalTime: number, startX: number, startY: number, boxHeight: number, noteFractions: number[], firstT: number }[] = [];
@@ -728,11 +743,52 @@ engine.runRenderLoop(() => {
         });
     }
 
-    // Update player body with march animation and ski-pole locomotion
+    // --- Player-to-marcher collision: stumble / fall ---
+    if (scene.activeCamera) {
+        const playerPos = scene.activeCamera.globalPosition;
+        const frameDt = engine.getDeltaTime() / 1000;
+
+        bandLegs.forEach(({ anchor }, index) => {
+            const st = stumbleStates[index];
+            const dx = playerPos.x - anchor.position.x;
+            const dz = playerPos.z - anchor.position.z;
+            const distSq = dx * dx + dz * dz;
+
+            if (distSq < COLLISION_RADIUS * COLLISION_RADIUS && distSq > 0.001) {
+                // Push direction: from player toward marcher
+                const dist = Math.sqrt(distSq);
+                st.tiltDirX = -dx / dist;  // direction away from player
+                st.tiltDirZ = -dz / dist;
+
+                // Impact proportional to closeness and player speed
+                const overlap = 1 - dist / COLLISION_RADIUS; // 0..1
+                const impact = overlap * 3.0; // radians to add per frame-ish
+                st.tilt = Math.min(MAX_TILT, st.tilt + impact * frameDt * 8);
+                st.recovering = false;
+            } else if (st.tilt > 0) {
+                // Recover: stand back up
+                st.recovering = true;
+                st.tilt = Math.max(0, st.tilt - STUMBLE_RECOVERY * frameDt);
+            }
+
+            // Apply tilt to anchor rotation (rotate around the base / feet)
+            if (st.tilt > 0.001) {
+                // Tilt axis is perpendicular to push direction (cross with Y-up)
+                // Push direction is (tiltDirX, 0, tiltDirZ), tilt axis = cross(push, up) = (-tiltDirZ, 0, tiltDirX)
+                anchor.rotation.x = st.tilt * st.tiltDirZ;
+                anchor.rotation.z = -st.tilt * st.tiltDirX;
+            } else {
+                anchor.rotation.x = 0;
+                anchor.rotation.z = 0;
+            }
+        });
+    }
+
+    // Update player body with march animation and treadmill locomotion
     if (scene.activeCamera) {
         const dt = engine.getDeltaTime() / 1000;
         const { movement, turnY } = playerBody.update(scene.activeCamera, marchPhase, gameStartTime !== null, dt);
-        // Apply ski-pole locomotion to camera position and rotation
+        // Apply treadmill locomotion to camera position and rotation
         if (movement.lengthSquared() > 0) {
             scene.activeCamera.position.addInPlace(movement);
         }

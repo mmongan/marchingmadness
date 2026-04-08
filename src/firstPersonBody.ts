@@ -12,20 +12,18 @@ export class FirstPersonBody {
     private controllerLeft: WebXRInputSource | null = null;
     private controllerRight: WebXRInputSource | null = null;
 
-    // Ski-pole / Nordic Walking locomotion tracking
+    // Treadmill / Walking-in-Place locomotion tracking
     private prevGripPosL: Vector3 | null = null;
     private prevGripPosR: Vector3 | null = null;
-    private velocityL = Vector3.Zero();
-    private velocityR = Vector3.Zero();
     private moveSpeed = 0;
     private turnSpeed = 0;
     private walkPhase = 0;
 
     // Tuning constants
-    private readonly VEL_THRESHOLD = 0.3;   // m/s minimum push to count
+    private readonly VEL_THRESHOLD = 0.4;   // m/s minimum vertical pump to count
     private readonly MAX_SPEED = 4.0;       // m/s top movement speed
-    private readonly MAX_TURN = 2.0;        // rad/s max turn rate
-    private readonly ACCEL = 6.0;           // speed ramp-up rate
+    private readonly MAX_TURN = 1.5;        // rad/s max turn rate
+    private readonly ACCEL = 5.0;           // speed ramp-up rate
     private readonly FRICTION = 4.0;        // speed decay rate
     private readonly TURN_FRICTION = 6.0;   // turn decay rate
 
@@ -75,7 +73,7 @@ export class FirstPersonBody {
     }
 
     /**
-     * Returns movement vector and turn angle driven by ski-pole locomotion.
+     * Returns movement vector and turn angle driven by treadmill arm-pump locomotion.
      * The caller should apply movement to camera position and turnY to camera rotation.
      */
     public update(cam: Camera, marchPhase: number, isMarching: boolean, deltaTime: number): { movement: Vector3; turnY: number } {
@@ -87,8 +85,8 @@ export class FirstPersonBody {
         this.updateArm(this.armL, this.controllerLeft, cam, -0.3, marchPhase, isMarching);
         this.updateArm(this.armR, this.controllerRight, cam, 0.3, marchPhase, isMarching);
 
-        // Ski-pole locomotion: push down+back to move, differential for turning
-        const result = this.computeSkiPoleLocomotion(cam, deltaTime);
+        // Treadmill locomotion: pump arms up & down to march forward
+        const result = this.computeTreadmillLocomotion(cam, deltaTime);
 
         // Animate legs from absolute movement speed
         const absSpeed = Math.abs(this.moveSpeed);
@@ -106,57 +104,43 @@ export class FirstPersonBody {
         return result;
     }
 
-    private computeSkiPoleLocomotion(cam: Camera, dt: number): { movement: Vector3; turnY: number } {
+    private computeTreadmillLocomotion(cam: Camera, dt: number): { movement: Vector3; turnY: number } {
         // Compute per-controller velocity from frame deltas
-        this.velocityL = this.gripVelocity(this.controllerLeft, this.prevGripPosL, dt);
+        const velL = this.gripVelocity(this.controllerLeft, this.prevGripPosL, dt);
         this.prevGripPosL = this.controllerLeft?.grip
             ? this.controllerLeft.grip.absolutePosition.clone() : null;
 
-        this.velocityR = this.gripVelocity(this.controllerRight, this.prevGripPosR, dt);
+        const velR = this.gripVelocity(this.controllerRight, this.prevGripPosR, dt);
         this.prevGripPosR = this.controllerRight?.grip
             ? this.controllerRight.grip.absolutePosition.clone() : null;
 
-        // Ski-pole: measure downward + backward push for each hand
-        // Backward push (negative dot with head forward) = forward thrust
-        // Forward push (positive dot) = reverse thrust
-        // Downward push also counts (planting the pole)
-        const headFwd = cam.getDirection(Vector3.Forward());
+        // Treadmill: measure vertical arm-pump intensity per hand
+        // Absolute vertical speed captures the up-and-down pumping motion
+        const pumpL = Math.abs(velL.y) > this.VEL_THRESHOLD ? Math.abs(velL.y) : 0;
+        const pumpR = Math.abs(velR.y) > this.VEL_THRESHOLD ? Math.abs(velR.y) : 0;
 
-        const backL = -Vector3.Dot(this.velocityL, headFwd);
-        const downL = Math.max(0, -this.velocityL.y);
-        const rawL = backL + downL * 0.5;
+        // Total pump intensity drives forward speed
+        const totalPump = pumpL + pumpR;
 
-        const backR = -Vector3.Dot(this.velocityR, headFwd);
-        const downR = Math.max(0, -this.velocityR.y);
-        const rawR = backR + downR * 0.5;
-
-        // Apply threshold to eliminate jitter (but preserve sign for reverse)
-        const pushL = Math.abs(rawL) > this.VEL_THRESHOLD ? rawL : 0;
-        const pushR = Math.abs(rawR) > this.VEL_THRESHOLD ? rawR : 0;
-
-        // Forward/reverse: average of both pushes
-        const totalPush = pushL + pushR;
-
-        // Differential turning: difference between sides
-        // Left arm pushes harder → turn right (positive Y rotation)
-        const turnPush = pushL - pushR;
+        // Differential pumping for turning:
+        // Left arm pumps harder → turn right (positive Y rotation)
+        const turnPump = pumpL - pumpR;
 
         // Update forward speed with acceleration/friction
-        if (Math.abs(totalPush) > 0) {
-            const targetSpeed = Math.max(-this.MAX_SPEED, Math.min(this.MAX_SPEED, totalPush * 1.5));
+        if (totalPump > 0) {
+            const targetSpeed = Math.min(this.MAX_SPEED, totalPump * 1.2);
             this.moveSpeed += (targetSpeed - this.moveSpeed) * Math.min(1, this.ACCEL * dt);
         } else {
-            // Friction decay toward zero
-            if (Math.abs(this.moveSpeed) < 0.05) {
+            if (this.moveSpeed < 0.05) {
                 this.moveSpeed = 0;
             } else {
-                this.moveSpeed -= Math.sign(this.moveSpeed) * Math.min(Math.abs(this.moveSpeed), this.FRICTION * dt);
+                this.moveSpeed -= Math.min(this.moveSpeed, this.FRICTION * dt);
             }
         }
 
         // Update turn speed with acceleration/friction
-        if (Math.abs(turnPush) > 0) {
-            const targetTurn = Math.max(-this.MAX_TURN, Math.min(this.MAX_TURN, turnPush * 1.0));
+        if (Math.abs(turnPump) > 0.1) {
+            const targetTurn = Math.max(-this.MAX_TURN, Math.min(this.MAX_TURN, turnPump * 0.8));
             this.turnSpeed += (targetTurn - this.turnSpeed) * Math.min(1, this.ACCEL * dt);
         } else {
             if (Math.abs(this.turnSpeed) < 0.05) {
@@ -166,9 +150,9 @@ export class FirstPersonBody {
             }
         }
 
-        // Compute movement in head-forward direction (Y-flattened)
+        // Move in head-forward direction (Y-flattened), always forward
         let movement = Vector3.Zero();
-        if (Math.abs(this.moveSpeed) > 0.01) {
+        if (this.moveSpeed > 0.01) {
             const fwd = cam.getDirection(Vector3.Forward());
             fwd.y = 0;
             fwd.normalize();
