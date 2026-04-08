@@ -58,8 +58,8 @@ export class BandMemberFactory {
         this.baseTorso = MeshBuilder.CreateBox("baseTorso", { width: 0.45, height: 0.6, depth: 0.3 }, scene);
         this.baseTorso.material = this.uniformMat;
 
-        this.baseLeg = MeshBuilder.CreateBox("baseLeg", { width: 0.18, height: 0.8, depth: 0.18 }, scene);
-        this.baseLeg.bakeTransformIntoVertices(Matrix.Translation(0, -0.4, 0)); 
+        this.baseLeg = MeshBuilder.CreateBox("baseLeg", { width: 0.18, height: 1.0, depth: 0.18 }, scene);
+        this.baseLeg.bakeTransformIntoVertices(Matrix.Translation(0, -0.5, 0)); 
         this.baseLeg.material = this.pantsMat;
 
         this.baseHead = MeshBuilder.CreateSphere("baseHead", { diameter: 0.3 }, scene);
@@ -92,11 +92,11 @@ export class BandMemberFactory {
 
         const legL = isBase ? this.baseLeg : this.baseLeg.createInstance(`legL_${r}_${c}`);
         legL.parent = anchor;
-        legL.position.set(-0.12, 0.8, 0);
+        legL.position.set(-0.12, 1.0, 0);
 
         const legR = isBase ? this.baseLeg.createInstance(`legR_${r}_${c}`) : this.baseLeg.createInstance(`legR_${r}_${c}`);
         legR.parent = anchor;
-        legR.position.set(0.12, 0.8, 0);
+        legR.position.set(0.12, 1.0, 0);
 
         const head = isBase ? this.baseHead : this.baseHead.createInstance(`head_${r}_${c}`);
         head.parent = anchor;
