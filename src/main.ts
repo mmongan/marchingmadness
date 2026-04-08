@@ -1,5 +1,5 @@
 import { BandMemberFactory, InstrumentType, BandMemberData } from "./bandMemberFactory";
-import { Engine, Scene, FreeCamera, Vector3, HemisphericLight, MeshBuilder, StandardMaterial, DynamicTexture, Color3, Texture, CubeTexture, PointerEventTypes } from "@babylonjs/core";
+import { Engine, Scene, FreeCamera, Vector3, HemisphericLight, MeshBuilder, StandardMaterial, DynamicTexture, Color3, Texture, CubeTexture, PointerEventTypes, Matrix, TransformNode } from "@babylonjs/core";
 import { OpenSheetMusicDisplay } from "opensheetmusicdisplay";
 import * as Tone from "tone";
 import { Soundfont } from "smplr";
@@ -55,6 +55,44 @@ scene.createDefaultXRExperienceAsync({
 }).catch((err) => {
     console.warn("WebXR not available, falling back to desktop controls:", err);
 });
+
+// Player's own body — block-style torso, arms, and legs visible when looking down
+const playerBodyRoot = new TransformNode("playerBodyRoot", scene);
+
+const playerUniformMat = new StandardMaterial("playerUniformMat", scene);
+playerUniformMat.diffuseColor = new Color3(0.1, 0.2, 0.8);
+
+const playerPantsMat = new StandardMaterial("playerPantsMat", scene);
+playerPantsMat.diffuseColor = new Color3(0.1, 0.2, 0.8);
+
+const playerTorso = MeshBuilder.CreateBox("playerTorso", { width: 0.45, height: 0.6, depth: 0.3 }, scene);
+playerTorso.material = playerUniformMat;
+playerTorso.parent = playerBodyRoot;
+playerTorso.position.set(0, -0.45, 0); // Below camera (head level)
+
+const playerArmL = MeshBuilder.CreateBox("playerArmL", { width: 0.12, height: 0.5, depth: 0.12 }, scene);
+playerArmL.material = playerUniformMat;
+playerArmL.parent = playerBodyRoot;
+playerArmL.position.set(-0.3, -0.35, 0.15);
+playerArmL.rotation.x = Math.PI / 6;
+
+const playerArmR = MeshBuilder.CreateBox("playerArmR", { width: 0.12, height: 0.5, depth: 0.12 }, scene);
+playerArmR.material = playerUniformMat;
+playerArmR.parent = playerBodyRoot;
+playerArmR.position.set(0.3, -0.35, 0.15);
+playerArmR.rotation.x = Math.PI / 6;
+
+const playerLegL = MeshBuilder.CreateBox("playerLegL", { width: 0.18, height: 1.0, depth: 0.18 }, scene);
+playerLegL.bakeTransformIntoVertices(Matrix.Translation(0, -0.5, 0));
+playerLegL.material = playerPantsMat;
+playerLegL.parent = playerBodyRoot;
+playerLegL.position.set(-0.12, -0.75, 0);
+
+const playerLegR = MeshBuilder.CreateBox("playerLegR", { width: 0.18, height: 1.0, depth: 0.18 }, scene);
+playerLegR.bakeTransformIntoVertices(Matrix.Translation(0, -0.5, 0));
+playerLegR.material = playerPantsMat;
+playerLegR.parent = playerBodyRoot;
+playerLegR.position.set(0.12, -0.75, 0);
 
 // Add a standard majestic skybox
 function buildSkybox(scene: Scene) {
@@ -655,6 +693,13 @@ engine.runRenderLoop(() => {
         scene.activeCamera.position.y = 1.5; // Always bounce them back up to a standing height
     }
 
+    // Update player body to follow camera
+    if (scene.activeCamera) {
+        const cam = scene.activeCamera;
+        playerBodyRoot.position.copyFrom(cam.globalPosition);
+        playerBodyRoot.rotation.y = cam.absoluteRotation.toEulerAngles().y;
+    }
+
     // Marching Band Animation
     const currentRenderTime = gameStartTime !== null ? Tone.now() - gameStartTime : performance.now() / 1000;
     const secondsPerBeat = 60 / BPM;
@@ -709,6 +754,15 @@ engine.runRenderLoop(() => {
             legL.rotation.x = Math.sin(marchPhase) * 0.6;
             legR.rotation.x = -Math.sin(marchPhase) * 0.6;
         });
+    }
+
+    // Animate player legs in sync with march
+    if (gameStartTime !== null) {
+        playerLegL.rotation.x = Math.sin(marchPhase) * 0.6;
+        playerLegR.rotation.x = -Math.sin(marchPhase) * 0.6;
+        // Subtle arm swing opposite to legs
+        playerArmL.rotation.x = Math.PI / 6 - Math.sin(marchPhase) * 0.2;
+        playerArmR.rotation.x = Math.PI / 6 + Math.sin(marchPhase) * 0.2;
     }
 
     // Continuously poll to ensure the queue processes upcoming measures during gameplay
