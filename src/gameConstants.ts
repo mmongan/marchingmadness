@@ -68,3 +68,18 @@ export const SONG_LIST = [
     { file: "assets/stars_and_stripes.xml", title: "Stars & Stripes", subtitle: "Full Band" },
     { file: "assets/battle_hymn.xml", title: "Battle Hymn", subtitle: "Full Band" },
 ];
+
+// Stumble state per band member (shared between collision and audio systems)
+export interface StumbleState {
+    tilt: number;
+    tiltDirX: number;
+    tiltDirZ: number;
+    recovering: boolean;
+    downTimer: number;
+    playedStumble: boolean;
+    playedFall: boolean;
+}
+
+export function createStumbleState(): StumbleState {
+    return { tilt: 0, tiltDirX: 0, tiltDirZ: 0, recovering: false, downTimer: 0, playedStumble: false, playedFall: false };
+}
