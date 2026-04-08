@@ -3,18 +3,62 @@ import { Engine, Scene, FreeCamera, Vector3, HemisphericLight, MeshBuilder, Stan
 import { OpenSheetMusicDisplay } from "opensheetmusicdisplay";
 import * as Tone from "tone";
 
-let synth: Tone.PolySynth | null = null;
-function getTrumpetSynth() {
-    if (!synth) {
-        synth = new Tone.PolySynth(Tone.Synth, {
-            oscillator: { type: "sawtooth" },
-            envelope: { attack: 0.1, decay: 0.1, sustain: 0.6, release: 0.2 },
-        }).toDestination();
-        
-        // Add a slight lowpass filter to mimic a brass instrument
-        const filter = new Tone.Filter(800, "lowpass").toDestination();
-        synth.connect(filter);
+// Per-instrument synth voices
+const instrumentSynths: Map<number, Tone.PolySynth> = new Map();
+
+function getInstrumentSynth(instrumentIndex: number): Tone.PolySynth {
+    if (instrumentSynths.has(instrumentIndex)) return instrumentSynths.get(instrumentIndex)!;
+
+    let oscillatorType: OscillatorType = "sawtooth";
+    let filterFreq = 800;
+    let volume = -6;
+    let attack = 0.1;
+    let sustain = 0.6;
+
+    switch (instrumentIndex) {
+        case 0: // Trumpet 1
+            oscillatorType = "sawtooth";
+            filterFreq = 1200;
+            volume = -4;
+            break;
+        case 1: // Trumpet 2
+            oscillatorType = "sawtooth";
+            filterFreq = 1000;
+            volume = -6;
+            break;
+        case 2: // Horn in F
+            oscillatorType = "triangle";
+            filterFreq = 600;
+            volume = -8;
+            attack = 0.15;
+            sustain = 0.7;
+            break;
+        case 3: // Trombone
+            oscillatorType = "sawtooth";
+            filterFreq = 500;
+            volume = -5;
+            attack = 0.12;
+            sustain = 0.65;
+            break;
+        case 4: // Tuba
+            oscillatorType = "square";
+            filterFreq = 300;
+            volume = -4;
+            attack = 0.15;
+            sustain = 0.7;
+            break;
     }
+
+    const synth = new Tone.PolySynth(Tone.Synth, {
+        oscillator: { type: oscillatorType },
+        envelope: { attack, decay: 0.1, sustain, release: 0.2 },
+    }).toDestination();
+    synth.volume.value = volume;
+
+    const filter = new Tone.Filter(filterFreq, "lowpass").toDestination();
+    synth.connect(filter);
+
+    instrumentSynths.set(instrumentIndex, synth);
     return synth;
 }
 
@@ -45,10 +89,10 @@ camera.attachControl(canvas, true);
 const light = new HemisphericLight("light", new Vector3(0, 1, 0), scene);
 light.intensity = 0.8;
 
-// Enable WebXR/VR
+// Enable WebXR/VR with graceful device detection
 scene.createDefaultXRExperienceAsync({
     inputOptions: {
-        forceInputProfile: "meta-quest-3"
+        // Don't force a profile — let the browser report the real controller
     }
 }).then((xr) => {
     // If the device doesn't supply a real-world vertical tracking offset (3DoF/Emulators),
@@ -56,6 +100,13 @@ scene.createDefaultXRExperienceAsync({
     xr.baseExperience.onInitialXRPoseSetObservable.add((xrCamera) => {
         xrCamera.position.y = 1.8;
     });
+
+    // Log connected controllers for debugging
+    xr.input.onControllerAddedObservable.add((controller) => {
+        console.log(`XR controller connected: ${controller.inputSource.handedness}, profile: ${controller.inputSource.profiles.join(", ")}`);
+    });
+}).catch((err) => {
+    console.warn("WebXR not available, falling back to desktop controls:", err);
 });
 
 // Add a standard majestic skybox
@@ -337,6 +388,15 @@ const WHOLE_NOTE_DURATION = (60 / BPM) * 4;
 // 1 beat = 4.5708 / 8 = 0.57135m. At BPM, speed = 0.57135 * (BPM / 60) m/s.
 const FLY_SPEED = 0.57135 * (BPM / 60);
 
+// Visual beat indicator - a glowing sphere that flashes on each beat
+const beatIndicator = MeshBuilder.CreateSphere("beatIndicator", { diameter: 0.15 }, scene);
+beatIndicator.position = new Vector3(0, 2.5, 3);
+const beatMat = new StandardMaterial("beatMat", scene);
+beatMat.emissiveColor = new Color3(1, 0.8, 0);
+beatMat.disableLighting = true;
+beatIndicator.material = beatMat;
+beatIndicator.isVisible = false;
+
 // 3D VR Start Button
 const startBtnMesh = MeshBuilder.CreatePlane("startBtnMesh", { width: 2, height: 1 }, scene);
 startBtnMesh.position = new Vector3(0, 1.5, 2);
@@ -362,54 +422,57 @@ startBtnMesh.actionManager.registerAction(
         ActionManager.OnPickTrigger,
         async () => {
             await Tone.start();
-const synth = getTrumpetSynth(); // pre-initialize
-        getMetronomeSynth(); // pre-initialize
+            // Pre-initialize all instrument synths
+            for (let i = 0; i < 5; i++) getInstrumentSynth(i);
+            getMetronomeSynth();
         
-        // Sync Tone.Transport to our 80 BPM and start a repeating metronome click
-        Tone.Transport.bpm.value = BPM;
-        // Delay metronome by exactly 2 whole notes so it starts right when the first block arrives
-        Tone.Transport.scheduleRepeat((time) => {
-            getMetronomeSynth().triggerAttackRelease("C5", "32n", time);
-        }, "4n");
+            // Sync Tone.Transport to our 80 BPM and start a repeating metronome click
+            Tone.Transport.bpm.value = BPM;
+            Tone.Transport.scheduleRepeat((time) => {
+                getMetronomeSynth().triggerAttackRelease("C5", "32n", time);
+            }, "4n");
         
-        // Schedule all generated sheet music notes onto the Transport timeline instantly
-        if (osmd && osmd.Sheet) {
-            osmd.Sheet.SourceMeasures.forEach((sourceMeasure, mIndex) => {
-                let measureFirstT = 0;
-                if (sourceMeasure.VerticalSourceStaffEntryContainers.length > 0 && sourceMeasure.VerticalSourceStaffEntryContainers[0].Timestamp) {
-                    measureFirstT = sourceMeasure.VerticalSourceStaffEntryContainers[0].Timestamp.RealValue;
-                }
+            // Schedule ALL instrument parts onto the Transport timeline
+            if (osmd && osmd.Sheet) {
+                const instruments = osmd.Sheet.Instruments;
+                osmd.Sheet.SourceMeasures.forEach((sourceMeasure, mIndex) => {
+                    let measureFirstT = 0;
+                    if (sourceMeasure.VerticalSourceStaffEntryContainers.length > 0 && sourceMeasure.VerticalSourceStaffEntryContainers[0].Timestamp) {
+                        measureFirstT = sourceMeasure.VerticalSourceStaffEntryContainers[0].Timestamp.RealValue;
+                    }
 
-                sourceMeasure.VerticalSourceStaffEntryContainers.forEach(container => {
-                    if (!container.Timestamp) return;
-                    const timeInMeasure = (container.Timestamp.RealValue - measureFirstT) * WHOLE_NOTE_DURATION;
+                    sourceMeasure.VerticalSourceStaffEntryContainers.forEach(container => {
+                        if (!container.Timestamp) return;
+                        const timeInMeasure = (container.Timestamp.RealValue - measureFirstT) * WHOLE_NOTE_DURATION;
                     
-                    container.StaffEntries.forEach(entry => {
-                        // Only play the Trumpet 1 instrument (index 0)
-                        if (entry.ParentStaff.ParentInstrument.Id === osmd!.Sheet!.Instruments[0].Id) {
+                        container.StaffEntries.forEach(entry => {
+                            // Find which instrument index this entry belongs to
+                            const instrIndex = instruments.findIndex(inst => inst.Id === entry.ParentStaff.ParentInstrument.Id);
+                            if (instrIndex < 0) return;
+
+                            const instrSynth = getInstrumentSynth(instrIndex);
                             entry.VoiceEntries.forEach(ve => {
                                 ve.Notes.forEach(note => {
-                                    // OSMD's halfTone property matches valid MIDI note numbers
                                     if (note.halfTone) {
                                         const frequency = Tone.Frequency(note.halfTone, "midi").toFrequency();
                                         const duration = note.Length.RealValue * WHOLE_NOTE_DURATION;
                                         const scheduleTime = (mIndex * WHOLE_NOTE_DURATION) + timeInMeasure;
                                         Tone.Transport.schedule((time) => {
-                                            synth.triggerAttackRelease(frequency, duration, time);
-                                    }, scheduleTime);
-                                }
+                                            instrSynth.triggerAttackRelease(frequency, duration, time);
+                                        }, scheduleTime);
+                                    }
+                                });
                             });
                         });
-                    }
+                    });
                 });
-            });
-        });
-    }
+            }
     
-    gameStartTime = Tone.now();
-    // Start the metronome and music specifically delayed by 2 whole notes
-    Tone.Transport.start(gameStartTime + 2 * WHOLE_NOTE_DURATION);
-    startBtnMesh.dispose(); // Remove the button after starting
+            gameStartTime = Tone.now();
+            beatIndicator.isVisible = true;
+            // Start the metronome and music specifically delayed by 2 whole notes
+            Tone.Transport.start(gameStartTime + 2 * WHOLE_NOTE_DURATION);
+            startBtnMesh.dispose(); // Remove the button after starting
         }
     )
 );
@@ -640,6 +703,14 @@ engine.runRenderLoop(() => {
     // Calculate a phase angle where one full stride occurs every 2 beats
     const marchPhase = (currentRenderTime * Math.PI * 2) / (secondsPerBeat * 2);
     const currentBeat = currentRenderTime * (BPM / 60);
+
+    // Animate the beat indicator - flash bright on each beat, then fade
+    if (gameStartTime !== null && beatIndicator.isVisible) {
+        const beatFrac = currentBeat % 1.0;
+        const flashIntensity = Math.max(0, 1.0 - beatFrac * 4.0); // fast fade-out
+        beatMat.emissiveColor = new Color3(flashIntensity, flashIntensity * 0.8, 0);
+        beatIndicator.scaling.setAll(0.5 + flashIntensity * 0.5);
+    }
 
     if (gameStartTime !== null) {
         // Pre-calculate positions and apply collision avoidance
