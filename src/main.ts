@@ -2,91 +2,12 @@ import { BandMemberFactory, InstrumentType, BandMemberData } from "./bandMemberF
 import { Engine, Scene, FreeCamera, Vector3, HemisphericLight, MeshBuilder, StandardMaterial, DynamicTexture, Color3, Texture, CubeTexture, ActionManager, ExecuteCodeAction } from "@babylonjs/core";
 import { OpenSheetMusicDisplay } from "opensheetmusicdisplay";
 import * as Tone from "tone";
+import { Soundfont } from "smplr";
 
-// Per-instrument synth voices
-const instrumentSynths: Map<number, Tone.PolySynth> = new Map();
-
-function getInstrumentSynth(instrumentIndex: number): Tone.PolySynth {
-    if (instrumentSynths.has(instrumentIndex)) return instrumentSynths.get(instrumentIndex)!;
-
-    // Instrument-specific synthesis parameters for clean brass sound
-    let oscillatorType: OscillatorType = "sawtooth";
-    let filterFreq = 2000;
-    let filterQ = 1;
-    let volume = -12;
-    let attack = 0.05;
-    let decay = 0.2;
-    let sustain = 0.4;
-    let release = 0.3;
-
-    switch (instrumentIndex) {
-        case 0: // Trumpet 1 — bright, clear lead
-            oscillatorType = "sawtooth";
-            filterFreq = 3000;
-            filterQ = 0.5;
-            volume = -10;
-            attack = 0.02;
-            decay = 0.15;
-            sustain = 0.35;
-            release = 0.2;
-            break;
-        case 1: // Trumpet 2 — slightly softer
-            oscillatorType = "sawtooth";
-            filterFreq = 2500;
-            filterQ = 0.5;
-            volume = -12;
-            attack = 0.03;
-            decay = 0.15;
-            sustain = 0.3;
-            release = 0.2;
-            break;
-        case 2: // Horn in F — warm, mellow
-            oscillatorType = "triangle";
-            filterFreq = 1500;
-            filterQ = 0.7;
-            volume = -11;
-            attack = 0.06;
-            decay = 0.25;
-            sustain = 0.4;
-            release = 0.35;
-            break;
-        case 3: // Trombone — rich, smooth
-            oscillatorType = "sawtooth";
-            filterFreq = 1800;
-            filterQ = 0.6;
-            volume = -11;
-            attack = 0.04;
-            decay = 0.2;
-            sustain = 0.35;
-            release = 0.3;
-            break;
-        case 4: // Tuba — deep, round
-            oscillatorType = "sawtooth";
-            filterFreq = 800;
-            filterQ = 0.8;
-            volume = -10;
-            attack = 0.06;
-            decay = 0.3;
-            sustain = 0.4;
-            release = 0.4;
-            break;
-    }
-
-    // Route: synth → filter → destination (single path, no double-routing)
-    const filter = new Tone.Filter(filterFreq, "lowpass", -24);
-    filter.Q.value = filterQ;
-    filter.toDestination();
-
-    const synth = new Tone.PolySynth(Tone.Synth, {
-        oscillator: { type: oscillatorType },
-        envelope: { attack, decay, sustain, release },
-    });
-    synth.volume.value = volume;
-    synth.connect(filter);
-
-    instrumentSynths.set(instrumentIndex, synth);
-    return synth;
-}
+// Real sampled instrument voices via General MIDI SoundFont
+const GM_INSTRUMENT_NAMES = ["trumpet", "trumpet", "french_horn", "trombone", "tuba"];
+const GM_INSTRUMENT_VOLUMES = [100, 90, 85, 95, 100]; // MIDI velocity 0-127
+const sfInstruments: Map<number, Soundfont> = new Map();
 
 let metronomeSynth: Tone.MembraneSynth | null = null;
 function getMetronomeSynth() {
@@ -448,8 +369,14 @@ startBtnMesh.actionManager.registerAction(
         ActionManager.OnPickTrigger,
         async () => {
             await Tone.start();
-            // Pre-initialize all instrument synths
-            for (let i = 0; i < 5; i++) getInstrumentSynth(i);
+            // Load real sampled instruments via SoundFont
+            const rawCtx = Tone.getContext().rawContext as AudioContext;
+            for (let i = 0; i < GM_INSTRUMENT_NAMES.length; i++) {
+                const sf = new Soundfont(rawCtx, { instrument: GM_INSTRUMENT_NAMES[i] as any });
+                await sf.load;
+                sf.output.setVolume(GM_INSTRUMENT_VOLUMES[i]);
+                sfInstruments.set(i, sf);
+            }
             getMetronomeSynth();
         
             // Sync Tone.Transport to our 80 BPM and start a repeating metronome click
@@ -476,7 +403,7 @@ startBtnMesh.actionManager.registerAction(
                             const instrIndex = instruments.findIndex(inst => inst.Id === entry.ParentStaff.ParentInstrument.Id);
                             if (instrIndex < 0) return;
 
-                            const instrSynth = getInstrumentSynth(instrIndex);
+                            const sf = sfInstruments.get(instrIndex);
                             entry.VoiceEntries.forEach(ve => {
                                 ve.Notes.forEach(note => {
                                     if (note.halfTone) {
@@ -484,11 +411,11 @@ startBtnMesh.actionManager.registerAction(
                                         // PlaybackTranspose is the MusicXML <chromatic> value
                                         // (e.g. -2 for Bb instruments, -7 for Horn in F)
                                         const transpose = (instruments[instrIndex] as any).PlaybackTranspose || 0;
-                                        const frequency = Tone.Frequency(note.halfTone + transpose, "midi").toFrequency();
+                                        const midiNote = note.halfTone + transpose;
                                         const duration = note.Length.RealValue * WHOLE_NOTE_DURATION;
                                         const scheduleTime = (mIndex * WHOLE_NOTE_DURATION) + timeInMeasure;
                                         Tone.Transport.schedule((time) => {
-                                            instrSynth.triggerAttackRelease(frequency, duration, time);
+                                            sf?.start({ note: midiNote, time, duration });
                                         }, scheduleTime);
                                     }
                                 });
