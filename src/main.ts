@@ -7,9 +7,10 @@ import {
     COLLISION_RADIUS, STUMBLE_RECOVERY, MAX_TILT, DOWN_DURATION,
     OBSTACLE_RADIUS, OBSTACLE_PUSH, MARCHER_COLLISION_RADIUS,
     PLAYER_DRILL_ROW, PLAYER_DRILL_COL, PLAYER_START_X, PLAYER_START_Z, 
-    STEP_LOOK_AHEAD, STEP_HIT_PERFECT, STEP_HIT_GOOD, FOOT_LATERAL
+    STEP_LOOK_AHEAD, STEP_HIT_PERFECT, STEP_HIT_GOOD, FOOT_LATERAL,
+    BAND_ROWS, BAND_COLS, SPACING_X, SPACING_Z, BAND_START_Z
 } from "./gameConstants";
-import { Engine, Scene, FreeCamera, Vector3, HemisphericLight, MeshBuilder, StandardMaterial, DynamicTexture, Color3, Texture, CubeTexture, PointerEventTypes, ParticleSystem, Color4, AbstractMesh } from "@babylonjs/core";
+import { Engine, Scene, FreeCamera, Vector3, HemisphericLight, MeshBuilder, StandardMaterial, DynamicTexture, Color3, Texture, CubeTexture, PointerEventTypes, ParticleSystem, Color4, AbstractMesh, Mesh } from "@babylonjs/core";
 import "@babylonjs/loaders/glTF";
 import { OpenSheetMusicDisplay } from "opensheetmusicdisplay";
 import * as Tone from "tone";
@@ -491,12 +492,12 @@ beatMat.disableLighting = true;
 beatIndicator.material = beatMat;
 beatIndicator.isVisible = false;
 
-// Formation Quality HUD — wrist-mounted display on left arm
+// Formation Quality HUD — wrist-mounted display on right arm
 const scoreHUD = MeshBuilder.CreatePlane("scoreHUD", { width: 0.18, height: 0.06 }, scene);
-scoreHUD.parent = playerBody.getLeftArm();
+scoreHUD.parent = playerBody.getRightArm();
 // Position on the wrist: far down the arm (+Y = toward hand)
-// and outward (+Z = face up/outward so you can glance down at it)
-scoreHUD.position.set(0, 0.45, 0.08);
+// and outward (-Z = face away from buttons side so you can glance down at it)
+scoreHUD.position.set(0, 0.45, -0.08);
 scoreHUD.rotation.set(Math.PI / 2, 0, 0); // face outward from the arm
 scoreHUD.isPickable = false;
 const scoreTex = new DynamicTexture("scoreTex", { width: 512, height: 128 }, scene, false);
@@ -530,6 +531,23 @@ function updateScoreHUD() {
     scoreTex.update();
 }
 
+// === Player Starting Position ===
+// Place player at a random position in the band formation instead of center field
+function getRandomPlayerPosition(): { x: number; z: number } {
+    const randomRow = Math.floor(Math.random() * BAND_ROWS);
+    const randomCol = Math.floor(Math.random() * BAND_COLS);
+    
+    // Calculate formation position using the same formula as band members
+    const startX = (randomCol - BAND_COLS / 2 + 0.5) * SPACING_X;
+    const startZ = BAND_START_Z - randomRow * SPACING_Z;
+    
+    return { x: startX, z: startZ };
+}
+
+const playerFormationPos = getRandomPlayerPosition();
+camera.position = new Vector3(playerFormationPos.x, 1.8, playerFormationPos.z);
+camera.setTarget(new Vector3(playerFormationPos.x, 1.8, playerFormationPos.z + 5));
+
 // Song selection
 const SONG_LIST = [
     { file: "assets/score.xml", title: "MacArthur Park", subtitle: "Brass Quintet" },
@@ -539,9 +557,14 @@ const SONG_LIST = [
 ];
 let selectedScoreFile = SONG_LIST[0].file;
 
+// === UI Button Meshes and Materials (organized in arrays for easier disposal) ===
+const buttonMeshes: Mesh[] = [];
+const buttonMaterials: StandardMaterial[] = [];
+const buttonTextures: DynamicTexture[] = [];
+
 // Title text
 const titleMesh = MeshBuilder.CreatePlane("titleMesh", { width: 3, height: 0.6 }, scene);
-titleMesh.position = new Vector3(0, 2.6, 2);
+titleMesh.position = new Vector3(playerFormationPos.x, 2.6, playerFormationPos.z + 2);
 const titleTex = new DynamicTexture("titleTex", { width: 768, height: 128 }, scene, false);
 const titleCtx = titleTex.getContext() as CanvasRenderingContext2D;
 titleCtx.fillStyle = "rgba(0,0,0,0)";
@@ -582,28 +605,32 @@ function drawSongBtn(tex: DynamicTexture, title: string, subtitle: string, selec
     tex.update();
 }
 
-const songTextures: DynamicTexture[] = [];
+const songMaterials: StandardMaterial[] = [];
 for (let i = 0; i < SONG_LIST.length; i++) {
     const btn = MeshBuilder.CreatePlane(`songBtn_${i}`, { width: 1.2, height: 0.5 }, scene);
     const xOffset = (i - (SONG_LIST.length - 1) / 2) * 1.4;
-    btn.position = new Vector3(xOffset, 1.8, 2);
+    btn.position = new Vector3(playerFormationPos.x + xOffset, 1.8, playerFormationPos.z + 2);
     const tex = new DynamicTexture(`songTex_${i}`, { width: 512, height: 256 }, scene, false);
     tex.hasAlpha = true;
     drawSongBtn(tex, SONG_LIST[i].title, SONG_LIST[i].subtitle, i === 0);
-    songTextures.push(tex);
+    buttonTextures.push(tex);
     const mat = new StandardMaterial(`songMat_${i}`, scene);
     mat.diffuseTexture = tex;
     mat.emissiveColor = new Color3(1, 1, 1);
     mat.backFaceCulling = false;
     btn.material = mat;
+    songMaterials.push(mat);
+    buttonMeshes.push(btn);
+    buttonMaterials.push(mat);
     songBtns.push(btn);
 }
 
 // 3D VR Start Button
 const startBtnMesh = MeshBuilder.CreatePlane("startBtnMesh", { width: 2, height: 0.7 }, scene);
-startBtnMesh.position = new Vector3(0, 1.1, 2);
+startBtnMesh.position = new Vector3(playerFormationPos.x, 1.1, playerFormationPos.z + 2);
 
 const btnTex = new DynamicTexture("btnTex", { width: 512, height: 256 }, scene, false);
+buttonTextures.push(btnTex);
 const btnCtx = btnTex.getContext() as CanvasRenderingContext2D;
 btnCtx.fillStyle = "#228822";
 btnCtx.fillRect(0, 0, 512, 256);
@@ -617,6 +644,19 @@ const btnMat = new StandardMaterial("btnMat", scene);
 btnMat.diffuseTexture = btnTex;
 btnMat.emissiveColor = new Color3(1, 1, 1);
 startBtnMesh.material = btnMat;
+buttonMaterials.push(btnMat);
+buttonMeshes.push(startBtnMesh);
+
+// === Attach UI buttons to right arm sleeve ===
+const rightArm = playerBody.getRightArm();
+for (const buttonMesh of buttonMeshes) {
+    buttonMesh.parent = rightArm;
+    // Offset relative to arm: position on the sleeve
+    // Right arm: 0.3 offset on right side, buttons positioned in front and up from arm
+    buttonMesh.position.x += 0.3;
+    buttonMesh.position.y += 0.5;
+    buttonMesh.position.z += 0.4;
+}
 
 let gameStarting = false;
 scene.onPointerObservable.add(async (pointerInfo) => {
@@ -629,7 +669,7 @@ scene.onPointerObservable.add(async (pointerInfo) => {
             selectedScoreFile = SONG_LIST[i].file;
             // Redraw all buttons to reflect selection
             for (let j = 0; j < songBtns.length; j++) {
-                drawSongBtn(songTextures[j], SONG_LIST[j].title, SONG_LIST[j].subtitle, j === i);
+                drawSongBtn(buttonTextures[j], SONG_LIST[j].title, SONG_LIST[j].subtitle, j === i);
             }
             return;
         }
@@ -664,9 +704,12 @@ scene.onPointerObservable.add(async (pointerInfo) => {
             updateScoreHUD();
             // Start the metronome and music specifically delayed by 2 whole notes
             Tone.Transport.start(gameStartTime + 2 * WHOLE_NOTE_DURATION);
-            startBtnMesh.dispose();
+            
+            // Dispose all UI buttons, materials, and textures
+            for (const buttonMesh of buttonMeshes) buttonMesh.dispose();
+            for (const mat of buttonMaterials) mat.dispose();
+            for (const tex of buttonTextures) tex.dispose();
             titleMesh.dispose();
-            for (const btn of songBtns) btn.dispose();
     }
 });
 

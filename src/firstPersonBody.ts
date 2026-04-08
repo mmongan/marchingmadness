@@ -92,6 +92,11 @@ export class FirstPersonBody {
         return this.armL;
     }
 
+    /** Returns the right arm mesh for attaching wrist UI elements. */
+    public getRightArm(): Mesh {
+        return this.armR;
+    }
+
     /** Returns world positions of all body-part meshes for collision checks. */
     public getBodyPartPositions(): Vector3[] {
         return [
