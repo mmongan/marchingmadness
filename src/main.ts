@@ -747,34 +747,61 @@ engine.runRenderLoop(() => {
     if (scene.activeCamera) {
         const playerPos = scene.activeCamera.globalPosition;
         const frameDt = engine.getDeltaTime() / 1000;
+        const BROAD_RADIUS = 5.0; // only check marchers within 5m of player
+        const broadRadiusSq = BROAD_RADIUS * BROAD_RADIUS;
 
         bandLegs.forEach(({ anchor }, index) => {
             const st = stumbleStates[index];
-            const dx = playerPos.x - anchor.position.x;
-            const dz = playerPos.z - anchor.position.z;
-            const distSq = dx * dx + dz * dz;
 
-            if (distSq < COLLISION_RADIUS * COLLISION_RADIUS && distSq > 0.001) {
-                // Push direction: from player toward marcher
-                const dist = Math.sqrt(distSq);
-                st.tiltDirX = -dx / dist;  // direction away from player
-                st.tiltDirZ = -dz / dist;
+            // Broad-phase: skip marchers far from player
+            const bx = playerPos.x - anchor.position.x;
+            const bz = playerPos.z - anchor.position.z;
+            if (bx * bx + bz * bz > broadRadiusSq) {
+                // Still recover if stumbling
+                if (st.tilt > 0) {
+                    st.recovering = true;
+                    st.tilt = Math.max(0, st.tilt - STUMBLE_RECOVERY * frameDt);
+                }
+                if (st.tilt <= 0.001) {
+                    anchor.rotation.x = 0;
+                    anchor.rotation.z = 0;
+                }
+                return;
+            }
 
-                // Impact proportional to closeness and player speed
-                const overlap = 1 - dist / COLLISION_RADIUS; // 0..1
-                const impact = overlap * 3.0; // radians to add per frame-ish
+            // Narrow-phase: find closest body part to this marcher
+            const bodyParts = playerBody.getBodyPartPositions();
+            const ax = anchor.position.x;
+            const az = anchor.position.z;
+            let closestDistSq = Infinity;
+            let closestDx = 0;
+            let closestDz = 0;
+            for (const partPos of bodyParts) {
+                const dx = partPos.x - ax;
+                const dz = partPos.z - az;
+                const dSq = dx * dx + dz * dz;
+                if (dSq < closestDistSq) {
+                    closestDistSq = dSq;
+                    closestDx = dx;
+                    closestDz = dz;
+                }
+            }
+
+            if (closestDistSq < COLLISION_RADIUS * COLLISION_RADIUS && closestDistSq > 0.001) {
+                const dist = Math.sqrt(closestDistSq);
+                st.tiltDirX = -closestDx / dist;
+                st.tiltDirZ = -closestDz / dist;
+
+                const overlap = 1 - dist / COLLISION_RADIUS;
+                const impact = overlap * 3.0;
                 st.tilt = Math.min(MAX_TILT, st.tilt + impact * frameDt * 8);
                 st.recovering = false;
             } else if (st.tilt > 0) {
-                // Recover: stand back up
                 st.recovering = true;
                 st.tilt = Math.max(0, st.tilt - STUMBLE_RECOVERY * frameDt);
             }
 
-            // Apply tilt to anchor rotation (rotate around the base / feet)
             if (st.tilt > 0.001) {
-                // Tilt axis is perpendicular to push direction (cross with Y-up)
-                // Push direction is (tiltDirX, 0, tiltDirZ), tilt axis = cross(push, up) = (-tiltDirZ, 0, tiltDirX)
                 anchor.rotation.x = st.tilt * st.tiltDirZ;
                 anchor.rotation.z = -st.tilt * st.tiltDirX;
             } else {

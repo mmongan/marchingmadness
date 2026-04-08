@@ -72,6 +72,17 @@ export class FirstPersonBody {
         if (handedness === "right") this.controllerRight = controller;
     }
 
+    /** Returns world positions of all body-part meshes for collision checks. */
+    public getBodyPartPositions(): Vector3[] {
+        return [
+            this.torso.absolutePosition,
+            this.armL.absolutePosition,
+            this.armR.absolutePosition,
+            this.legL.absolutePosition,
+            this.legR.absolutePosition,
+        ];
+    }
+
     /**
      * Returns movement vector and turn angle driven by treadmill arm-pump locomotion.
      * The caller should apply movement to camera position and turnY to camera rotation.
