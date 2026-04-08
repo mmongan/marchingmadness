@@ -1,5 +1,5 @@
 import { BandMemberFactory, InstrumentType, BandMemberData } from "./bandMemberFactory";
-import { Engine, Scene, FreeCamera, Vector3, HemisphericLight, MeshBuilder, StandardMaterial, DynamicTexture, Color3, Texture, CubeTexture, ActionManager, ExecuteCodeAction } from "@babylonjs/core";
+import { Engine, Scene, FreeCamera, Vector3, HemisphericLight, MeshBuilder, StandardMaterial, DynamicTexture, Color3, Texture, CubeTexture, PointerEventTypes } from "@babylonjs/core";
 import { OpenSheetMusicDisplay } from "opensheetmusicdisplay";
 import * as Tone from "tone";
 import { Soundfont } from "smplr";
@@ -363,11 +363,13 @@ btnMat.diffuseTexture = btnTex;
 btnMat.emissiveColor = new Color3(1, 1, 1);
 startBtnMesh.material = btnMat;
 
-startBtnMesh.actionManager = new ActionManager(scene);
-startBtnMesh.actionManager.registerAction(
-    new ExecuteCodeAction(
-        ActionManager.OnPickTrigger,
-        async () => {
+let gameStarting = false;
+scene.onPointerObservable.add(async (pointerInfo) => {
+    if (pointerInfo.type === PointerEventTypes.POINTERDOWN &&
+        pointerInfo.pickInfo?.hit &&
+        pointerInfo.pickInfo.pickedMesh === startBtnMesh &&
+        !gameStarting) {
+        gameStarting = true;
             await Tone.start();
             // Load real sampled instruments via SoundFont
             const rawCtx = Tone.getContext().rawContext as AudioContext;
@@ -430,9 +432,8 @@ startBtnMesh.actionManager.registerAction(
             // Start the metronome and music specifically delayed by 2 whole notes
             Tone.Transport.start(gameStartTime + 2 * WHOLE_NOTE_DURATION);
             startBtnMesh.dispose(); // Remove the button after starting
-        }
-    )
-);
+    }
+});
 
 let osmdContainer: HTMLDivElement | null = null;
 let osmd: OpenSheetMusicDisplay | null = null;
