@@ -181,45 +181,25 @@ export class BandMemberFactory {
         this.baseTrombone.material = this.brassMat;
 
         // Sousaphone
-        const sousaPath: Vector3[] = [];
-        
-        // Add a smooth cubic bezier curve for the mouthpiece extension that perfectly matches the tangent of the spiral
-        const mouthPos = new Vector3(0, 0.2, 0.05); // P0
-        const control1 = new Vector3(-0.3, 0.2, 0.1); // P1 (comes out of mouth to the left)
-        const spiralStart = new Vector3(-0.4, -0.4, 0.0); // P3
-        // To match the start tangent of the spiral exactly:
-        // Spiral equations: x = -(0.4+0.1t)cos(1.5pi t), y = -0.4+1.2t, z = -(0.4+0.1t)sin(1.5pi t)
-        // dx/dt at t=0: -0.1, dy/dt: 1.2, dz/dt: -0.4*1.5*pi = -1.885
-        // We set P2 such that P3 - P2 is parallel to this velocity vector.
-        // Let's step backward from P3 by a scaler to align the tangent perfectly, dipping neatly under the curve.
-        const control2 = new Vector3(-0.35, -0.6, 0.3); // P2
-        
-        for (let i = 0; i < 20; i++) {
-            const t = i / 20;
-            const invT = 1 - t;
-            const x = invT * invT * invT * mouthPos.x + 3 * invT * invT * t * control1.x + 3 * invT * t * t * control2.x + t * t * t * spiralStart.x;
-            const y = invT * invT * invT * mouthPos.y + 3 * invT * invT * t * control1.y + 3 * invT * t * t * control2.y + t * t * t * spiralStart.y;
-            const z = invT * invT * invT * mouthPos.z + 3 * invT * invT * t * control1.z + 3 * invT * t * t * control2.z + t * t * t * spiralStart.z;
-            sousaPath.push(new Vector3(x, y, z));
-        }
+        // Efficient circular design using basic geometric primitives (Torus and Cylinders)
+        const sousaBody = MeshBuilder.CreateTorus("sousaBody", { diameter: 0.9, thickness: 0.16, tessellation: 32 }, scene);
+        sousaBody.position.set(0, -0.1, 0); // Centered a bit lower than the anchor
+        sousaBody.rotation.x = -Math.PI / 8; // Tilt so the back is higher than the front
+        sousaBody.rotation.z = Math.PI / 6;  // Tilt so the left side wraps over the shoulder, right side under the arm
 
-        for (let i = 0; i <= 60; i++) {
-            const t = i / 60;
-            const angle = t * Math.PI * 1.8; // almost a full circle
-            // Make the path a truly circular tilted ring
-            const radius = 0.45;
-            const x = -radius * Math.cos(angle);
-            const z = -radius * Math.sin(angle);
-            // Tilted perfectly circularly (plane tilt)
-            const y = -0.3 + x * 0.8; 
-            sousaPath.push(new Vector3(x, y, z));
-        }
-        const lastP = sousaPath[sousaPath.length - 1];
-        const sousaBody = MeshBuilder.CreateTube("sousaBody", { path: sousaPath, radius: 0.08 }, scene);
-        const sousaBell = MeshBuilder.CreateCylinder("sousaBell", { diameterTop: 0.8, diameterBottom: 0.1, height: 0.6 }, scene);
-        sousaBell.position.set(lastP.x, lastP.y, lastP.z + 0.3);
-        sousaBell.rotation.x = Math.PI / 2;
-        this.baseSousaphone = Mesh.MergeMeshes([sousaBody, sousaBell], true) as Mesh;
+        // Forward-facing prominent Bell
+        const sousaBell = MeshBuilder.CreateCylinder("sousaBell", { diameterTop: 0.8, diameterBottom: 0.16, height: 0.7 }, scene);
+        sousaBell.position.set(-0.4, 0.5, 0.2); // Positioned high over the left shoulder
+        sousaBell.rotation.x = Math.PI / 2; // Face forward
+        sousaBell.rotation.y = -Math.PI / 16; // Slight outward flare
+
+        // Mouthpiece tube connecting the main body to the mouth (mouth local: 0, 0.2, 0.05)
+        const sousaMouthpipe = MeshBuilder.CreateCylinder("sousaMouthpipe", { diameter: 0.04, height: 0.5 }, scene);
+        sousaMouthpipe.position.set(-0.15, 0.05, 0.15); // Bridging the gap
+        sousaMouthpipe.rotation.z = -Math.PI / 4; // Angle up to the mouth
+        sousaMouthpipe.rotation.x = Math.PI / 8;
+
+        this.baseSousaphone = Mesh.MergeMeshes([sousaBody, sousaBell, sousaMouthpipe], true) as Mesh;
         this.baseSousaphone.name = "baseSousaphone";
         const sousaMat = new StandardMaterial("sousaMat", scene);
         sousaMat.diffuseColor = new Color3(0.95, 0.95, 0.95); // White fiberglass body
