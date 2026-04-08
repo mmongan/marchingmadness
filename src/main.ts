@@ -296,11 +296,15 @@ interface StumbleState {
     tiltDirX: number;   // world-space push direction X
     tiltDirZ: number;   // world-space push direction Z
     recovering: boolean;
+    downTimer: number;  // seconds remaining on the ground before recovery starts
 }
 const stumbleStates: StumbleState[] = [];
 const COLLISION_RADIUS = 1.0;   // metres – how close player must be to collide
-const STUMBLE_RECOVERY = 0.8;   // rad/s – how fast members stand back up
+const STUMBLE_RECOVERY = 0.5;   // rad/s – how fast members stand back up (slower)
 const MAX_TILT = Math.PI / 2;   // fully fallen over
+const DOWN_DURATION = 4.0;      // seconds a fully-fallen marcher stays down
+const OBSTACLE_RADIUS = 1.2;    // metres – fallen marcher blocks the player
+const OBSTACLE_PUSH = 3.0;      // m/s push-back strength
 
 // Create a 100-member marching band in a 10x10 formation
 function buildMarchingBand(scene: Scene) {
@@ -354,7 +358,7 @@ function buildMarchingBand(scene: Scene) {
 buildMarchingBand(scene);
 // Initialize stumble state for each band member
 for (let i = 0; i < bandLegs.length; i++) {
-    stumbleStates.push({ tilt: 0, tiltDirX: 0, tiltDirZ: 0, recovering: false });
+    stumbleStates.push({ tilt: 0, tiltDirX: 0, tiltDirZ: 0, recovering: false, downTimer: 0 });
 }
 // Keep reference to blocks
 const measureBlocks: any[] = [];
@@ -744,21 +748,27 @@ engine.runRenderLoop(() => {
     }
 
     // --- Player-to-marcher collision: stumble / fall ---
+    let obstaclePushX = 0;
+    let obstaclePushZ = 0;
     if (scene.activeCamera) {
         const playerPos = scene.activeCamera.globalPosition;
         const frameDt = engine.getDeltaTime() / 1000;
-        const BROAD_RADIUS = 5.0; // only check marchers within 5m of player
+        const BROAD_RADIUS = 5.0;
         const broadRadiusSq = BROAD_RADIUS * BROAD_RADIUS;
 
         bandLegs.forEach(({ anchor }, index) => {
             const st = stumbleStates[index];
+            const isDown = st.tilt >= MAX_TILT * 0.95;
 
             // Broad-phase: skip marchers far from player
             const bx = playerPos.x - anchor.position.x;
             const bz = playerPos.z - anchor.position.z;
-            if (bx * bx + bz * bz > broadRadiusSq) {
-                // Still recover if stumbling
-                if (st.tilt > 0) {
+            const bDistSq = bx * bx + bz * bz;
+            if (bDistSq > broadRadiusSq) {
+                // Tick down timer and recover if far away
+                if (st.downTimer > 0) {
+                    st.downTimer = Math.max(0, st.downTimer - frameDt);
+                } else if (st.tilt > 0) {
                     st.recovering = true;
                     st.tilt = Math.max(0, st.tilt - STUMBLE_RECOVERY * frameDt);
                 }
@@ -767,6 +777,17 @@ engine.runRenderLoop(() => {
                     anchor.rotation.z = 0;
                 }
                 return;
+            }
+
+            // Fallen marcher acts as obstacle: push player away
+            if (isDown && st.downTimer > 0) {
+                const obstDistSq = bx * bx + bz * bz;
+                if (obstDistSq < OBSTACLE_RADIUS * OBSTACLE_RADIUS && obstDistSq > 0.001) {
+                    const obstDist = Math.sqrt(obstDistSq);
+                    const pushStrength = (1 - obstDist / OBSTACLE_RADIUS) * OBSTACLE_PUSH * frameDt;
+                    obstaclePushX += (bx / obstDist) * pushStrength;
+                    obstaclePushZ += (bz / obstDist) * pushStrength;
+                }
             }
 
             // Narrow-phase: find closest body part to this marcher
@@ -796,6 +817,15 @@ engine.runRenderLoop(() => {
                 const impact = overlap * 3.0;
                 st.tilt = Math.min(MAX_TILT, st.tilt + impact * frameDt * 8);
                 st.recovering = false;
+                st.downTimer = 0; // reset while still being hit
+
+                // Start down timer once fully fallen
+                if (st.tilt >= MAX_TILT * 0.95) {
+                    st.downTimer = DOWN_DURATION;
+                }
+            } else if (st.downTimer > 0) {
+                // Stay on the ground, count down
+                st.downTimer = Math.max(0, st.downTimer - frameDt);
             } else if (st.tilt > 0) {
                 st.recovering = true;
                 st.tilt = Math.max(0, st.tilt - STUMBLE_RECOVERY * frameDt);
@@ -818,6 +848,11 @@ engine.runRenderLoop(() => {
         // Apply treadmill locomotion to camera position and rotation
         if (movement.lengthSquared() > 0) {
             scene.activeCamera.position.addInPlace(movement);
+        }
+        // Push player away from fallen obstacle marchers
+        if (Math.abs(obstaclePushX) > 0.001 || Math.abs(obstaclePushZ) > 0.001) {
+            scene.activeCamera.position.x += obstaclePushX;
+            scene.activeCamera.position.z += obstaclePushZ;
         }
         if (Math.abs(turnY) > 0.0001 && "rotation" in scene.activeCamera) {
             (scene.activeCamera as any).rotation.y += turnY;
