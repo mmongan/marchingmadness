@@ -22,6 +22,7 @@ Modular TypeScript + Babylon.js structure with separated concerns:
 - **`src/main.ts`** (1515 lines) — Scene orchestration, render loop, UI, OSMD integration
 - **`src/gameConstants.ts`** — Shared constants (BPM, physics, scoring thresholds, band layout)
 - **`src/drillMath.ts`** — Pure drill math (formation shapes, position interpolation, grading)
+- **`src/drillFactory.ts`** — Band creation and positioning logic
 - **`src/environment.ts`** — Skybox and football field rendering
 - **`src/audioSystem.ts`** — SoundFont instrument loading, collision sounds, spatial audio
 - **`src/musicManager.ts`** — Metronome synth, Tone.Transport setup, instrument scheduling from OSMD
