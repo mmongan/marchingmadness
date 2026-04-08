@@ -79,20 +79,17 @@ export class FirstPersonBody {
         this.updateArm(this.armL, this.controllerLeft, cam, -0.3, marchPhase, isMarching);
         this.updateArm(this.armR, this.controllerRight, cam, 0.3, marchPhase, isMarching);
 
-        // Animate legs during march
-        if (isMarching) {
-            this.legL.rotation.x = Math.sin(marchPhase) * 0.6;
-            this.legR.rotation.x = -Math.sin(marchPhase) * 0.6;
-        }
-
         // Arm-swing locomotion: detect pumping motion from controllers
         const movement = this.computeArmSwingLocomotion(cam, deltaTime);
 
-        // Animate legs from arm swing when not game-marching
-        if (!isMarching && this.swingSpeed > 0.05) {
+        // Legs move only from actual arm swing motion
+        if (this.swingSpeed > 0.05) {
             const amplitude = Math.min(1, this.swingSpeed) * 0.6;
             this.legL.rotation.x = Math.sin(this.walkPhase) * amplitude;
             this.legR.rotation.x = -Math.sin(this.walkPhase) * amplitude;
+        } else {
+            this.legL.rotation.x = 0;
+            this.legR.rotation.x = 0;
         }
 
         return movement;
