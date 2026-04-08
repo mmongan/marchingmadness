@@ -480,9 +480,10 @@ startBtnMesh.actionManager.registerAction(
                             entry.VoiceEntries.forEach(ve => {
                                 ve.Notes.forEach(note => {
                                     if (note.halfTone) {
-                                        // Apply instrument transposition: halfTone is written pitch,
-                                        // Transpose gives the chromatic offset to get sounding pitch
-                                        const transpose = instruments[instrIndex].Transpose || 0;
+                                        // halfTone is the WRITTEN pitch as MIDI number.
+                                        // PlaybackTranspose is the MusicXML <chromatic> value
+                                        // (e.g. -2 for Bb instruments, -7 for Horn in F)
+                                        const transpose = (instruments[instrIndex] as any).PlaybackTranspose || 0;
                                         const frequency = Tone.Frequency(note.halfTone + transpose, "midi").toFrequency();
                                         const duration = note.Length.RealValue * WHOLE_NOTE_DURATION;
                                         const scheduleTime = (mIndex * WHOLE_NOTE_DURATION) + timeInMeasure;
