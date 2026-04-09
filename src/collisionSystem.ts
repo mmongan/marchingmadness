@@ -204,7 +204,32 @@ export function updateCollisions(
             }
         }
 
-        if (closestDistSq < COLLISION_RADIUS * COLLISION_RADIUS && closestDistSq > 0.001) {
+        // Skip collision if standing up (make recovery invulnerable to interruption)
+        if (st.standingUp) {
+            // During stand-up: just push away gently, no damage
+            if (closestDistSq < COLLISION_RADIUS * COLLISION_RADIUS && closestDistSq > 0.001) {
+                const dist = Math.sqrt(closestDistSq);
+                const pushForce = (1 - dist / COLLISION_RADIUS) * 0.2 * frameDt;
+                const pushX = (-closestDx / dist) * pushForce;
+                const pushZ = (-closestDz / dist) * pushForce;
+                anchor.position.x += pushX;
+                anchor.position.z += pushZ;
+            }
+            // Continue stand-up animation
+            st.standingUpTimer += frameDt;
+            const progress = Math.min(1.0, st.standingUpTimer / STAND_UP_DURATION);
+            const easeProgress = 1 - Math.pow(1 - progress, 3);
+            st.tilt = MAX_TILT * (1 - easeProgress);
+            
+            if (st.standingUpTimer >= STAND_UP_DURATION) {
+                st.standingUp = false;
+                st.tilt = 0;
+                st.playedStumble = false;
+                st.playedFall = false;
+                st.hitCount = 0;
+                st.hitCountTimer = 0;
+            }
+        } else if (closestDistSq < COLLISION_RADIUS * COLLISION_RADIUS && closestDistSq > 0.001) {
             const dist = Math.sqrt(closestDistSq);
             st.tiltDirX = -closestDx / dist;
             st.tiltDirZ = -closestDz / dist;
@@ -254,23 +279,6 @@ export function updateCollisions(
             if (st.downTimer <= 0) {
                 st.standingUp = true;
                 st.standingUpTimer = 0;
-            }
-        } else if (st.standingUp) {
-            // Animate stand-up: smooth interpolation from lying flat to vertical
-            st.standingUpTimer += frameDt;
-            const progress = Math.min(1.0, st.standingUpTimer / STAND_UP_DURATION);
-            // Ease-out cubic for natural sit-up motion
-            const easeProgress = 1 - Math.pow(1 - progress, 3);
-            st.tilt = MAX_TILT * (1 - easeProgress);
-            
-            if (st.standingUpTimer >= STAND_UP_DURATION) {
-                st.standingUp = false;
-                st.tilt = 0;
-                st.playedStumble = false;
-                st.playedFall = false;
-                // Reset hit count when fully recovered
-                st.hitCount = 0;
-                st.hitCountTimer = 0;
             }
         } else if (st.tilt > 0) {
             st.recovering = true;
@@ -375,12 +383,15 @@ export function updateCollisions(
         }
     }
 
-    // Separation pass: push apart marchers who are both stumbling/down to prevent mesh overlap
-    const SEPARATION_RADIUS = MARCHER_COLLISION_RADIUS + 0.1;
-    const SEPARATION_FORCE = 0.4; // m/s² separation acceleration (reduced from 1.0)
+    // Separation pass: push apart marchers to prevent mesh overlap
+    // Include any marcher that's stumbling, down, standing up, or recovering
+    const SEPARATION_RADIUS = MARCHER_COLLISION_RADIUS + 0.2;
+    const SEPARATION_FORCE = 1.5; // Much stronger force to actively push out of formation
     for (let i = 0; i < bandLegs.length; i++) {
         const si = stumbleStates[i];
-        if (si.tilt <= 0.3 && si.downTimer <= 0) continue; // only stumbling/down marchers
+        // Include stumbling, down, standing up, or recovering marchers
+        const iAffected = si.tilt > 0.1 || si.downTimer > 0 || si.standingUp;
+        if (!iAffected) continue;
 
         const ai = bandLegs[i].anchor.position;
         const cx = (ai.x * INV_CELL) | 0;
@@ -395,7 +406,8 @@ export function updateCollisions(
                 for (const j of bucket) {
                     if (i >= j) continue; // avoid double-processing
                     const sj = stumbleStates[j];
-                    if (sj.tilt <= 0.3 && sj.downTimer <= 0) continue; // only if j is also stumbling/down
+                    const jAffected = sj.tilt > 0.1 || sj.downTimer > 0 || sj.standingUp;
+                    if (!jAffected) continue; // only if j is also affected
 
                     const aj = bandLegs[j].anchor.position;
                     const dx = aj.x - ai.x;
