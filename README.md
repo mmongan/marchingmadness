@@ -47,7 +47,7 @@ npm run dev       # Dev server with HMR
 
 ## Gameplay
 
-1. **Select Song** — Choose from 4 arrangements (MacArthur Park, When the Saints, Stars & Stripes, Battle Hymn)
+1. **Select Song** — Choose from 3 arrangements (MacArthur Park, Stars & Stripes, Battle Hymn)
 2. **Step to Beats** — 12 ground markers show upcoming footstep positions; step when each beat arrives
 3. **Manage Formation** — Stay near band members, avoid knocking them down
 4. **Earn Points** — Perfect steps (+0.8%), Good steps (+0.2%), Misses (-0.3%)

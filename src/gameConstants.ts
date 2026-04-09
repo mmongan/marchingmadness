@@ -74,7 +74,6 @@ export const GM_INSTRUMENT_VOLUMES = [100, 90, 85, 95, 100, 80, 85, 85, 75];
 // Song list
 export const SONG_LIST = [
     { file: "assets/score.xml", title: "MacArthur Park", subtitle: "Brass Quintet" },
-    { file: "assets/saints.xml", title: "When the Saints", subtitle: "Full Band" },
     { file: "assets/stars_and_stripes.xml", title: "Stars & Stripes", subtitle: "Full Band" },
     { file: "assets/battle_hymn.xml", title: "Battle Hymn", subtitle: "Full Band" },
 ];

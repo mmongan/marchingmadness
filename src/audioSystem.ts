@@ -13,6 +13,8 @@ export const sfInstruments: Map<number, Soundfont> = new Map();
 export const sfPanners: Map<number, PannerNode> = new Map();
 
 let crashSynth: Tone.NoiseSynth | null = null;
+let lastCrashTime = -1;
+
 function getCrashSynth() {
     if (!crashSynth) {
         crashSynth = new Tone.NoiseSynth({
@@ -46,11 +48,19 @@ export function playCrashSound(row: number): void {
     const sf = sfInstruments.get(sfIdx);
     if (!sf) return;
     const baseNote = sfIdx === 4 ? 40 : sfIdx === 3 ? 48 : sfIdx === 5 ? 72 : sfIdx === 8 ? 76 : 60;
-    const now = Tone.now();
-    // Stagger start times to avoid "start time must be strictly greater" error
+    let now = Tone.now();
+    
+    // Ensure start times are strictly increasing to avoid Tone.js timing errors
+    // when multiple crash sounds trigger in the same frame
+    if (now <= lastCrashTime) {
+        now = lastCrashTime + 0.002; // Small stagger offset
+    }
+    lastCrashTime = now;
+    
+    // Stagger the three harmonics to create a richer crash sound
     sf.start({ note: baseNote - 1, duration: 0.1, time: now });
-    sf.start({ note: baseNote + 1, duration: 0.1, time: now + 0.01 });
-    sf.start({ note: baseNote + 6, duration: 0.1, time: now + 0.02 });
+    sf.start({ note: baseNote + 1, duration: 0.1, time: now + 0.001 });
+    sf.start({ note: baseNote + 6, duration: 0.1, time: now + 0.002 });
 }
 
 /** Load all SoundFont instruments with spatial PannerNodes. Call after Tone.start(). */
