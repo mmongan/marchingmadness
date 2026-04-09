@@ -8,7 +8,8 @@ import {
     OBSTACLE_RADIUS, OBSTACLE_PUSH, MARCHER_COLLISION_RADIUS,
     PLAYER_DRILL_ROW, PLAYER_DRILL_COL, PLAYER_START_X, PLAYER_START_Z, 
     STEP_LOOK_AHEAD, STEP_HIT_PERFECT, STEP_HIT_GOOD, FOOT_LATERAL,
-    BAND_ROWS, BAND_COLS, SPACING_X, SPACING_Z, BAND_START_Z
+    BAND_ROWS, BAND_COLS, SPACING_X, SPACING_Z, BAND_START_Z,
+    FIELD_MIN_X, FIELD_MAX_X, FIELD_MIN_Z, FIELD_MAX_Z, MAX_DRILL_START_Z
 } from "./gameConstants";
 import { Engine, Scene, FreeCamera, Vector3, HemisphericLight, MeshBuilder, StandardMaterial, DynamicTexture, Color3, Texture, CubeTexture, PointerEventTypes, ParticleSystem, Color4, AbstractMesh, Mesh } from "@babylonjs/core";
 import "@babylonjs/loaders/glTF";
@@ -196,20 +197,30 @@ function buildFootballField(scene: Scene) {
 buildFootballField(scene);
 
 
+// Helper to clamp a position to field bounds
+function clampToFieldBounds(x: number, z: number): {x: number, z: number} {
+    return {
+        x: Math.max(FIELD_MIN_X, Math.min(FIELD_MAX_X, x)),
+        z: Math.max(FIELD_MIN_Z, Math.min(FIELD_MAX_Z, z))
+    };
+}
+
 type DrillShape = (r: number, c: number, cols: number, rows: number, startX: number, startZ: number) => {x: number, z: number};
 
 const drillShapes: DrillShape[] = [
     // 0: Original Block
-    (_r, _c, _cols, _rows, startX, startZ) => ({ x: startX, z: startZ }),
+    (_r, _c, _cols, _rows, startX, startZ) => 
+        clampToFieldBounds(startX, startZ),
     
     // 1: Expanded Block
-    (_r, _c, _cols, _rows, startX, startZ) => ({ x: startX * 2.0, z: startZ }),
+    (_r, _c, _cols, _rows, startX, startZ) => 
+        clampToFieldBounds(startX * 2.0, startZ),
     
     // 2: Wedge (Arrowhead) - Z shifts based on column distance from center
     (_r, c, cols, _rows, startX, startZ) => {
         const centerCol = (cols - 1) / 2;
         const distFromCenter = Math.abs(c - centerCol);
-        return { x: startX * 1.5, z: startZ - distFromCenter * 3.0 };
+        return clampToFieldBounds(startX * 1.5, startZ - distFromCenter * 3.0);
     },
 
     // 3: Diamond Bow - X stretches outward in the middle rows
@@ -217,13 +228,13 @@ const drillShapes: DrillShape[] = [
         const rowPhase = (r / (rows - 1)) * Math.PI;
         // Multiplier ranges from 1.0 at ends to 2.2 in the middle
         const stretch = 1.0 + 1.2 * Math.sin(rowPhase);
-        return { x: startX * stretch, z: startZ };
+        return clampToFieldBounds(startX * stretch, startZ);
     },
 
     // 4: S-Curve Wave - Entire band slithers left and right down the field
     (_r, _c, _cols, _rows, startX, startZ) => {
         const waveShift = Math.sin(startZ / 5.0) * 3.0;
-        return { x: startX * 1.5 + waveShift, z: startZ };
+        return clampToFieldBounds(startX * 1.5 + waveShift, startZ);
     }
 ];
 
@@ -423,7 +434,8 @@ function buildMarchingBand(scene: Scene) {
     const cols = 5;
     const spacingX = 2.0; // 2 meters between columns
     const spacingZ = 2.0; // 2 meters between rows
-    const startZ = 15; // Start near midfield so all 15 rows (28m deep) stay on the field
+    // Start position clamped to keep back row on field: startZ ≤ MAX_DRILL_START_Z (19.8m with 1m safety margin)
+    const startZ = Math.min(BAND_START_Z, MAX_DRILL_START_Z); // 15m is well within bounds
 
     for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
@@ -1155,10 +1167,14 @@ engine.runRenderLoop(() => {
                 const gap = Math.sqrt(dx * dx + dz * dz);
 
                 // Constant smooth lerp: always move toward target
-                // Base lerp rate with hustle boost for catch-up
-                const baseRate = 0.04; // smooth base rate (down from 0.05)
-                const hustleFactor = gap > 0.05 ? Math.min(2.5, 1.0 + gap * 0.3) : 1.0;
-                const lerpRate = Math.min(0.2, baseRate * hustleFactor);
+                // Stride length varies based on distance from formation position
+                // All marchers maintain same beat frequency but take longer/shorter steps
+                const baseRate = 0.04; // base stride length
+                const maxCatchupRate = 0.18; // max stride when far from target
+                // Interpolate stride length based on distance: closer to target = shorter stride
+                const lerpRate = gap > 0.05 
+                    ? baseRate + (maxCatchupRate - baseRate) * Math.min(1.0, gap / 3.0)
+                    : baseRate;
                 
                 // Calculate avoidance steering for out-of-formation marchers
                 let avoidanceX = 0;
@@ -1259,17 +1275,14 @@ engine.runRenderLoop(() => {
                 anchor.position.x += dx * lerpRate + avoidanceX;
                 anchor.position.z += dz * lerpRate + avoidanceZ;
 
-                // Set leg animation based on whether hustling
-                if (gap > 0.1) {
-                    // Faster leg swing when hustling/catching up
-                    const hustleSwing = Math.min(1.0, gap * 0.2) * 0.3;
-                    legL.rotation.x = Math.sin(marchPhase * hustleFactor) * (0.6 + hustleSwing);
-                    legR.rotation.x = -Math.sin(marchPhase * hustleFactor) * (0.6 + hustleSwing);
-                } else {
-                    // Normal marching legs
-                    legL.rotation.x = Math.sin(marchPhase) * 0.6;
-                    legR.rotation.x = -Math.sin(marchPhase) * 0.6;
-                }
+                // Set leg animation - all marchers swing at same beat, stride length varies via movement speed
+                // Leg swing amplitude increases slightly when taking longer strides to add visual appeal
+                const maxAmplitude = 0.7;
+                const minAmplitude = 0.5;
+                const legAmplitude = minAmplitude + (maxAmplitude - minAmplitude) * Math.min(1.0, gap / 2.0);
+                
+                legL.rotation.x = Math.sin(marchPhase) * legAmplitude;
+                legR.rotation.x = -Math.sin(marchPhase) * legAmplitude;
             }
 
             // Face direction of movement / drill target

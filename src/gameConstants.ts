@@ -45,6 +45,12 @@ export const FIELD_MAX_X = 52.85;
 export const FIELD_MIN_Z = 1.0;
 export const FIELD_MAX_Z = 47.8;
 
+// Maximum safe startZ to keep back row of band on field
+// Back row Z = startZ + (BAND_ROWS - 1) * SPACING_Z = startZ + 28
+// To keep back row ≤ FIELD_MAX_Z: startZ ≤ FIELD_MAX_Z - 28 = 19.8
+// Add 1m buffer: startZ_MAX = 18.8
+export const MAX_DRILL_START_Z = FIELD_MAX_Z - (BAND_ROWS - 1) * SPACING_Z - 1.0;
+
 // Instrument mapping: row → SoundFont instrument index (null = percussion)
 export const ROW_TO_SF_INDEX: (number | null)[] = [
     null, // 0  DrumMajor
