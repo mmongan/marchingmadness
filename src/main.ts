@@ -1264,6 +1264,19 @@ engine.runRenderLoop(() => {
             marker.mesh.position.z = footZ;
             marker.mesh.isVisible = true;
 
+            // Rotate marker to face the direction of march
+            // Calculate direction from this beat to next beat
+            const nextBeat = targetBeat + 1;
+            const nextDrill = getDrillPosition(nextBeat, playerRow, playerCol,
+                BAND_COLS, BAND_ROWS, playerStartX, playerStartZ);
+            const nextBeatTimeSec = nextBeat * secondsPerBeat;
+            const nextFootZ = nextDrill.z - nextBeatTimeSec * FLY_SPEED;
+            
+            const dx = nextDrill.x - drill.x;
+            const dz = nextFootZ - footZ;
+            const marchAngle = Math.atan2(dx, dz);
+            marker.mesh.rotation.y = marchAngle;
+
             // Handle explosion animation
             if (marker.isExploding) {
                 marker.explosionTime += dt;
