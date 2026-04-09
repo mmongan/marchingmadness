@@ -211,6 +211,22 @@ export class InstrumentFactory {
         glockMat.diffuseColor = new Color3(0.8, 0.8, 0.8); // Silver/Metallic
         glockMat.specularColor = new Color3(1, 1, 1);
         this.baseGlockenspiel.material = glockMat;
+
+        // Hide all base instrument meshes (they're only used to create instances)
+        this.baseBassDrum.isVisible = false;
+        this.baseSnareDrum.isVisible = false;
+        this.baseTomToms.isVisible = false;
+        this.baseCymbals.isVisible = false;
+        this.baseSaxophone.isVisible = false;
+        this.baseClarinet.isVisible = false;
+        this.baseTrombone.isVisible = false;
+        this.baseSousaphone.isVisible = false;
+        this.baseFlute.isVisible = false;
+        this.baseTrumpet.isVisible = false;
+        this.baseMellophone.isVisible = false;
+        this.baseEuphonium.isVisible = false;
+        this.baseMace.isVisible = false;
+        this.baseGlockenspiel.isVisible = false;
     }
 
     public createInstrument(type: InstrumentType, r: number, c: number, anchor: Mesh): void {

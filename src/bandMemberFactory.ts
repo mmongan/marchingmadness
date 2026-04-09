@@ -76,6 +76,14 @@ export class BandMemberFactory {
 
         this.baseArm = MeshBuilder.CreateBox("baseArm", { width: 0.12, height: 0.5, depth: 0.12 }, scene);
         this.baseArm.material = this.uniformMat;
+
+        // Hide all base meshes (they're only used to create instances)
+        this.baseTorso.isVisible = false;
+        this.baseLeg.isVisible = false;
+        this.baseHead.isVisible = false;
+        this.baseHat.isVisible = false;
+        this.basePlume.isVisible = false;
+        this.baseArm.isVisible = false;
     }
 
     public createMember(r: number, c: number, type: InstrumentType, xPos: number, zPos: number): BandMemberData {
