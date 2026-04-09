@@ -7,10 +7,12 @@ export interface BandMemberData {
     legL: InstancedMesh | Mesh;
     legR: InstancedMesh | Mesh;
     anchor: Mesh;
+    plume: InstancedMesh | Mesh; // for health coloring
     startZ: number;
     startX: number;
     row: number;
     col: number;
+    health: number; // 0-100 percentage
 }
 
 export class BandMemberFactory {
@@ -151,6 +153,6 @@ export class BandMemberFactory {
         labelPlane.material = labelMat;
         labelPlane.billboardMode = Mesh.BILLBOARDMODE_Y;
 
-        return { legL, legR, anchor, startZ: zPos, startX: xPos, row: r, col: c };
+        return { legL, legR, anchor, plume, startZ: zPos, startX: xPos, row: r, col: c, health: 100 };
     }
 }

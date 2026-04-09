@@ -1138,7 +1138,7 @@ engine.runRenderLoop(() => {
         // Update player body position based on camera
         playerBody.setBodyPosition(new Vector3(camera.position.x, 0, camera.position.z));
 
-        bandLegs.forEach(({ legL, legR, anchor }, index) => {
+        bandLegs.forEach(({ legL, legR, anchor, plume }, index) => {
             const st = stumbleStates[index];
             const isStumbling = st.tilt > 0.3 || st.downTimer > 0;
 
@@ -1226,6 +1226,23 @@ engine.runRenderLoop(() => {
                 shadow.position.x = anchor.position.x;
                 shadow.position.z = anchor.position.z;
             }
+
+            // Update plume color based on health (green=100% → red=0%)
+            const health = bandLegs[index].health;
+            const healthPercent = health / 100;
+            let r = 0, g = 0, b = 0;
+            
+            if (healthPercent >= 0.5) {
+                // Green to yellow transition (100% to 50%)
+                g = 1;
+                r = (1 - healthPercent) * 2; // 0 to 1 as health goes 100% to 50%
+            } else {
+                // Yellow to red transition (50% to 0%)
+                r = 1;
+                g = healthPercent * 2; // 1 to 0 as health goes 50% to 0%
+            }
+            
+            (plume.material as StandardMaterial).diffuseColor = new Color3(r, g, b);
         });
 
         // === FOOTSTEP MARKER POSITIONING ===
@@ -1335,10 +1352,10 @@ engine.runRenderLoop(() => {
         lastScoredBeat = thisBeat;
 
     } else {
+        // When not marching, keep legs at rest
         bandLegs.forEach(({ legL, legR }) => {
-            // Swing legs back and forth like pendulums
-            legL.rotation.x = Math.sin(marchPhase) * 0.6;
-            legR.rotation.x = -Math.sin(marchPhase) * 0.6;
+            legL.rotation.x = 0;
+            legR.rotation.x = 0;
         });
     }
 

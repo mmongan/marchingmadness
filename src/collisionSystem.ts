@@ -5,7 +5,7 @@ import { FirstPersonBody } from "./firstPersonBody";
 import {
     COLLISION_RADIUS, STUMBLE_RECOVERY, MAX_TILT, DOWN_DURATION, STAND_UP_DURATION,
     OBSTACLE_RADIUS, OBSTACLE_PUSH, MARCHER_COLLISION_RADIUS,
-    HITS_TO_FALL, HIT_COUNT_RESET_TIME
+    HITS_TO_FALL, HIT_COUNT_RESET_TIME, HEALTH_DAMAGE_PER_FALL
 } from "./gameConstants";
 import { playStumbleSound, playCrashSound } from "./audioSystem";
 import type { StumbleState } from "./gameConstants";
@@ -268,6 +268,10 @@ export function updateCollisions(
                     emitDustBurst(scene, anchor.position);
                     playerBody.pulseHaptics(0.8, 200);
                     scatterHat(anchor, st.tiltDirX, st.tiltDirZ);
+                    
+                    // Decrease band member health on fall
+                    bandLegs[index].health = Math.max(0, bandLegs[index].health - HEALTH_DAMAGE_PER_FALL);
+                    
                     // Reset hit count once fallen
                     st.hitCount = 0;
                     st.hitCountTimer = 0;

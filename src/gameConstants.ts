@@ -11,6 +11,7 @@ export const STUMBLE_RECOVERY = 0.5;   // rad/s
 export const MAX_TILT = Math.PI / 2;
 export const DOWN_DURATION = 4.0;      // seconds lying flat
 export const STAND_UP_DURATION = 1.2;  // seconds to animate standing up (like a sit-up)
+export const HEALTH_DAMAGE_PER_FALL = 25; // percentage per fall (0-100)
 export const OBSTACLE_RADIUS = 1.2;
 export const OBSTACLE_PUSH = 3.0;      // m/s
 export const MARCHER_COLLISION_RADIUS = 1.5;
