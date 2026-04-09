@@ -376,6 +376,37 @@ function emitDustBurst(position: Vector3) {
     ps.start();
 }
 
+// Explosion particle burst when a footstep is missed
+function emitStepExplosion(position: Vector3, isLeft: boolean) {
+    const ps = new ParticleSystem("stepExplosion", 40, scene);
+    ps.createPointEmitter(new Vector3(-0.3, -0.1, -0.3), new Vector3(0.3, 0.2, 0.3));
+    ps.emitter = position.clone();
+    ps.emitter.y = 0.1;
+    ps.minSize = 0.08;
+    ps.maxSize = 0.3;
+    ps.minLifeTime = 0.4;
+    ps.maxLifeTime = 1.0;
+    ps.emitRate = 0; // manual burst only
+    
+    // Color based on foot (left=blue, right=orange)
+    if (isLeft) {
+        ps.color1 = new Color4(0.2, 0.6, 1.0, 0.9);
+        ps.color2 = new Color4(0.1, 0.4, 0.8, 0.7);
+        ps.colorDead = new Color4(0.0, 0.2, 0.5, 0);
+    } else {
+        ps.color1 = new Color4(1.0, 0.6, 0.2, 0.9);
+        ps.color2 = new Color4(0.8, 0.4, 0.1, 0.7);
+        ps.colorDead = new Color4(0.5, 0.2, 0.0, 0);
+    }
+    
+    ps.gravity = new Vector3(0, -2, 0);
+    ps.blendMode = ParticleSystem.BLENDMODE_ADD;
+    ps.manualEmitCount = 40;
+    ps.targetStopDuration = 1.2;
+    ps.disposeOnStop = true;
+    ps.start();
+}
+
 // === Player Starting Position in Drill Formation ===
 // Assign player to replace a random band member position
 const randomMemberIndex = Math.floor(Math.random() * (BAND_ROWS * BAND_COLS));
@@ -513,6 +544,9 @@ interface StepMarker {
     mat: StandardMaterial;
     beatNum: number;
     flashTimer: number;
+    beatFlashPhase: number;  // for pulsing animation
+    isExploding: boolean;
+    explosionTime: number;   // time since explosion started
 }
 const stepMarkers: StepMarker[] = [];
 
@@ -527,7 +561,7 @@ for (let i = 0; i < STEP_LOOK_AHEAD; i++) {
     mat.disableLighting = true;
     mat.alpha = 0.6;
     mesh.material = mat;
-    stepMarkers.push({ mesh, mat, beatNum: -1, flashTimer: 0 });
+    stepMarkers.push({ mesh, mat, beatNum: -1, flashTimer: 0, beatFlashPhase: 0, isExploding: false, explosionTime: 0 });
 }
 
 let lastScoredBeat = -1;
@@ -1213,19 +1247,46 @@ engine.runRenderLoop(() => {
             marker.mesh.position.z = footZ;
             marker.mesh.isVisible = true;
 
-            // Flash countdown (from hit/miss feedback)
-            if (marker.flashTimer > 0) {
-                marker.flashTimer -= dt;
-            } else {
-                // Color: left = blue, right = orange; brightness by proximity in time
-                const beatsAhead = targetBeat - currentBeat;
-                const nearness = Math.max(0, 1 - beatsAhead / STEP_LOOK_AHEAD);
-                if (isLeftFoot) {
-                    marker.mat.emissiveColor.set(0.1 + 0.2 * nearness, 0.3 + 0.4 * nearness, 0.7 + 0.3 * nearness);
-                } else {
-                    marker.mat.emissiveColor.set(0.7 + 0.3 * nearness, 0.3 + 0.2 * nearness, 0.1 + 0.1 * nearness);
+            // Handle explosion animation
+            if (marker.isExploding) {
+                marker.explosionTime += dt;
+                const explosionProgress = Math.min(1, marker.explosionTime / 0.5);
+                marker.mat.alpha = Math.max(0, 0.6 * (1 - explosionProgress));
+                marker.mesh.scaling.y = 1 + explosionProgress * 0.5;
+                if (explosionProgress >= 1) {
+                    marker.isExploding = false;
+                    marker.explosionTime = 0;
+                    marker.mesh.scaling.y = 1;
                 }
-                marker.mat.alpha = 0.25 + 0.55 * nearness;
+            } else {
+                // Flash countdown (from hit/miss feedback)
+                if (marker.flashTimer > 0) {
+                    marker.flashTimer -= dt;
+                    // Keep normal scaling while flashing
+                    marker.mesh.scaling.x = 1;
+                    marker.mesh.scaling.z = 1;
+                } else {
+                    // Color: left = blue, right = orange; brightness by proximity in time
+                    const beatsAhead = targetBeat - currentBeat;
+                    const nearness = Math.max(0, 1 - beatsAhead / STEP_LOOK_AHEAD);
+                    
+                    // Pulsing animation when beat is imminent (within 1 beat)
+                    const beatProgress = beatsAhead % 1.0;
+                    let pulseScale = 1.0;
+                    if (beatsAhead < 1 && beatsAhead > 0) {
+                        // Pulse when beat is very close
+                        pulseScale = 1 + Math.abs(Math.sin(beatProgress * Math.PI * 4)) * 0.15;
+                    }
+                    marker.mesh.scaling.x = pulseScale;
+                    marker.mesh.scaling.z = pulseScale;
+                    
+                    if (isLeftFoot) {
+                        marker.mat.emissiveColor.set(0.1 + 0.2 * nearness, 0.3 + 0.4 * nearness, 0.7 + 0.3 * nearness);
+                    } else {
+                        marker.mat.emissiveColor.set(0.7 + 0.3 * nearness, 0.3 + 0.2 * nearness, 0.1 + 0.1 * nearness);
+                    }
+                    marker.mat.alpha = 0.25 + 0.55 * nearness;
+                }
             }
         }
 
@@ -1244,6 +1305,7 @@ engine.runRenderLoop(() => {
             const dist = Math.sqrt(ddx * ddx + ddz * ddz);
 
             const hitMarker = stepMarkers.find(m => m.beatNum === thisBeat);
+            const isLeftFoot = thisBeat % 2 === 0;
             totalStepsScored++;
 
             if (dist < STEP_HIT_PERFECT) {
@@ -1260,7 +1322,14 @@ engine.runRenderLoop(() => {
                 missedSteps++;
                 stepStreak = 0;
                 formationQuality = Math.max(0, formationQuality - 0.3);
-                if (hitMarker) { hitMarker.mat.emissiveColor.set(1, 0, 0); hitMarker.flashTimer = 0.3; }
+                if (hitMarker) { 
+                    hitMarker.mat.emissiveColor.set(1, 0, 0); 
+                    hitMarker.flashTimer = 0.3;
+                    // Trigger explosion animation
+                    hitMarker.isExploding = true;
+                    hitMarker.explosionTime = 0;
+                    emitStepExplosion(hitMarker.mesh.position, isLeftFoot);
+                }
             }
         }
         lastScoredBeat = thisBeat;

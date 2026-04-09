@@ -93,6 +93,11 @@
       #startBtn:active {
         transform: scale(0.95);
       }
+      .subtitle {
+        margin-bottom: 15px;
+        color: #aaaaaa;
+        font-size: 12px;
+      }
     </style>
     <!-- Load Ammo.js script directly as it often works best globally for Babylon -->
     <script src="https://rawcdn.githack.com/kripken/ammo.js/99d0ec0b1e26d7ccc13e013caba8e8a5c98d953b/builds/ammo.wasm.js"></script>
@@ -103,7 +108,7 @@
     </div>
     <div id="desktopUI">
       <h1>MARCHING MADNESS</h1>
-      <div style="margin-bottom: 15px; color: #aaaaaa; font-size: 12px;">Select a song and click START</div>
+      <div class="subtitle">Select a song and click START</div>
       <div id="songButtons"></div>
       <button id="startBtn">START GAME</button>
     </div>
