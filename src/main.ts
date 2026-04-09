@@ -1151,10 +1151,17 @@ engine.runRenderLoop(() => {
                 legL.rotation.x = 0;
                 legR.rotation.x = 0;
             } else {
-                // Normal marching legs
-                legL.rotation.x = Math.sin(marchPhase) * 0.6;
-                legR.rotation.x = -Math.sin(marchPhase) * 0.6;
+                // Smooth movement toward drill position with avoidance
+                const dx = targetX - anchor.position.x;
+                const dz = targetZ - anchor.position.z;
+                const gap = Math.sqrt(dx * dx + dz * dz);
 
+                // Constant smooth lerp: always move toward target
+                // Base lerp rate with hustle boost for catch-up
+                const baseRate = 0.04; // smooth base rate (down from 0.05)
+                const hustleFactor = gap > 0.05 ? Math.min(2.5, 1.0 + gap * 0.3) : 1.0;
+                const lerpRate = Math.min(0.2, baseRate * hustleFactor);
+                
                 // Calculate avoidance of fallen marchers
                 let avoidanceX = 0;
                 let avoidanceZ = 0;
@@ -1179,27 +1186,21 @@ engine.runRenderLoop(() => {
                         avoidanceZ -= (odz / dist) * pushForce;
                     }
                 }
-
-                // Smooth movement toward drill position with avoidance
-                const dx = targetX - anchor.position.x;
-                const dz = targetZ - anchor.position.z;
-                const gap = Math.sqrt(dx * dx + dz * dz);
-
-                // Constant smooth lerp: always move toward target
-                // Base lerp rate with hustle boost for catch-up
-                const baseRate = 0.04; // smooth base rate (down from 0.05)
-                const hustleFactor = gap > 0.05 ? Math.min(2.5, 1.0 + gap * 0.3) : 1.0;
-                const lerpRate = Math.min(0.2, baseRate * hustleFactor);
                 
                 // Apply movement with avoidance integrated
                 anchor.position.x += dx * lerpRate + avoidanceX;
                 anchor.position.z += dz * lerpRate + avoidanceZ;
 
-                // Faster leg swing when hustling
+                // Set leg animation based on whether hustling
                 if (gap > 0.1) {
+                    // Faster leg swing when hustling/catching up
                     const hustleSwing = Math.min(1.0, gap * 0.2) * 0.3;
                     legL.rotation.x = Math.sin(marchPhase * hustleFactor) * (0.6 + hustleSwing);
                     legR.rotation.x = -Math.sin(marchPhase * hustleFactor) * (0.6 + hustleSwing);
+                } else {
+                    // Normal marching legs
+                    legL.rotation.x = Math.sin(marchPhase) * 0.6;
+                    legR.rotation.x = -Math.sin(marchPhase) * 0.6;
                 }
             }
 
