@@ -25,6 +25,8 @@ export class BandMemberFactory {
     private shirtMat!: StandardMaterial;
     private hatMat!: StandardMaterial;
     private plumeMat!: StandardMaterial;
+    private shoeMat!: StandardMaterial;
+    private spatMat!: StandardMaterial;
 
     // Base meshes for instancing (realistic proportions)
     private baseHead!: Mesh;
@@ -44,6 +46,8 @@ export class BandMemberFactory {
     private baseFootR!: Mesh;
     private baseHat!: Mesh;
     private basePlume!: Mesh;
+    private baseSpatL!: Mesh;
+    private baseSpatR!: Mesh;
 
     private firstBodyPlaced = false;
 
@@ -71,6 +75,12 @@ export class BandMemberFactory {
 
         this.plumeMat = new StandardMaterial("plumeMat", scene);
         this.plumeMat.diffuseColor = new Color3(0.2, 0.7, 1.0); // Bright blue plume
+
+        this.shoeMat = new StandardMaterial("shoeMat", scene);
+        this.shoeMat.diffuseColor = new Color3(0.05, 0.05, 0.05); // Black shoes
+
+        this.spatMat = new StandardMaterial("spatMat", scene);
+        this.spatMat.diffuseColor = new Color3(0.95, 0.95, 0.95); // White spats
 
         // === HEAD (realistic sphere, ~10cm diameter) ===
         this.baseHead = MeshBuilder.CreateSphere("baseHead", { diameter: 0.35, segments: 16 }, scene);
@@ -129,12 +139,19 @@ export class BandMemberFactory {
         this.baseLowerLegR = MeshBuilder.CreateCylinder("baseLowerLegR", { diameter: 0.15, height: 0.5 }, scene);
         this.baseLowerLegR.material = this.uniformMat;
 
-        // === FEET (boxes) ===
+        // === FEET (boxes - black shoes) ===
         this.baseFootL = MeshBuilder.CreateBox("baseFootL", { width: 0.18, height: 0.12, depth: 0.25 }, scene);
-        this.baseFootL.material = this.skinMat;
+        this.baseFootL.material = this.shoeMat;
 
         this.baseFootR = MeshBuilder.CreateBox("baseFootR", { width: 0.18, height: 0.12, depth: 0.25 }, scene);
-        this.baseFootR.material = this.skinMat;
+        this.baseFootR.material = this.shoeMat;
+
+        // === SPATS (white ankle covers) ===
+        this.baseSpatL = MeshBuilder.CreateCylinder("baseSpatL", { diameter: 0.17, height: 0.1 }, scene);
+        this.baseSpatL.material = this.spatMat;
+
+        this.baseSpatR = MeshBuilder.CreateCylinder("baseSpatR", { diameter: 0.17, height: 0.1 }, scene);
+        this.baseSpatR.material = this.spatMat;
 
         // === HAT (flat-top cylinder) ===
         this.baseHat = MeshBuilder.CreateCylinder("baseHat", { diameter: 0.4, height: 0.15 }, scene);
@@ -155,6 +172,7 @@ export class BandMemberFactory {
             this.baseFootL, this.baseFootR,
             this.baseHat, this.basePlume
         ];
+        baseMeshes.push(this.baseSpatL, this.baseSpatR);
         baseMeshes.forEach(m => m.isVisible = false);
     }
 
@@ -232,6 +250,11 @@ export class BandMemberFactory {
         footL.parent = lowerLegL;  // Child of lower leg
         footL.position.set(0, -0.24, 0.08);  // Moved up from -0.31 to prevent ground clipping
 
+        // Spat (white ankle cover) on left leg
+        const spatL = isBase ? this.baseSpatL : this.baseSpatL.createInstance(`spatL_${r}_${c}`);
+        spatL.parent = lowerLegL;  // Child of lower leg
+        spatL.position.set(0, -0.18, 0);  // Just above the foot
+
         // === RIGHT LEG (animated) ===
         const upperLegR = isBase ? this.baseUpperLegR.createInstance(`upperLegR_${r}_${c}`) : this.baseUpperLegR.createInstance(`upperLegR_${r}_${c}`);
         upperLegR.parent = anchor;
@@ -246,6 +269,11 @@ export class BandMemberFactory {
         const footR = isBase ? this.baseFootR.createInstance(`footR_${r}_${c}`) : this.baseFootR.createInstance(`footR_${r}_${c}`);
         footR.parent = lowerLegR;  // Child of lower leg
         footR.position.set(0, -0.24, 0.08);  // Moved up from -0.31 to prevent ground clipping
+
+        // Spat (white ankle cover) on right leg
+        const spatR = isBase ? this.baseSpatR.createInstance(`spatR_${r}_${c}`) : this.baseSpatR.createInstance(`spatR_${r}_${c}`);
+        spatR.parent = lowerLegR;  // Child of lower leg
+        spatR.position.set(0, -0.18, 0);  // Just above the foot
 
         // === HAT & PLUME ===
         const hat = isBase ? this.baseHat : this.baseHat.createInstance(`hat_${r}_${c}`);
