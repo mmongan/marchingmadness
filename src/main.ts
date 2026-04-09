@@ -1164,6 +1164,25 @@ engine.runRenderLoop(() => {
                 let avoidanceX = 0;
                 let avoidanceZ = 0;
                 
+                // === PLAYER AVOIDANCE (Highest Priority) ===
+                // Marchers route around the player to create emergent behavior
+                if (scene.activeCamera) {
+                    const playerPos = scene.activeCamera.globalPosition;
+                    const playerAvoidRadius = 3.5; // Marchers avoid player at this distance
+                    const playerDx = anchor.position.x - playerPos.x;
+                    const playerDz = anchor.position.z - playerPos.z;
+                    const playerDistSq = playerDx * playerDx + playerDz * playerDz;
+                    
+                    if (playerDistSq < playerAvoidRadius * playerAvoidRadius && playerDistSq > 0.1) {
+                        const playerDist = Math.sqrt(playerDistSq);
+                        const playerAvoidForce = (1 - playerDist / playerAvoidRadius) * 0.8;
+                        
+                        // Push away from player with strong force
+                        avoidanceX += (playerDx / playerDist) * playerAvoidForce;
+                        avoidanceZ += (playerDz / playerDist) * playerAvoidForce;
+                    }
+                }
+                
                 // === DETECT OUT-OF-FORMATION MARCHERS & ROUTE AROUND THEM ===
                 const outOfFormationRadius = 2.5; // Marchers are "out of formation" if this far from drill
                 const avoidanceRadius = 1.8; // Detection radius for steering around
