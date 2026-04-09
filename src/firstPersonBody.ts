@@ -159,17 +159,27 @@ export class FirstPersonBody {
         // Treadmill locomotion: pump arms up & down to march forward
         const result = this.computeTreadmillLocomotion(cam, deltaTime);
 
-        // Animate legs from absolute movement speed
-        const absSpeed = Math.abs(this.moveSpeed);
-        if (absSpeed > 0.1) {
-            this.walkPhase += deltaTime * absSpeed * 3.5;
-            const amplitude = Math.min(1, absSpeed / 2.0) * 0.6;
-            const dir = this.moveSpeed >= 0 ? 1 : -1;
-            this.legL.rotation.x = Math.sin(this.walkPhase) * amplitude * dir;
-            this.legR.rotation.x = -Math.sin(this.walkPhase) * amplitude * dir;
+        // Animate legs only when game is actively marching
+        // When not marching, keep legs at rest regardless of moveSpeed
+        if (isMarching) {
+            const absSpeed = Math.abs(this.moveSpeed);
+            if (absSpeed > 0.1) {
+                this.walkPhase += deltaTime * absSpeed * 3.5;
+                const amplitude = Math.min(1, absSpeed / 2.0) * 0.6;
+                const dir = this.moveSpeed >= 0 ? 1 : -1;
+                this.legL.rotation.x = Math.sin(this.walkPhase) * amplitude * dir;
+                this.legR.rotation.x = -Math.sin(this.walkPhase) * amplitude * dir;
+            } else {
+                this.legL.rotation.x = 0;
+                this.legR.rotation.x = 0;
+            }
         } else {
+            // Game not marching: keep legs at rest
             this.legL.rotation.x = 0;
             this.legR.rotation.x = 0;
+            // Reset movement speed when not marching (prevents carryover)
+            this.moveSpeed = 0;
+            this.turnSpeed = 0;
         }
 
         return result;
