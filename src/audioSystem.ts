@@ -46,9 +46,11 @@ export function playCrashSound(row: number): void {
     const sf = sfInstruments.get(sfIdx);
     if (!sf) return;
     const baseNote = sfIdx === 4 ? 40 : sfIdx === 3 ? 48 : sfIdx === 5 ? 72 : sfIdx === 8 ? 76 : 60;
-    sf.start({ note: baseNote - 1, duration: 0.1 });
-    sf.start({ note: baseNote + 1, duration: 0.1 });
-    sf.start({ note: baseNote + 6, duration: 0.1 });
+    const now = Tone.now();
+    // Stagger start times to avoid "start time must be strictly greater" error
+    sf.start({ note: baseNote - 1, duration: 0.1, time: now });
+    sf.start({ note: baseNote + 1, duration: 0.1, time: now + 0.01 });
+    sf.start({ note: baseNote + 6, duration: 0.1, time: now + 0.02 });
 }
 
 /** Load all SoundFont instruments with spatial PannerNodes. Call after Tone.start(). */

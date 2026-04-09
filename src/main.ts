@@ -480,7 +480,7 @@ bandLegs[playerMarcherIndex] = playerMarcher;
 
 // Initialize camera to player's starting drill position
 camera.position = new Vector3(playerStartX, 1.8, playerStartZ);
-camera.setTarget(new Vector3(playerStartX, 1.8, playerStartZ + 5));
+camera.setTarget(new Vector3(playerStartX, 1.8, playerStartZ - 5));
 
 // Position the player's VR body at the marcher location
 playerBody.setBodyPosition(new Vector3(playerStartX, 0, playerStartZ));
@@ -1100,21 +1100,9 @@ engine.runRenderLoop(() => {
             return getDrillPosition(currentBeat, member.row, member.col, 5, 15, member.startX, member.startZ);
         });
 
-        // Update player camera to follow their drill position
-        const playerDrillPos = getDrillPosition(currentBeat, playerRow, playerCol,
-            BAND_COLS, BAND_ROWS, playerStartX, playerStartZ);
-        const playerTargetX = playerDrillPos.x;
-        const playerTargetZ = playerDrillPos.z - (currentRenderTime * FLY_SPEED);
-        
-        // Smoothly move camera toward drill position
-        const camLerpRate = 0.08;
-        camera.position.x += (playerTargetX - camera.position.x) * camLerpRate;
-        camera.position.z += (playerTargetZ - camera.position.z) * camLerpRate;
-        // Update look target to stay ahead of player's position
-        camera.setTarget(new Vector3(playerTargetX, 1.8, playerTargetZ + 5));
-        
-        // Keep player body at the same position (for collision/arm tracking)
-        playerBody.setBodyPosition(new Vector3(playerTargetX, 0, playerTargetZ));
+        // Player position is controlled by firstPersonBody input, not drill position
+        // Update player body position based on camera
+        playerBody.setBodyPosition(new Vector3(camera.position.x, 0, camera.position.z));
 
         bandLegs.forEach(({ legL, legR, anchor }, index) => {
             const st = stumbleStates[index];
