@@ -238,13 +238,15 @@ export class FirstPersonBody {
     }
 
     private computeDesktopLocomotion(cam: Camera, dt: number): { movement: Vector3; turnY: number } {
-        // WASD / Arrow keys for movement, mouse look for turning
+        // WASD / Arrow keys for movement, Q/E for turning
         const moveForward = this.keysPressed['w'] || this.keysPressed['arrowup'];
         const moveBackward = this.keysPressed['s'] || this.keysPressed['arrowdown'];
         const moveLeft = this.keysPressed['a'] || this.keysPressed['arrowleft'];
         const moveRight = this.keysPressed['d'] || this.keysPressed['arrowright'];
+        const turnLeft = this.keysPressed['q'];
+        const turnRight = this.keysPressed['e'];
 
-        // Compute desired speed: forward is negative X in standard FPS, but positive Z is forward
+        // Compute desired speed: forward is positive, backward is negative
         let targetSpeed = 0;
         if (moveForward) targetSpeed = 2.5; // Default movement speed
         else if (moveBackward) targetSpeed = -1.5;
@@ -257,7 +259,7 @@ export class FirstPersonBody {
             this.moveSpeed = targetSpeed;
         }
 
-        // Strafing with A/D or arrow keys
+        // Strafing with A/D or left/right arrow keys
         let strafeDir = 0;
         if (moveLeft) strafeDir = -1;
         else if (moveRight) strafeDir = 1;
@@ -275,12 +277,13 @@ export class FirstPersonBody {
             movement = fwd.scale(this.moveSpeed * dt).add(right.scale(strafeDir * 2.0 * dt));
         }
 
-        // Mouse turn or Q/E for manual turn
-        let targetTurn = this.desktopMouseTurnX;
-        if (this.keysPressed['q']) targetTurn -= 1.0 * dt;
-        if (this.keysPressed['e']) targetTurn += 1.0 * dt;
+        // Compute target turn speed from Q/E keys and mouse
+        let targetTurn = 0;
+        if (turnLeft) targetTurn = -2.0;    // Full turn speed left
+        if (turnRight) targetTurn = 2.0;   // Full turn speed right
+        targetTurn += this.desktopMouseTurnX;  // Add mouse delta if present
 
-        // Apply turn acceleration
+        // Update turn speed with acceleration
         const turnDiff = targetTurn - this.turnSpeed;
         if (Math.abs(turnDiff) > 0.01) {
             this.turnSpeed += turnDiff * Math.min(1, this.ACCEL * dt);
@@ -288,9 +291,8 @@ export class FirstPersonBody {
             this.turnSpeed = targetTurn;
         }
 
-        // Reset mouse deltas
-        this.desktopMouseTurnX *= 0.8;
-        this.desktopMouseTurnY *= 0.8;
+        // Decay mouse input each frame (but keys provide continuous input)
+        this.desktopMouseTurnX *= 0.9;
 
         return { movement, turnY: this.turnSpeed * dt };
     }

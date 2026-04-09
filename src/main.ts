@@ -1133,7 +1133,32 @@ engine.runRenderLoop(() => {
                 legL.rotation.x = Math.sin(marchPhase) * 0.6;
                 legR.rotation.x = -Math.sin(marchPhase) * 0.6;
 
-                // Smooth movement toward drill position
+                // Calculate avoidance of fallen marchers
+                let avoidanceX = 0;
+                let avoidanceZ = 0;
+                const avoidanceRadius = 1.5; // Look ahead for fallen marchers
+                const avoidanceRadius2 = avoidanceRadius * avoidanceRadius;
+                
+                for (let j = 0; j < bandLegs.length; j++) {
+                    if (j === index) continue;
+                    const st = stumbleStates[j];
+                    if (st.tilt < MAX_TILT * 0.8) continue; // Only avoid significantly fallen marchers
+                    
+                    const otherAnchor = bandLegs[j].anchor;
+                    const odx = otherAnchor.position.x - anchor.position.x;
+                    const odz = otherAnchor.position.z - anchor.position.z;
+                    const distSq = odx * odx + odz * odz;
+                    
+                    if (distSq < avoidanceRadius2 && distSq > 0.01) {
+                        // Push away from fallen marcher
+                        const dist = Math.sqrt(distSq);
+                        const pushForce = (1 - dist / avoidanceRadius) * 0.5;
+                        avoidanceX -= (odx / dist) * pushForce;
+                        avoidanceZ -= (odz / dist) * pushForce;
+                    }
+                }
+
+                // Smooth movement toward drill position with avoidance
                 const dx = targetX - anchor.position.x;
                 const dz = targetZ - anchor.position.z;
                 const gap = Math.sqrt(dx * dx + dz * dz);
@@ -1144,8 +1169,9 @@ engine.runRenderLoop(() => {
                 const hustleFactor = gap > 0.05 ? Math.min(2.5, 1.0 + gap * 0.3) : 1.0;
                 const lerpRate = Math.min(0.2, baseRate * hustleFactor);
                 
-                anchor.position.x += dx * lerpRate;
-                anchor.position.z += dz * lerpRate;
+                // Apply movement with avoidance integrated
+                anchor.position.x += dx * lerpRate + avoidanceX;
+                anchor.position.z += dz * lerpRate + avoidanceZ;
 
                 // Faster leg swing when hustling
                 if (gap > 0.1) {
