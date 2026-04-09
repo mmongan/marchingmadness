@@ -302,9 +302,18 @@ export function updateCollisions(
         if (st.tilt > 0.001) {
             anchor.rotation.x = st.tilt * st.tiltDirZ;
             anchor.rotation.z = -st.tilt * st.tiltDirX;
+            
+            // Prevent body parts from sinking into ground
+            // When tilted, raise the anchor so the lowest body point stays at Y > 0
+            // Maximum tilt is ~1.57 rad (π/2), body length from anchor ~1.0m
+            // At full tilt, minimum Y should be ~0.5m to keep feet from going below 0
+            const minY = 0.5 * Math.sin(st.tilt);
+            anchor.position.y = Math.max(anchor.position.y, minY);
         } else {
             anchor.rotation.x = 0;
             anchor.rotation.z = 0;
+            // Return to ground level when standing up
+            anchor.position.y = 0;
         }
     });
 
