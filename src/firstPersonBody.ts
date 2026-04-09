@@ -24,7 +24,6 @@ export class FirstPersonBody {
     private prevGripPosR: Vector3 | null = null;
     private moveSpeed = 0;
     private turnSpeed = 0;
-    private walkPhase = 0;
 
     // Tuning constants
     private readonly VEL_THRESHOLD = 0.4;   // m/s minimum vertical pump to count
@@ -150,15 +149,16 @@ export class FirstPersonBody {
     /**
      * Returns movement vector and turn angle driven by treadmill arm-pump locomotion.
      * The caller should apply movement to camera position and turnY to camera rotation.
+     * Leg animation is synchronized to the beat when marching.
      */
-    public update(cam: Camera, marchPhase: number, isMarching: boolean, deltaTime: number): { movement: Vector3; turnY: number } {
+    public update(cam: Camera, beatPhase: number, _currentBeat: number, isMarching: boolean, deltaTime: number): { movement: Vector3; turnY: number } {
         // Body root follows camera position and Y rotation
         this.bodyRoot.position.copyFrom(cam.globalPosition);
         this.bodyRoot.rotation.y = cam.absoluteRotation.toEulerAngles().y;
 
         // Stretch arms from shoulders to hands (controllers or desktop fallback)
-        this.updateArm(this.armL, this.controllerLeft, cam, -0.3, marchPhase, isMarching);
-        this.updateArm(this.armR, this.controllerRight, cam, 0.3, marchPhase, isMarching);
+        this.updateArm(this.armL, this.controllerLeft, cam, -0.3, beatPhase, isMarching);
+        this.updateArm(this.armR, this.controllerRight, cam, 0.3, beatPhase, isMarching);
 
         // Treadmill locomotion: pump arms up & down to march forward
         const result = this.computeTreadmillLocomotion(cam, deltaTime);
@@ -173,14 +173,15 @@ export class FirstPersonBody {
             const amplifyFade = Math.max(0, Math.min(1, absSpeed / fadeInThreshold));
             
             if (absSpeed > 0.01) {
-                // Always update walkPhase for smooth animation
-                // The amplitude fade handles the speed->stop transition smoothly
-                this.walkPhase += deltaTime * Math.max(0.1, absSpeed) * 3.5;
+                // Synchronize leg swing with beat phase for marching
+                // beatPhase is 0-2π over 2 beats: one complete left-right-left cycle
                 const baseAmplitude = Math.min(1, absSpeed / 2.0) * 0.6;
                 const amplitude = baseAmplitude * amplifyFade;
                 const dir = this.moveSpeed >= 0 ? 1 : -1;
-                this.legL.rotation.x = Math.sin(this.walkPhase) * amplitude * dir;
-                this.legR.rotation.x = -Math.sin(this.walkPhase) * amplitude * dir;
+                
+                // Legs swing synchronized to beat using beatPhase
+                this.legL.rotation.x = Math.sin(beatPhase) * amplitude * dir;
+                this.legR.rotation.x = -Math.sin(beatPhase) * amplitude * dir;
             } else {
                 // Very slow: smoothly fade legs to rest
                 this.legL.rotation.x *= 0.95;

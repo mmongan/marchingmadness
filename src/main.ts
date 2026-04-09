@@ -1670,7 +1670,9 @@ engine.runRenderLoop(() => {
     // Update player body with march animation and treadmill locomotion
     if (scene.activeCamera) {
         const dt = engine.getDeltaTime() / 1000;
-        const { movement, turnY } = playerBody.update(scene.activeCamera, marchPhase, gameStartTime !== null, dt);
+        const secondsPerBeat = 60 / BPM;
+        const beatPhase = (currentRenderTime % (secondsPerBeat * 2)) / (secondsPerBeat * 2) * Math.PI * 2; // 0-2π every 2 beats
+        const { movement, turnY } = playerBody.update(scene.activeCamera, beatPhase, currentBeat, gameStartTime !== null, dt);
         // Apply treadmill locomotion to camera position and rotation
         if (movement.lengthSquared() > 0) {
             scene.activeCamera.position.addInPlace(movement);
