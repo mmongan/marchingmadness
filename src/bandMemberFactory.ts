@@ -192,9 +192,11 @@ export class BandMemberFactory {
         forearmL.parent = anchor;
         forearmL.position.set(-0.52, 1.28, 0);
         
+        // Hand positioned at end of forearm (forearm extends ~0.4 units at angle π/2.2)
+        // End point: center + (0.4*sin(π/2.2), -0.4*cos(π/2.2), 0) ≈ (0.396, -0.060, 0)
         const handL = isBase ? this.baseHandL : this.baseHandL.createInstance(`handL_${r}_${c}`);
         handL.parent = anchor;
-        handL.position.set(-0.62, 1.15, 0);
+        handL.position.set(-0.52 + 0.4, 1.28 - 0.06, 0);  // (-0.12, 1.22, 0)
 
         // === RIGHT ARM ===
         const upperArmR = isBase ? this.baseUpperArmR.createInstance(`upperArmR_${r}_${c}`) : this.baseUpperArmR.createInstance(`upperArmR_${r}_${c}`);
@@ -205,9 +207,10 @@ export class BandMemberFactory {
         forearmR.parent = anchor;
         forearmR.position.set(0.52, 1.28, 0);
         
+        // Hand positioned at end of forearm
         const handR = isBase ? this.baseHandR.createInstance(`handR_${r}_${c}`) : this.baseHandR.createInstance(`handR_${r}_${c}`);
         handR.parent = anchor;
-        handR.position.set(0.62, 1.15, 0);
+        handR.position.set(0.52 - 0.4, 1.28 - 0.06, 0);  // (0.12, 1.22, 0)
 
         // === LEFT LEG (animated) ===
         const upperLegL = isBase ? this.baseUpperLegL : this.baseUpperLegL.createInstance(`upperLegL_${r}_${c}`);
