@@ -89,23 +89,24 @@ export class BandMemberFactory {
         this.baseTorso.bakeTransformIntoVertices(toTransform);
 
         // === UPPER ARMS (realistic cylinders, ~4cm diameter) ===
-        this.baseUpperArmL = MeshBuilder.CreateCylinder("baseUpperArmL", { diameter: 0.14, height: 0.45 }, scene);
+        // Positioned UP for marching pose (not extended horizontally)
+        this.baseUpperArmL = MeshBuilder.CreateCylinder("baseUpperArmL", { diameter: 0.14, height: 0.5 }, scene);
         this.baseUpperArmL.material = this.shirtMat;
-        this.baseUpperArmL.rotation.z = Math.PI / 2.2;  // Upper arm extends outward from shoulder
+        this.baseUpperArmL.rotation.z = Math.PI / 6;  // ~30° forward pump (more vertical than before)
 
-        this.baseUpperArmR = MeshBuilder.CreateCylinder("baseUpperArmR", { diameter: 0.14, height: 0.45 }, scene);
+        this.baseUpperArmR = MeshBuilder.CreateCylinder("baseUpperArmR", { diameter: 0.14, height: 0.5 }, scene);
         this.baseUpperArmR.material = this.shirtMat;
-        this.baseUpperArmR.rotation.z = Math.PI / 2.2;
+        this.baseUpperArmR.rotation.z = Math.PI / 6;
 
         // === FOREARMS (thinner cylinders, ~3.5cm diameter) ===
-        // Rotated less than upper arms to create natural elbow bend
-        this.baseForearmL = MeshBuilder.CreateCylinder("baseForearmL", { diameter: 0.12, height: 0.4 }, scene);
+        // Bent upward for dynamic marching position
+        this.baseForearmL = MeshBuilder.CreateCylinder("baseForearmL", { diameter: 0.12, height: 0.45 }, scene);
         this.baseForearmL.material = this.skinMat;
-        this.baseForearmL.rotation.z = Math.PI / 2.8;  // More vertical for natural elbow bend
+        this.baseForearmL.rotation.z = -Math.PI / 4;  // ~-45° bent upward
 
-        this.baseForearmR = MeshBuilder.CreateCylinder("baseForearmR", { diameter: 0.12, height: 0.4 }, scene);
+        this.baseForearmR = MeshBuilder.CreateCylinder("baseForearmR", { diameter: 0.12, height: 0.45 }, scene);
         this.baseForearmR.material = this.skinMat;
-        this.baseForearmR.rotation.z = Math.PI / 2.8;
+        this.baseForearmR.rotation.z = -Math.PI / 4;
 
         // === HANDS (small boxes at end of arms) ===
         this.baseHandL = MeshBuilder.CreateBox("baseHandL", { width: 0.12, height: 0.15, depth: 0.08 }, scene);
@@ -185,60 +186,66 @@ export class BandMemberFactory {
         torso.position.set(0, 1.2, 0);
 
         // === LEFT ARM ===
+        // Upper arm at shoulder, raised for marching pump
         const upperArmL = isBase ? this.baseUpperArmL : this.baseUpperArmL.createInstance(`upperArmL_${r}_${c}`);
         upperArmL.parent = anchor;
-        upperArmL.position.set(-0.35, 1.45, 0);
+        upperArmL.position.set(-0.25, 1.5, 0.1);  // Shoulder, slightly forward for raised posture
         
-        // Forearm positioned at elbow (end of upper arm + offset for new angle)
+        // Forearm bent upward from elbow
         const forearmL = isBase ? this.baseForearmL : this.baseForearmL.createInstance(`forearmL_${r}_${c}`);
         forearmL.parent = anchor;
-        forearmL.position.set(-0.65, 1.35, 0);  // Positioned further out and lower from upper arm
+        forearmL.position.set(-0.32, 1.85, 0.22);  // End of upper arm + offset for upward bend
         
-        // Hand positioned at end of forearm
+        // Hand at end of forearm
         const handL = isBase ? this.baseHandL : this.baseHandL.createInstance(`handL_${r}_${c}`);
         handL.parent = anchor;
-        handL.position.set(-0.96, 1.19, 0);  // End of forearm with π/2.8 rotation
+        handL.position.set(-0.38, 2.05, 0.32);  // End of forearm extension
 
         // === RIGHT ARM ===
+        // Upper arm at shoulder, raised for marching pump
         const upperArmR = isBase ? this.baseUpperArmR.createInstance(`upperArmR_${r}_${c}`) : this.baseUpperArmR.createInstance(`upperArmR_${r}_${c}`);
         upperArmR.parent = anchor;
-        upperArmR.position.set(0.35, 1.45, 0);
+        upperArmR.position.set(0.25, 1.5, 0.1);  // Shoulder, slightly forward for raised posture
         
-        // Forearm positioned at elbow (end of upper arm + offset for new angle)
+        // Forearm bent upward from elbow
         const forearmR = isBase ? this.baseForearmR.createInstance(`forearmR_${r}_${c}`) : this.baseForearmR.createInstance(`forearmR_${r}_${c}`);
         forearmR.parent = anchor;
-        forearmR.position.set(0.65, 1.35, 0);  // Positioned further out and lower from upper arm
+        forearmR.position.set(0.32, 1.85, 0.22);  // End of upper arm + offset for upward bend
         
-        // Hand positioned at end of forearm
+        // Hand at end of forearm
         const handR = isBase ? this.baseHandR.createInstance(`handR_${r}_${c}`) : this.baseHandR.createInstance(`handR_${r}_${c}`);
         handR.parent = anchor;
-        handR.position.set(0.96, 1.19, 0);  // End of forearm with π/2.8 rotation
+        handR.position.set(0.38, 2.05, 0.32);  // End of forearm extension
 
         // === LEFT LEG (animated) ===
         const upperLegL = isBase ? this.baseUpperLegL : this.baseUpperLegL.createInstance(`upperLegL_${r}_${c}`);
         upperLegL.parent = anchor;
         upperLegL.position.set(-0.15, 0.8, 0);
 
+        // Lower leg is CHILD of upper leg so it rotates with it
         const lowerLegL = isBase ? this.baseLowerLegL : this.baseLowerLegL.createInstance(`lowerLegL_${r}_${c}`);
-        lowerLegL.parent = anchor;
-        lowerLegL.position.set(-0.15, 0.45, 0);
+        lowerLegL.parent = upperLegL;  // Now a child of upper leg!
+        lowerLegL.position.set(0, -0.525, 0);  // Offset from upper leg center
 
+        // Foot is child of lower leg, positioned higher to prevent ground sinking
         const footL = isBase ? this.baseFootL : this.baseFootL.createInstance(`footL_${r}_${c}`);
-        footL.parent = anchor;
-        footL.position.set(-0.15, 0.08, 0.08);
+        footL.parent = lowerLegL;  // Child of lower leg
+        footL.position.set(0, -0.24, 0.08);  // Moved up from -0.31 to prevent ground clipping
 
         // === RIGHT LEG (animated) ===
         const upperLegR = isBase ? this.baseUpperLegR.createInstance(`upperLegR_${r}_${c}`) : this.baseUpperLegR.createInstance(`upperLegR_${r}_${c}`);
         upperLegR.parent = anchor;
         upperLegR.position.set(0.15, 0.8, 0);
 
+        // Lower leg is CHILD of upper leg so it rotates with it
         const lowerLegR = isBase ? this.baseLowerLegR.createInstance(`lowerLegR_${r}_${c}`) : this.baseLowerLegR.createInstance(`lowerLegR_${r}_${c}`);
-        lowerLegR.parent = anchor;
-        lowerLegR.position.set(0.15, 0.45, 0);
+        lowerLegR.parent = upperLegR;  // Now a child of upper leg!
+        lowerLegR.position.set(0, -0.525, 0);  // Offset from upper leg center
 
+        // Foot is child of lower leg, positioned higher to prevent ground sinking
         const footR = isBase ? this.baseFootR.createInstance(`footR_${r}_${c}`) : this.baseFootR.createInstance(`footR_${r}_${c}`);
-        footR.parent = anchor;
-        footR.position.set(0.15, 0.08, 0.08);
+        footR.parent = lowerLegR;  // Child of lower leg
+        footR.position.set(0, -0.24, 0.08);  // Moved up from -0.31 to prevent ground clipping
 
         // === HAT & PLUME ===
         const hat = isBase ? this.baseHat : this.baseHat.createInstance(`hat_${r}_${c}`);
