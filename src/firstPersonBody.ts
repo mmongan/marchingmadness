@@ -55,10 +55,14 @@ export class FirstPersonBody {
         this.armL = MeshBuilder.CreateBox("playerArmL", { width: 0.12, height: 1, depth: 0.12 }, scene);
         this.armL.material = uniformMat;
         this.armL.isPickable = false;
+        this.armL.parent = this.bodyRoot;
+        this.armL.position.set(-0.3, -0.38, 0); // Shoulder position relative to body root
 
         this.armR = MeshBuilder.CreateBox("playerArmR", { width: 0.12, height: 1, depth: 0.12 }, scene);
         this.armR.material = uniformMat;
         this.armR.isPickable = false;
+        this.armR.parent = this.bodyRoot;
+        this.armR.position.set(0.3, -0.38, 0); // Shoulder position relative to body root
 
         this.legL = MeshBuilder.CreateBox("playerLegL", { width: 0.18, height: 1.0, depth: 0.18 }, scene);
         this.legL.bakeTransformIntoVertices(Matrix.Translation(0, -0.5, 0));
@@ -319,11 +323,8 @@ export class FirstPersonBody {
     }
 
     private updateArm(arm: Mesh, controller: WebXRInputSource | null, cam: Camera, xOffset: number, marchPhase: number, isMarching: boolean): void {
-        // Shoulder position: offset from body root at top-of-torso height
-        const right = cam.getDirection(Vector3.Right());
-        const shoulderPos = this.bodyRoot.position.clone()
-            .addInPlace(right.scale(xOffset * 0.75))
-            .addInPlace(Vector3.Up().scale(-0.38));
+        // Shoulder position in world space (arm's local position transforms to world via bodyRoot parent)
+        const shoulderPos = arm.absolutePosition.clone();
 
         // Hand position: VR controller grip or desktop fallback
         let handPos: Vector3;
@@ -331,6 +332,7 @@ export class FirstPersonBody {
             handPos = controller.grip.absolutePosition.clone();
         } else {
             const fwd = cam.getDirection(Vector3.Forward());
+            const right = cam.getDirection(Vector3.Right());
             handPos = cam.globalPosition.clone()
                 .addInPlace(right.scale(xOffset))
                 .addInPlace(fwd.scale(0.3))
@@ -343,8 +345,10 @@ export class FirstPersonBody {
             }
         }
 
-        // Position at midpoint, scale Y to distance
+        // Stretch arm from shoulder to hand: position at midpoint, scale Y to distance
         Vector3.CenterToRef(shoulderPos, handPos, arm.position);
+        // Convert midpoint back to local coordinates since arm is a child of bodyRoot
+        arm.position.subtractInPlace(this.bodyRoot.position);
         const dist = Vector3.Distance(shoulderPos, handPos);
         arm.scaling.set(1, dist, 1);
 
