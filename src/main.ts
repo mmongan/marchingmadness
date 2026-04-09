@@ -1149,7 +1149,7 @@ engine.runRenderLoop(() => {
                 legL.rotation.x = 0;
                 legR.rotation.x = 0;
             } else {
-                // Smooth movement toward drill position with avoidance
+                // Smooth movement toward drill position with intelligent avoidance
                 const dx = targetX - anchor.position.x;
                 const dz = targetZ - anchor.position.z;
                 const gap = Math.sqrt(dx * dx + dz * dz);
@@ -1160,26 +1160,45 @@ engine.runRenderLoop(() => {
                 const hustleFactor = gap > 0.05 ? Math.min(2.5, 1.0 + gap * 0.3) : 1.0;
                 const lerpRate = Math.min(0.2, baseRate * hustleFactor);
                 
-                // Calculate avoidance of fallen marchers
+                // Calculate avoidance steering for out-of-formation marchers
                 let avoidanceX = 0;
                 let avoidanceZ = 0;
-                const avoidanceRadius = 1.5; // Look ahead for fallen marchers
+                
+                // === DETECT OUT-OF-FORMATION MARCHERS & ROUTE AROUND THEM ===
+                const outOfFormationRadius = 2.5; // Marchers are "out of formation" if this far from drill
+                const avoidanceRadius = 1.8; // Detection radius for steering around
                 const avoidanceRadius2 = avoidanceRadius * avoidanceRadius;
                 
                 for (let j = 0; j < bandLegs.length; j++) {
                     if (j === index) continue;
-                    const st = stumbleStates[j];
-                    if (st.tilt < MAX_TILT * 0.8) continue; // Only avoid significantly fallen marchers
                     
-                    const otherAnchor = bandLegs[j].anchor;
+                    const otherMember = bandLegs[j];
+                    const otherDrill = getDrillPosition(currentBeat, otherMember.row, otherMember.col, 5, 15, otherMember.startX, otherMember.startZ);
+                    const otherDrillX = otherDrill.x;
+                    const otherDrillZ = otherDrill.z - (currentRenderTime * FLY_SPEED);
+                    
+                    const markerDistX = otherMember.anchor.position.x - otherDrillX;
+                    const markerDistZ = otherMember.anchor.position.z - otherDrillZ;
+                    const markerDist = Math.sqrt(markerDistX * markerDistX + markerDistZ * markerDistZ);
+                    
+                    // Check if this marcher is significantly out of formation
+                    const isOutOfFormation = markerDist > outOfFormationRadius;
+                    
+                    // Also treat heavily fallen marchers as obstacles
+                    const st = stumbleStates[j];
+                    const isDown = st.tilt >= MAX_TILT * 0.7;
+                    
+                    if (!isOutOfFormation && !isDown) continue; // Only avoid out-of-formation or fallen
+                    
+                    const otherAnchor = otherMember.anchor;
                     const odx = otherAnchor.position.x - anchor.position.x;
                     const odz = otherAnchor.position.z - anchor.position.z;
                     const distSq = odx * odx + odz * odz;
                     
                     if (distSq < avoidanceRadius2 && distSq > 0.01) {
-                        // Push away from fallen marcher
                         const dist = Math.sqrt(distSq);
-                        const pushForce = (1 - dist / avoidanceRadius) * 0.5;
+                        const strength = isDown ? 0.6 : 0.4; // Fallen marchers: strong avoidance. Out-of-formation: moderate
+                        const pushForce = (1 - dist / avoidanceRadius) * strength;
                         avoidanceX -= (odx / dist) * pushForce;
                         avoidanceZ -= (odz / dist) * pushForce;
                     }
