@@ -627,8 +627,7 @@ function updateScoreHUD() {
 // Song selection
 const SONG_LIST = [
     { file: "assets/fight_song.xml", title: "Fight Song", subtitle: "Public Domain" },
-    { file: "assets/stars_and_stripes.xml", title: "Stars & Stripes", subtitle: "Full Band" },
-    { file: "assets/battle_hymn.xml", title: "Battle Hymn", subtitle: "Full Band" },
+    { file: "assets/battle_hymn.xml", title: "Battle Hymn", subtitle: "Public Domain" },
 ];
 let selectedScoreFile = SONG_LIST[0].file;
 
