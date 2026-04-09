@@ -167,15 +167,28 @@ export class FirstPersonBody {
         // When not marching, keep legs at rest regardless of moveSpeed
         if (isMarching) {
             const absSpeed = Math.abs(this.moveSpeed);
-            if (absSpeed > 0.1) {
-                this.walkPhase += deltaTime * absSpeed * 3.5;
-                const amplitude = Math.min(1, absSpeed / 2.0) * 0.6;
+            // Smoothly fade in leg animation as speed approaches zero
+            // This prevents vibration when speed oscillates around a threshold
+            const fadeInThreshold = 0.3; // Speed at which animation fully fades in
+            const amplifyFade = Math.max(0, Math.min(1, absSpeed / fadeInThreshold));
+            
+            if (absSpeed > 0.01) {
+                // Always update walkPhase for smooth animation
+                // The amplitude fade handles the speed->stop transition smoothly
+                this.walkPhase += deltaTime * Math.max(0.1, absSpeed) * 3.5;
+                const baseAmplitude = Math.min(1, absSpeed / 2.0) * 0.6;
+                const amplitude = baseAmplitude * amplifyFade;
                 const dir = this.moveSpeed >= 0 ? 1 : -1;
                 this.legL.rotation.x = Math.sin(this.walkPhase) * amplitude * dir;
                 this.legR.rotation.x = -Math.sin(this.walkPhase) * amplitude * dir;
             } else {
-                this.legL.rotation.x = 0;
-                this.legR.rotation.x = 0;
+                // Very slow: smoothly fade legs to rest
+                this.legL.rotation.x *= 0.95;
+                this.legR.rotation.x *= 0.95;
+                if (Math.abs(this.legL.rotation.x) < 0.001) {
+                    this.legL.rotation.x = 0;
+                    this.legR.rotation.x = 0;
+                }
             }
         } else {
             // Game not marching: keep legs at rest
