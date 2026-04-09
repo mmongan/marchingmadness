@@ -152,6 +152,7 @@ export class BandMemberFactory {
         labelMat.disableLighting = true;
         labelPlane.material = labelMat;
         labelPlane.billboardMode = Mesh.BILLBOARDMODE_Y;
+        labelPlane.isVisible = false;
 
         return { legL, legR, anchor, plume, startZ: zPos, startX: xPos, row: r, col: c, health: 100 };
     }
