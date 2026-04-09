@@ -1166,15 +1166,21 @@ engine.runRenderLoop(() => {
                 const dz = targetZ - anchor.position.z;
                 const gap = Math.sqrt(dx * dx + dz * dz);
 
-                // Constant smooth lerp: always move toward target
-                // Stride length varies based on distance from formation position
-                // All marchers maintain same beat frequency but take longer/shorter steps
-                const baseRate = 0.04; // base stride length
-                const maxCatchupRate = 0.18; // max stride when far from target
-                // Interpolate stride length based on distance: closer to target = shorter stride
-                const lerpRate = gap > 0.05 
-                    ? baseRate + (maxCatchupRate - baseRate) * Math.min(1.0, gap / 3.0)
-                    : baseRate;
+                // SETTLE ZONE: If close enough to target, use normal steady pace
+                // This prevents marchers from orbiting around their formation position
+                // while keeping them actively moving with the drill formation
+                const settleZone = 0.25; // meters - marchers within this distance are "settled"
+                let moveAmount = 0.04; // default: normal formation marching pace
+                
+                if (gap > settleZone) {
+                    // Outside settle zone: catch up with longer strides
+                    const baseRate = 0.04; // base stride length
+                    const maxCatchupRate = 0.18; // max stride when far from target
+                    // Interpolate stride length based on distance: closer to target = shorter stride
+                    moveAmount = gap > 0.05 
+                        ? baseRate + (maxCatchupRate - baseRate) * Math.min(1.0, gap / 3.0)
+                        : baseRate;
+                }
                 
                 // Calculate avoidance steering for out-of-formation marchers
                 let avoidanceX = 0;
@@ -1272,14 +1278,18 @@ engine.runRenderLoop(() => {
                 }
                 
                 // Apply movement with avoidance integrated
-                anchor.position.x += dx * lerpRate + avoidanceX;
-                anchor.position.z += dz * lerpRate + avoidanceZ;
+                anchor.position.x += dx * moveAmount + avoidanceX;
+                anchor.position.z += dz * moveAmount + avoidanceZ;
 
                 // Set leg animation - all marchers swing at same beat, stride length varies via movement speed
                 // Leg swing amplitude increases slightly when taking longer strides to add visual appeal
-                const maxAmplitude = 0.7;
-                const minAmplitude = 0.5;
-                const legAmplitude = minAmplitude + (maxAmplitude - minAmplitude) * Math.min(1.0, gap / 2.0);
+                // Marchers settled near formation position use minimal leg swing
+                let legAmplitude = 0.5; // base amplitude for settled marchers
+                if (gap >= settleZone) {
+                    const maxAmplitude = 0.7;
+                    const minAmplitude = 0.5;
+                    legAmplitude = minAmplitude + (maxAmplitude - minAmplitude) * Math.min(1.0, gap / 2.0);
+                }
                 
                 legL.rotation.x = Math.sin(marchPhase) * legAmplitude;
                 legR.rotation.x = -Math.sin(marchPhase) * legAmplitude;
