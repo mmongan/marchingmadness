@@ -1164,6 +1164,38 @@ engine.runRenderLoop(() => {
                 let avoidanceX = 0;
                 let avoidanceZ = 0;
                 
+                // === GENERAL MARCHER COLLISION AVOIDANCE (Prevent overlap) ===
+                // Check all nearby marchers regardless of formation status
+                const collisionRadius = 1.2; // Marchers should maintain minimum spacing
+                const collisionRadius2 = collisionRadius * collisionRadius;
+                let collisionCount = 0;
+                let collisionX = 0;
+                let collisionZ = 0;
+                
+                for (let j = 0; j < bandLegs.length; j++) {
+                    if (j === index) continue;
+                    
+                    const otherAnchor = bandLegs[j].anchor;
+                    const cdx = otherAnchor.position.x - anchor.position.x;
+                    const cdz = otherAnchor.position.z - anchor.position.z;
+                    const collisionDistSq = cdx * cdx + cdz * cdz;
+                    
+                    if (collisionDistSq < collisionRadius2 && collisionDistSq > 0.01) {
+                        // Marcher is too close! Apply repulsion
+                        const collisionDist = Math.sqrt(collisionDistSq);
+                        const repelStrength = (1 - collisionDist / collisionRadius) * 0.5;
+                        collisionX += (cdx / collisionDist) * repelStrength;
+                        collisionZ += (cdz / collisionDist) * repelStrength;
+                        collisionCount++;
+                    }
+                }
+                
+                // Accumulate collision avoidance
+                if (collisionCount > 0) {
+                    avoidanceX += collisionX;
+                    avoidanceZ += collisionZ;
+                }
+                
                 // === PLAYER AVOIDANCE (Highest Priority) ===
                 // Marchers route around the player to create emergent behavior
                 if (scene.activeCamera) {
