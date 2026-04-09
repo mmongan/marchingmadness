@@ -4,7 +4,7 @@ import { BandMemberData } from "./bandMemberFactory";
 import { FirstPersonBody } from "./firstPersonBody";
 import {
     COLLISION_RADIUS, STUMBLE_RECOVERY, MAX_TILT, DOWN_DURATION, STAND_UP_DURATION,
-    OBSTACLE_RADIUS, OBSTACLE_PUSH, MARCHER_COLLISION_RADIUS,
+    OBSTACLE_RADIUS, OBSTACLE_PUSH,
     HITS_TO_FALL, HIT_COUNT_RESET_TIME, HEALTH_DAMAGE_PER_FALL
 } from "./gameConstants";
 import { playStumbleSound, playCrashSound } from "./audioSystem";
@@ -108,7 +108,8 @@ export interface CollisionResult {
 }
 
 /**
- * Process player-to-marcher collisions + domino cascade.
+ * Process player-to-marcher collisions only.
+ * Marchers avoid collisions by routing around obstacles.
  * Returns obstacle push and scoring deltas for the frame.
  */
 export function updateCollisions(
@@ -127,6 +128,7 @@ export function updateCollisions(
     const BROAD_RADIUS = 5.0;
     const broadRadiusSq = BROAD_RADIUS * BROAD_RADIUS;
 
+    // === PHASE 1: Player-to-Marcher Collisions ===
     bandLegs.forEach(({ anchor }, index) => {
         const st = stumbleStates[index];
         const isDown = st.tilt >= MAX_TILT * 0.95;
@@ -177,6 +179,7 @@ export function updateCollisions(
             return;
         }
 
+        // Obstacle push from down marchers (only push, no cascade)
         if (isDown && st.downTimer > 0) {
             const obstDistSq = bx * bx + bz * bz;
             if (obstDistSq < OBSTACLE_RADIUS * OBSTACLE_RADIUS && obstDistSq > 0.001) {
@@ -305,136 +308,61 @@ export function updateCollisions(
         }
     });
 
-    // Domino cascade via spatial grid
-    const MARCHER_COL_SQ = MARCHER_COLLISION_RADIUS * MARCHER_COLLISION_RADIUS;
-    const GRID_CELL = 2.0;
-    const INV_CELL = 1 / GRID_CELL;
-    const grid = new Map<number, number[]>();
+    // === PHASE 2: Marcher Avoidance Routing ===
+    // Marchers detect nearby obstacles (player, down marchers) and route around them
+    const AVOIDANCE_RADIUS = 2.5; // Detection range for obstacles
+    const AVOIDANCE_FORCE = 3.0; // Strength of repulsive force
 
-    for (let j = 0; j < bandLegs.length; j++) {
-        const p = bandLegs[j].anchor.position;
-        const cx = (p.x * INV_CELL) | 0;
-        const cz = (p.z * INV_CELL) | 0;
-        const key = cx * 73856093 + cz * 19349663;
-        const bucket = grid.get(key);
-        if (bucket) bucket.push(j); else grid.set(key, [j]);
-    }
+    bandLegs.forEach(({ anchor }, index) => {
+        const st = stumbleStates[index];
+        
+        // Don't apply avoidance to marchers that are down or standing up
+        if (st.downTimer > 0 || st.standingUp || st.tilt >= MAX_TILT * 0.5) {
+            return;
+        }
 
-    for (let i = 0; i < bandLegs.length; i++) {
-        const si = stumbleStates[i];
-        if (si.tilt < 0.4 && si.downTimer <= 0) continue;
+        let avoidX = 0;
+        let avoidZ = 0;
 
-        const ai = bandLegs[i].anchor.position;
-        const cx = (ai.x * INV_CELL) | 0;
-        const cz = (ai.z * INV_CELL) | 0;
+        // Detect player as obstacle
+        const toPlayerX = anchor.position.x - playerPos.x;
+        const toPlayerZ = anchor.position.z - playerPos.z;
+        const playerDistSq = toPlayerX * toPlayerX + toPlayerZ * toPlayerZ;
+        
+        if (playerDistSq > 0.001 && playerDistSq < AVOIDANCE_RADIUS * AVOIDANCE_RADIUS) {
+            const playerDist = Math.sqrt(playerDistSq);
+            const repulsionForce = (1 - playerDist / AVOIDANCE_RADIUS) * AVOIDANCE_FORCE;
+            avoidX += (toPlayerX / playerDist) * repulsionForce;
+            avoidZ += (toPlayerZ / playerDist) * repulsionForce;
+        }
 
-        for (let ox = -1; ox <= 1; ox++) {
-            for (let oz = -1; oz <= 1; oz++) {
-                const key = (cx + ox) * 73856093 + (cz + oz) * 19349663;
-                const bucket = grid.get(key);
-                if (!bucket) continue;
+        // Detect down marchers as obstacles
+        for (let j = 0; j < bandLegs.length; j++) {
+            if (j === index) continue;
+            const sj = stumbleStates[j];
+            
+            // Only treat marchers that are down as obstacles
+            if (sj.downTimer <= 0) continue;
 
-                for (const j of bucket) {
-                    if (i === j) continue;
-                    const sj = stumbleStates[j];
-                    if (sj.tilt > 0.3 || sj.downTimer > 0) continue;
+            const aj = bandLegs[j].anchor.position;
+            const toObstacleX = anchor.position.x - aj.x;
+            const toObstacleZ = anchor.position.z - aj.z;
+            const obstDistSq = toObstacleX * toObstacleX + toObstacleZ * toObstacleZ;
 
-                    const aj = bandLegs[j].anchor.position;
-                    const dx = aj.x - ai.x;
-                    const dz = aj.z - ai.z;
-                    const distSq = dx * dx + dz * dz;
-                    if (distSq >= MARCHER_COL_SQ || distSq < 0.001) continue;
-
-                    const dist = Math.sqrt(distSq);
-                    const overlap = 1 - dist / MARCHER_COLLISION_RADIUS;
-                    const transferFactor = (si.tilt / MAX_TILT) * overlap * 1.5;
-                    sj.tilt = Math.min(MAX_TILT, sj.tilt + transferFactor * frameDt * 6);
-                    sj.tiltDirX = dx / dist;
-                    sj.tiltDirZ = dz / dist;
-                    sj.recovering = false;
-                    
-                    // Track hits from domino cascade
-                    sj.hitCount++;
-                    sj.hitCountTimer = 0;
-
-                    if (!sj.playedStumble && sj.tilt > 0.3) {
-                        sj.playedStumble = true;
-                        playStumbleSound(bandLegs[j].row);
-                        penaltyThisFrame += 2;
-                    }
-                    
-                    // Auto-fall if hit enough times during cascade
-                    if (sj.hitCount >= HITS_TO_FALL && sj.tilt < MAX_TILT * 0.95) {
-                        sj.tilt = MAX_TILT;
-                    }
-                    
-                    if (sj.tilt >= MAX_TILT * 0.95) {
-                        sj.downTimer = DOWN_DURATION;
-                        if (!sj.playedFall) {
-                            sj.playedFall = true;
-                            playCrashSound(bandLegs[j].row);
-                            penaltyThisFrame += 5;
-                            knockedThisFrame++;
-                            emitDustBurst(scene, bandLegs[j].anchor.position);
-                            scatterHat(bandLegs[j].anchor, sj.tiltDirX, sj.tiltDirZ);
-                            // Reset hit count once fallen
-                            sj.hitCount = 0;
-                            sj.hitCountTimer = 0;
-                        }
-                    }
-                }
+            if (obstDistSq > 0.001 && obstDistSq < AVOIDANCE_RADIUS * AVOIDANCE_RADIUS) {
+                const obstDist = Math.sqrt(obstDistSq);
+                const repulsionForce = (1 - obstDist / AVOIDANCE_RADIUS) * AVOIDANCE_FORCE;
+                avoidX += (toObstacleX / obstDist) * repulsionForce;
+                avoidZ += (toObstacleZ / obstDist) * repulsionForce;
             }
         }
-    }
 
-    // Separation pass: push apart marchers to prevent mesh overlap
-    // Include any marcher that's stumbling, down, standing up, or recovering
-    const SEPARATION_RADIUS = MARCHER_COLLISION_RADIUS + 0.2;
-    const SEPARATION_FORCE = 1.5; // Much stronger force to actively push out of formation
-    for (let i = 0; i < bandLegs.length; i++) {
-        const si = stumbleStates[i];
-        // Include stumbling, down, standing up, or recovering marchers
-        const iAffected = si.tilt > 0.1 || si.downTimer > 0 || si.standingUp;
-        if (!iAffected) continue;
-
-        const ai = bandLegs[i].anchor.position;
-        const cx = (ai.x * INV_CELL) | 0;
-        const cz = (ai.z * INV_CELL) | 0;
-
-        for (let ox = -1; ox <= 1; ox++) {
-            for (let oz = -1; oz <= 1; oz++) {
-                const key = (cx + ox) * 73856093 + (cz + oz) * 19349663;
-                const bucket = grid.get(key);
-                if (!bucket) continue;
-
-                for (const j of bucket) {
-                    if (i >= j) continue; // avoid double-processing
-                    const sj = stumbleStates[j];
-                    const jAffected = sj.tilt > 0.1 || sj.downTimer > 0 || sj.standingUp;
-                    if (!jAffected) continue; // only if j is also affected
-
-                    const aj = bandLegs[j].anchor.position;
-                    const dx = aj.x - ai.x;
-                    const dz = aj.z - ai.z;
-                    const distSq = dx * dx + dz * dz;
-                    const sepRadiusSq = SEPARATION_RADIUS * SEPARATION_RADIUS;
-                    if (distSq >= sepRadiusSq || distSq < 0.001) continue;
-
-                    const dist = Math.sqrt(distSq);
-                    const overlap = SEPARATION_RADIUS - dist;
-                    const pushForce = overlap * SEPARATION_FORCE * frameDt;
-                    const pushX = (dx / dist) * pushForce;
-                    const pushZ = (dz / dist) * pushForce;
-
-                    // Push both marchers apart equally
-                    ai.x -= pushX * 0.5;
-                    ai.z -= pushZ * 0.5;
-                    aj.x += pushX * 0.5;
-                    aj.z += pushZ * 0.5;
-                }
-            }
+        // Apply avoidance by adjusting position
+        if (avoidX !== 0 || avoidZ !== 0) {
+            anchor.position.x += avoidX * frameDt;
+            anchor.position.z += avoidZ * frameDt;
         }
-    }
+    });
 
     return {
         obstaclePushX,
