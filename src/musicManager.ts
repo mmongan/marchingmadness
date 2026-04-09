@@ -1,6 +1,6 @@
 // Music manager: metronome, Tone.Transport setup, and instrument scheduling
 import * as Tone from "tone";
-import { BPM, WHOLE_NOTE_DURATION, PART_ID_TO_SF_INDEX } from "./gameConstants";
+import { BPM, WHOLE_NOTE_DURATION, PART_ID_TO_SF_INDEX, PART_ID_TO_TRANSPOSE } from "./gameConstants";
 import { sfInstruments } from "./audioSystem";
 
 let metronomeSynth: Tone.MembraneSynth | null = null;
@@ -76,7 +76,7 @@ export function startMetronomeAndMusic(
                     entry.VoiceEntries.forEach((ve: any) => {
                         ve.Notes.forEach((note: any) => {
                             if (note.halfTone) {
-                                const transpose = (osmdInstrument as any).PlaybackTranspose || 0;
+                                const transpose = PART_ID_TO_TRANSPOSE[osmdInstrId] || 0;
                                 const midiNote = note.halfTone + transpose;
                                 const duration = note.Length.RealValue * WHOLE_NOTE_DURATION;
                                 const scheduleTime = (mIndex * WHOLE_NOTE_DURATION) + timeInMeasure;

@@ -85,6 +85,20 @@ export const PART_ID_TO_SF_INDEX: Record<string, number> = {
     "P10": 8, // Glockenspiel → glockenspiel
 };
 
+// MusicXML Part ID → Transposition in semitones (negative = lower pitch for Bb/Eb instruments)
+export const PART_ID_TO_TRANSPOSE: Record<string, number> = {
+    "P1": 0,   // Flute: concert pitch
+    "P2": -2,  // B♭ Clarinet: down 2 semitones
+    "P3": -9,  // Alto Sax: down 9 semitones (Eb instrument)
+    "P4": -7,  // Mellophone (Horn in F): down 7 semitones
+    "P5": -2,  // B♭ Trumpet 1: down 2 semitones
+    "P6": -2,  // B♭ Trumpet 2: down 2 semitones
+    "P7": 0,   // Trombone: concert pitch
+    "P8": 0,   // Euphonium: concert pitch
+    "P9": 0,   // Tuba: concert pitch
+    "P10": 0,  // Glockenspiel: concert pitch
+};
+
 // Song list
 export const SONG_LIST = [
     { file: "assets/fight_song.xml", title: "Fight Song", subtitle: "Public Domain" },
