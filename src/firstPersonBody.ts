@@ -89,6 +89,10 @@ export class FirstPersonBody {
             if (document.pointerLockElement === document.body || document.pointerLockElement === document.documentElement) {
                 this.desktopMouseTurnX += deltaX * this.DESKTOP_MOUSE_SENSITIVITY;
                 this.desktopMouseTurnY += deltaY * this.DESKTOP_MOUSE_SENSITIVITY;
+            } else {
+                // Reset mouse inputs when pointer lock is not active
+                this.desktopMouseTurnX = 0;
+                this.desktopMouseTurnY = 0;
             }
         });
     }
@@ -291,8 +295,9 @@ export class FirstPersonBody {
             this.turnSpeed = targetTurn;
         }
 
-        // Decay mouse input each frame (but keys provide continuous input)
-        this.desktopMouseTurnX *= 0.9;
+        // Reset mouse input each frame (only apply for one frame, don't accumulate)
+        this.desktopMouseTurnX = 0;
+        this.desktopMouseTurnY = 0;
 
         return { movement, turnY: this.turnSpeed * dt };
     }
