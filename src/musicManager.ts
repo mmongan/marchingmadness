@@ -1,6 +1,6 @@
 // Music manager: metronome, Tone.Transport setup, and instrument scheduling
 import * as Tone from "tone";
-import { BPM, WHOLE_NOTE_DURATION } from "./gameConstants";
+import { BPM, WHOLE_NOTE_DURATION, PART_ID_TO_SF_INDEX } from "./gameConstants";
 import { sfInstruments } from "./audioSystem";
 
 let metronomeSynth: Tone.MembraneSynth | null = null;
@@ -44,7 +44,12 @@ export function startMetronomeAndMusic(
         return;
     }
 
-    const instruments = osmdSheet.Instruments;
+    // Debug: Log instrument transposition values
+    console.log("=== OSMD Instruments ===");
+    osmdSheet.Instruments.forEach((inst: any, idx: number) => {
+        console.log(`[${idx}] ${inst.Name} (ID: ${inst.Id}): PlaybackTranspose=${inst.PlaybackTranspose}`);
+    });
+
     osmdSheet.SourceMeasures.forEach((sourceMeasure: any, mIndex: number) => {
             let measureFirstT = 0;
             if (sourceMeasure.VerticalSourceStaffEntryContainers.length > 0 &&
@@ -57,19 +62,33 @@ export function startMetronomeAndMusic(
                 const timeInMeasure = (container.Timestamp.RealValue - measureFirstT) * WHOLE_NOTE_DURATION;
 
                 container.StaffEntries.forEach((entry: any) => {
-                    const instrIndex = instruments.findIndex((inst: any) => inst.Id === entry.ParentStaff.ParentInstrument.Id);
-                    if (instrIndex < 0) return;
+                    const osmdInstrument = entry.ParentStaff.ParentInstrument;
+                    const osmdInstrId = osmdInstrument.Id;
+                    
+                    // Map OSMD part ID (P1, P2, etc.) to SoundFont index
+                    const sfIndex = PART_ID_TO_SF_INDEX[osmdInstrId];
+                    if (sfIndex === undefined) return; // Unknown or percussion part
+                    
+                    const sf = sfInstruments.get(sfIndex);
+                    if (!sf) return;
 
-                    const sf = sfInstruments.get(instrIndex);
+                    let noteCount = 0;
                     entry.VoiceEntries.forEach((ve: any) => {
                         ve.Notes.forEach((note: any) => {
                             if (note.halfTone) {
-                                const transpose = (instruments[instrIndex] as any).PlaybackTranspose || 0;
+                                const transpose = (osmdInstrument as any).PlaybackTranspose || 0;
                                 const midiNote = note.halfTone + transpose;
                                 const duration = note.Length.RealValue * WHOLE_NOTE_DURATION;
                                 const scheduleTime = (mIndex * WHOLE_NOTE_DURATION) + timeInMeasure;
+                                
+                                // Debug: Log first few notes per instrument
+                                if (noteCount < 3) {
+                                    console.log(`  ${osmdInstrId}: halfTone=${note.halfTone} + transpose=${transpose} = MIDI${midiNote}`);
+                                    noteCount++;
+                                }
+                                
                                 Tone.Transport.schedule((time) => {
-                                    sf?.start({ note: midiNote, time, duration });
+                                    sf.start({ note: midiNote, time, duration });
                                 }, scheduleTime);
                             }
                         });

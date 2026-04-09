@@ -71,6 +71,20 @@ export const GM_INSTRUMENT_NAMES = [
 ];
 export const GM_INSTRUMENT_VOLUMES = [100, 90, 85, 95, 100, 80, 85, 85, 75];
 
+// MusicXML Part ID → SoundFont index mapping (P1-P10 from MusicXML, some share SF instruments)
+export const PART_ID_TO_SF_INDEX: Record<string, number> = {
+    "P1": 5,  // Flute → flute
+    "P2": 6,  // B♭ Clarinet → clarinet
+    "P3": 7,  // Alto Sax → alto_sax
+    "P4": 2,  // Mellophone → french_horn
+    "P5": 0,  // B♭ Trumpet 1 → trumpet
+    "P6": 1,  // B♭ Trumpet 2 → trumpet
+    "P7": 3,  // Trombone → trombone
+    "P8": 3,  // Euphonium → trombone (shares with P7)
+    "P9": 4,  // Tuba → tuba
+    "P10": 8, // Glockenspiel → glockenspiel
+};
+
 // Song list
 export const SONG_LIST = [
     { file: "assets/fight_song.xml", title: "Fight Song", subtitle: "Public Domain" },
