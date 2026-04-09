@@ -1174,10 +1174,29 @@ engine.runRenderLoop(() => {
                 let avoidanceX = 0;
                 let avoidanceZ = 0;
                 
+                // === PLAYER AVOIDANCE (Check for ALL marchers - settled or not) ===
+                // This ensures marchers route around blockages and don't pile up behind player
+                if (scene.activeCamera) {
+                    const playerPos = scene.activeCamera.globalPosition;
+                    const playerAvoidRadius = 5.0; // Increased: marchers see player from further away
+                    const playerDx = anchor.position.x - playerPos.x;
+                    const playerDz = anchor.position.z - playerPos.z;
+                    const playerDistSq = playerDx * playerDx + playerDz * playerDz;
+                    
+                    if (playerDistSq < playerAvoidRadius * playerAvoidRadius && playerDistSq > 0.1) {
+                        const playerDist = Math.sqrt(playerDistSq);
+                        // Stronger avoidance force when very close (to escape pileups)
+                        const playerAvoidForce = (1 - playerDist / playerAvoidRadius) * (playerDist < 1.5 ? 1.5 : 0.8);
+                        
+                        avoidanceX += (playerDx / playerDist) * playerAvoidForce;
+                        avoidanceZ += (playerDz / playerDist) * playerAvoidForce;
+                    }
+                }
+                
                 if (isSettled) {
                     // SETTLED IN FORMATION: March smoothly at normal pace, no avoidance interference
                     moveAmount = 0.04;
-                    // Skip all avoidance calculations - just march with the band
+                    // Only player avoidance applies - skip other calculations for smooth marching
                 } else {
                     // OUT OF FORMATION: Catch up with longer strides and active avoidance
                     const baseRate = 0.04; // base stride length
@@ -1214,23 +1233,6 @@ engine.runRenderLoop(() => {
                     if (collisionCount > 0) {
                         avoidanceX += collisionX;
                         avoidanceZ += collisionZ;
-                    }
-                    
-                    // === PLAYER AVOIDANCE ===
-                    if (scene.activeCamera) {
-                        const playerPos = scene.activeCamera.globalPosition;
-                        const playerAvoidRadius = 3.5;
-                        const playerDx = anchor.position.x - playerPos.x;
-                        const playerDz = anchor.position.z - playerPos.z;
-                        const playerDistSq = playerDx * playerDx + playerDz * playerDz;
-                        
-                        if (playerDistSq < playerAvoidRadius * playerAvoidRadius && playerDistSq > 0.1) {
-                            const playerDist = Math.sqrt(playerDistSq);
-                            const playerAvoidForce = (1 - playerDist / playerAvoidRadius) * 0.8;
-                            
-                            avoidanceX += (playerDx / playerDist) * playerAvoidForce;
-                            avoidanceZ += (playerDz / playerDist) * playerAvoidForce;
-                        }
                     }
                     
                     // === DETECT OUT-OF-FORMATION MARCHERS & ROUTE AROUND THEM ===
@@ -1271,7 +1273,7 @@ engine.runRenderLoop(() => {
                     }
                 }
                 
-                // Apply movement (dx/dz are very small when settled, so avoidance is skipped)
+                // Apply movement with player avoidance always active
                 anchor.position.x += dx * moveAmount + avoidanceX;
                 anchor.position.z += dz * moveAmount + avoidanceZ;
 
