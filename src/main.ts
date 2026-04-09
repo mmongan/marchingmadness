@@ -1188,7 +1188,8 @@ engine.runRenderLoop(() => {
                 
                 // === GENERAL MARCHER COLLISION AVOIDANCE (Prevent overlap) ===
                 // Check all nearby marchers regardless of formation status
-                const collisionRadius = 1.2; // Marchers should maintain minimum spacing
+                // Use smaller radius than formation spacing (2.0m) so marchers can settle into proper positions
+                const collisionRadius = 0.8; // Only prevent actual body overlap, allow formation spacing
                 const collisionRadius2 = collisionRadius * collisionRadius;
                 let collisionCount = 0;
                 let collisionX = 0;
