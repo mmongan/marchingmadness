@@ -1166,127 +1166,119 @@ engine.runRenderLoop(() => {
                 const dz = targetZ - anchor.position.z;
                 const gap = Math.sqrt(dx * dx + dz * dz);
 
-                // SETTLE ZONE: If close enough to target, use normal steady pace
-                // This prevents marchers from orbiting around their formation position
-                // while keeping them actively moving with the drill formation
+                // SETTLE ZONE: Marchers in proper formation position march smoothly without interference
                 const settleZone = 0.25; // meters - marchers within this distance are "settled"
+                const isSettled = gap <= settleZone;
+                
                 let moveAmount = 0.04; // default: normal formation marching pace
-                
-                if (gap > settleZone) {
-                    // Outside settle zone: catch up with longer strides
-                    const baseRate = 0.04; // base stride length
-                    const maxCatchupRate = 0.18; // max stride when far from target
-                    // Interpolate stride length based on distance: closer to target = shorter stride
-                    moveAmount = gap > 0.05 
-                        ? baseRate + (maxCatchupRate - baseRate) * Math.min(1.0, gap / 3.0)
-                        : baseRate;
-                }
-                
-                // Calculate avoidance steering for out-of-formation marchers
                 let avoidanceX = 0;
                 let avoidanceZ = 0;
                 
-                // === GENERAL MARCHER COLLISION AVOIDANCE (Prevent overlap) ===
-                // Check all nearby marchers regardless of formation status
-                // Use smaller radius than formation spacing (2.0m) so marchers can settle into proper positions
-                const collisionRadius = 0.8; // Only prevent actual body overlap, allow formation spacing
-                const collisionRadius2 = collisionRadius * collisionRadius;
-                let collisionCount = 0;
-                let collisionX = 0;
-                let collisionZ = 0;
-                
-                for (let j = 0; j < bandLegs.length; j++) {
-                    if (j === index) continue;
+                if (isSettled) {
+                    // SETTLED IN FORMATION: March smoothly at normal pace, no avoidance interference
+                    moveAmount = 0.04;
+                    // Skip all avoidance calculations - just march with the band
+                } else {
+                    // OUT OF FORMATION: Catch up with longer strides and active avoidance
+                    const baseRate = 0.04; // base stride length
+                    const maxCatchupRate = 0.18; // max stride when far from target
+                    moveAmount = gap > 0.05 
+                        ? baseRate + (maxCatchupRate - baseRate) * Math.min(1.0, gap / 3.0)
+                        : baseRate;
                     
-                    const otherAnchor = bandLegs[j].anchor;
-                    const cdx = otherAnchor.position.x - anchor.position.x;
-                    const cdz = otherAnchor.position.z - anchor.position.z;
-                    const collisionDistSq = cdx * cdx + cdz * cdz;
+                    // Only calculate avoidance when out of formation
+                    // === GENERAL MARCHER COLLISION AVOIDANCE (Prevent overlap) ===
+                    const collisionRadius = 0.8;
+                    const collisionRadius2 = collisionRadius * collisionRadius;
+                    let collisionX = 0;
+                    let collisionZ = 0;
+                    let collisionCount = 0;
                     
-                    if (collisionDistSq < collisionRadius2 && collisionDistSq > 0.01) {
-                        // Marcher is too close! Apply repulsion
-                        const collisionDist = Math.sqrt(collisionDistSq);
-                        const repelStrength = (1 - collisionDist / collisionRadius) * 0.5;
-                        collisionX += (cdx / collisionDist) * repelStrength;
-                        collisionZ += (cdz / collisionDist) * repelStrength;
-                        collisionCount++;
-                    }
-                }
-                
-                // Accumulate collision avoidance
-                if (collisionCount > 0) {
-                    avoidanceX += collisionX;
-                    avoidanceZ += collisionZ;
-                }
-                
-                // === PLAYER AVOIDANCE (Highest Priority) ===
-                // Marchers route around the player to create emergent behavior
-                if (scene.activeCamera) {
-                    const playerPos = scene.activeCamera.globalPosition;
-                    const playerAvoidRadius = 3.5; // Marchers avoid player at this distance
-                    const playerDx = anchor.position.x - playerPos.x;
-                    const playerDz = anchor.position.z - playerPos.z;
-                    const playerDistSq = playerDx * playerDx + playerDz * playerDz;
-                    
-                    if (playerDistSq < playerAvoidRadius * playerAvoidRadius && playerDistSq > 0.1) {
-                        const playerDist = Math.sqrt(playerDistSq);
-                        const playerAvoidForce = (1 - playerDist / playerAvoidRadius) * 0.8;
+                    for (let j = 0; j < bandLegs.length; j++) {
+                        if (j === index) continue;
                         
-                        // Push away from player with strong force
-                        avoidanceX += (playerDx / playerDist) * playerAvoidForce;
-                        avoidanceZ += (playerDz / playerDist) * playerAvoidForce;
+                        const otherAnchor = bandLegs[j].anchor;
+                        const cdx = otherAnchor.position.x - anchor.position.x;
+                        const cdz = otherAnchor.position.z - anchor.position.z;
+                        const collisionDistSq = cdx * cdx + cdz * cdz;
+                        
+                        if (collisionDistSq < collisionRadius2 && collisionDistSq > 0.01) {
+                            const collisionDist = Math.sqrt(collisionDistSq);
+                            const repelStrength = (1 - collisionDist / collisionRadius) * 0.5;
+                            collisionX += (cdx / collisionDist) * repelStrength;
+                            collisionZ += (cdz / collisionDist) * repelStrength;
+                            collisionCount++;
+                        }
+                    }
+                    
+                    if (collisionCount > 0) {
+                        avoidanceX += collisionX;
+                        avoidanceZ += collisionZ;
+                    }
+                    
+                    // === PLAYER AVOIDANCE ===
+                    if (scene.activeCamera) {
+                        const playerPos = scene.activeCamera.globalPosition;
+                        const playerAvoidRadius = 3.5;
+                        const playerDx = anchor.position.x - playerPos.x;
+                        const playerDz = anchor.position.z - playerPos.z;
+                        const playerDistSq = playerDx * playerDx + playerDz * playerDz;
+                        
+                        if (playerDistSq < playerAvoidRadius * playerAvoidRadius && playerDistSq > 0.1) {
+                            const playerDist = Math.sqrt(playerDistSq);
+                            const playerAvoidForce = (1 - playerDist / playerAvoidRadius) * 0.8;
+                            
+                            avoidanceX += (playerDx / playerDist) * playerAvoidForce;
+                            avoidanceZ += (playerDz / playerDist) * playerAvoidForce;
+                        }
+                    }
+                    
+                    // === DETECT OUT-OF-FORMATION MARCHERS & ROUTE AROUND THEM ===
+                    const outOfFormationRadius = 2.5;
+                    const avoidanceRadius = 1.8;
+                    const avoidanceRadius2 = avoidanceRadius * avoidanceRadius;
+                    
+                    for (let j = 0; j < bandLegs.length; j++) {
+                        if (j === index) continue;
+                        
+                        const otherMember = bandLegs[j];
+                        const otherDrill = getDrillPosition(currentBeat, otherMember.row, otherMember.col, 5, 15, otherMember.startX, otherMember.startZ);
+                        const otherDrillX = otherDrill.x;
+                        const otherDrillZ = otherDrill.z - (currentRenderTime * FLY_SPEED);
+                        
+                        const markerDistX = otherMember.anchor.position.x - otherDrillX;
+                        const markerDistZ = otherMember.anchor.position.z - otherDrillZ;
+                        const markerDist = Math.sqrt(markerDistX * markerDistX + markerDistZ * markerDistZ);
+                        
+                        const isOutOfFormation = markerDist > outOfFormationRadius;
+                        const st = stumbleStates[j];
+                        const isDown = st.tilt >= MAX_TILT * 0.7;
+                        
+                        if (!isOutOfFormation && !isDown) continue;
+                        
+                        const otherAnchor = otherMember.anchor;
+                        const odx = otherAnchor.position.x - anchor.position.x;
+                        const odz = otherAnchor.position.z - anchor.position.z;
+                        const distSq = odx * odx + odz * odz;
+                        
+                        if (distSq < avoidanceRadius2 && distSq > 0.01) {
+                            const dist = Math.sqrt(distSq);
+                            const strength = isDown ? 0.6 : 0.4;
+                            const pushForce = (1 - dist / avoidanceRadius) * strength;
+                            avoidanceX -= (odx / dist) * pushForce;
+                            avoidanceZ -= (odz / dist) * pushForce;
+                        }
                     }
                 }
                 
-                // === DETECT OUT-OF-FORMATION MARCHERS & ROUTE AROUND THEM ===
-                const outOfFormationRadius = 2.5; // Marchers are "out of formation" if this far from drill
-                const avoidanceRadius = 1.8; // Detection radius for steering around
-                const avoidanceRadius2 = avoidanceRadius * avoidanceRadius;
-                
-                for (let j = 0; j < bandLegs.length; j++) {
-                    if (j === index) continue;
-                    
-                    const otherMember = bandLegs[j];
-                    const otherDrill = getDrillPosition(currentBeat, otherMember.row, otherMember.col, 5, 15, otherMember.startX, otherMember.startZ);
-                    const otherDrillX = otherDrill.x;
-                    const otherDrillZ = otherDrill.z - (currentRenderTime * FLY_SPEED);
-                    
-                    const markerDistX = otherMember.anchor.position.x - otherDrillX;
-                    const markerDistZ = otherMember.anchor.position.z - otherDrillZ;
-                    const markerDist = Math.sqrt(markerDistX * markerDistX + markerDistZ * markerDistZ);
-                    
-                    // Check if this marcher is significantly out of formation
-                    const isOutOfFormation = markerDist > outOfFormationRadius;
-                    
-                    // Also treat heavily fallen marchers as obstacles
-                    const st = stumbleStates[j];
-                    const isDown = st.tilt >= MAX_TILT * 0.7;
-                    
-                    if (!isOutOfFormation && !isDown) continue; // Only avoid out-of-formation or fallen
-                    
-                    const otherAnchor = otherMember.anchor;
-                    const odx = otherAnchor.position.x - anchor.position.x;
-                    const odz = otherAnchor.position.z - anchor.position.z;
-                    const distSq = odx * odx + odz * odz;
-                    
-                    if (distSq < avoidanceRadius2 && distSq > 0.01) {
-                        const dist = Math.sqrt(distSq);
-                        const strength = isDown ? 0.6 : 0.4; // Fallen marchers: strong avoidance. Out-of-formation: moderate
-                        const pushForce = (1 - dist / avoidanceRadius) * strength;
-                        avoidanceX -= (odx / dist) * pushForce;
-                        avoidanceZ -= (odz / dist) * pushForce;
-                    }
-                }
-                
-                // Apply movement with avoidance integrated
+                // Apply movement (dx/dz are very small when settled, so avoidance is skipped)
                 anchor.position.x += dx * moveAmount + avoidanceX;
                 anchor.position.z += dz * moveAmount + avoidanceZ;
 
-                // Set leg animation - all marchers swing at same beat, stride length varies via movement speed
-                // Leg swing amplitude increases slightly when taking longer strides to add visual appeal
-                // Marchers settled near formation position use minimal leg swing
-                let legAmplitude = 0.5; // base amplitude for settled marchers
-                if (gap >= settleZone) {
+                // Set leg animation - consistent and smooth when settled
+                let legAmplitude = 0.6; // consistent amplitude for smooth marching
+                if (!isSettled) {
+                    // Only vary amplitude when catching up
                     const maxAmplitude = 0.7;
                     const minAmplitude = 0.5;
                     legAmplitude = minAmplitude + (maxAmplitude - minAmplitude) * Math.min(1.0, gap / 2.0);
