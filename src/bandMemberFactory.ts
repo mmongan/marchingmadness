@@ -342,10 +342,10 @@ export class BandMemberFactory {
 
         // === BUILD SKELETON HIERARCHY ===
         
-        // Torso (center 1.20, height 0.40, hip to shoulders)
+        // Torso (center 1.22, height 0.40, hip to shoulders)
         const torso = isBase ? this.baseTorso : this.baseTorso.createInstance(`torso_${r}_${c}`);
         torso.parent = anchor;
-        torso.position.set(0, 1.20, 0);
+        torso.position.set(0, 1.22, 0);
 
         // Neck-Torso connector (fills gap between torso top and neck, serves as rotation pivot)
         const neckConnector = isBase ? this.baseNeckConnector : this.baseNeckConnector.createInstance(`neckConnector_${r}_${c}`);
@@ -453,12 +453,12 @@ export class BandMemberFactory {
         // Upper leg (child of hip)
         const upperLegL = isBase ? this.baseUpperLegL : this.baseUpperLegL.createInstance(`upperLegL_${r}_${c}`);
         upperLegL.parent = hipL;
-        upperLegL.position.set(0, -0.26, 0);  // Positioned to end at knee
+        upperLegL.position.set(0, -0.16, 0);  // Positioned to end at knee
 
         // Knee sphere (visual joint, child of upper leg, serves as lower leg pivot)
         const kneeL = isBase ? this.baseKneeL : this.baseKneeL.createInstance(`kneeL_${r}_${c}`);
         kneeL.parent = upperLegL;
-        kneeL.position.set(0, -0.52, 0.04);  // At far endpoint of upper leg
+        kneeL.position.set(0, -0.26, 0.04);  // At far endpoint of upper leg
 
         // Lower leg (child of knee, rotates around knee center)
         const lowerLegL = isBase ? this.baseLowerLegL : this.baseLowerLegL.createInstance(`lowerLegL_${r}_${c}`);
@@ -468,7 +468,7 @@ export class BandMemberFactory {
         // Lower Leg-Foot connector (fills gap at ankle, serves as rotation pivot)
         const lowerLegFootConnectorL = isBase ? this.baseLowerLegFootConnectorL : this.baseLowerLegFootConnectorL.createInstance(`lowerLegFootConnectorL_${r}_${c}`);
         lowerLegFootConnectorL.parent = lowerLegL;
-        lowerLegFootConnectorL.position.set(0, -0.45, 0);  // At far endpoint of lower leg
+        lowerLegFootConnectorL.position.set(0, -0.225, 0);  // At far endpoint of lower leg
 
         // Foot (child of connector, rotates around connector center)
         const footL = isBase ? this.baseFootL : this.baseFootL.createInstance(`footL_${r}_${c}`);
@@ -489,12 +489,12 @@ export class BandMemberFactory {
         // Upper leg (child of hip)
         const upperLegR = isBase ? this.baseUpperLegR : this.baseUpperLegR.createInstance(`upperLegR_${r}_${c}`);
         upperLegR.parent = hipR;
-        upperLegR.position.set(0, -0.26, 0);  // Positioned to end at knee
+        upperLegR.position.set(0, -0.16, 0);  // Positioned to end at knee
 
         // Knee sphere (visual joint, child of upper leg, serves as lower leg pivot)
         const kneeR = isBase ? this.baseKneeR : this.baseKneeR.createInstance(`kneeR_${r}_${c}`);
         kneeR.parent = upperLegR;
-        kneeR.position.set(0, -0.52, 0.04);  // At far endpoint of upper leg
+        kneeR.position.set(0, -0.26, 0.04);  // At far endpoint of upper leg
 
         // Lower leg (child of knee, rotates around knee center)
         const lowerLegR = isBase ? this.baseLowerLegR : this.baseLowerLegR.createInstance(`lowerLegR_${r}_${c}`);
@@ -504,7 +504,7 @@ export class BandMemberFactory {
         // Lower Leg-Foot connector (fills gap at ankle, serves as rotation pivot)
         const lowerLegFootConnectorR = isBase ? this.baseLowerLegFootConnectorR : this.baseLowerLegFootConnectorR.createInstance(`lowerLegFootConnectorR_${r}_${c}`);
         lowerLegFootConnectorR.parent = lowerLegR;
-        lowerLegFootConnectorR.position.set(0, -0.45, 0);  // At far endpoint of lower leg
+        lowerLegFootConnectorR.position.set(0, -0.225, 0);  // At far endpoint of lower leg
 
         // Foot (child of connector, rotates around connector center)
         const footR = isBase ? this.baseFootR : this.baseFootR.createInstance(`footR_${r}_${c}`);
