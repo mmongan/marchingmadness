@@ -425,16 +425,15 @@ export class BandMemberFactory {
         kneeL.parent = upperLegL;
         kneeL.position.set(0, 0, 0.04);  // At upper leg endpoint (knee center)
 
-        // Lower leg (child of knee, rotates around knee center - top of lower leg)
+        // Lower leg (child of knee, rotates around knee center)
         const lowerLegL = isBase ? this.baseLowerLegL : this.baseLowerLegL.createInstance(`lowerLegL_${r}_${c}`);
         lowerLegL.parent = kneeL;
-        lowerLegL.position.set(0, 0, 0);  // Top positioned at knee center
-        lowerLegL.rotation.z = Math.PI;  // Flip to extend downward
+        lowerLegL.position.set(0, -0.225, 0);  // Positioned below knee, extends from knee to ankle
 
         // Lower Leg-Foot connector (fills gap at ankle, serves as rotation pivot)
         const lowerLegFootConnectorL = isBase ? this.baseLowerLegFootConnectorL : this.baseLowerLegFootConnectorL.createInstance(`lowerLegFootConnectorL_${r}_${c}`);
         lowerLegFootConnectorL.parent = lowerLegL;
-        lowerLegFootConnectorL.position.set(0, -0.45, 0.04);  // At bottom of flipped lower leg
+        lowerLegFootConnectorL.position.set(0, -0.225, 0.04);  // At bottom of lower leg
 
         // Foot (child of connector, rotates around connector center)
         const footL = isBase ? this.baseFootL : this.baseFootL.createInstance(`footL_${r}_${c}`);
@@ -462,16 +461,15 @@ export class BandMemberFactory {
         kneeR.parent = upperLegR;
         kneeR.position.set(0, 0, 0.04);  // At upper leg endpoint (knee center)
 
-        // Lower leg (child of knee, rotates around knee center - top of lower leg)
+        // Lower leg (child of knee, rotates around knee center)
         const lowerLegR = isBase ? this.baseLowerLegR : this.baseLowerLegR.createInstance(`lowerLegR_${r}_${c}`);
         lowerLegR.parent = kneeR;
-        lowerLegR.position.set(0, 0, 0);  // Top positioned at knee center
-        lowerLegR.rotation.z = Math.PI;  // Flip to extend downward
+        lowerLegR.position.set(0, -0.225, 0);  // Positioned below knee, extends from knee to ankle
 
         // Lower Leg-Foot connector (fills gap at ankle, serves as rotation pivot)
         const lowerLegFootConnectorR = isBase ? this.baseLowerLegFootConnectorR : this.baseLowerLegFootConnectorR.createInstance(`lowerLegFootConnectorR_${r}_${c}`);
         lowerLegFootConnectorR.parent = lowerLegR;
-        lowerLegFootConnectorR.position.set(0, -0.45, 0.04);  // At bottom of flipped lower leg
+        lowerLegFootConnectorR.position.set(0, -0.225, 0.04);  // At bottom of lower leg
 
         // Foot (child of connector, rotates around connector center)
         const footR = isBase ? this.baseFootR : this.baseFootR.createInstance(`footR_${r}_${c}`);
