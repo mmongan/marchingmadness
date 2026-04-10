@@ -12,6 +12,8 @@ export interface BodyParts {
     torsoBaseY?: number;
     upperArmL?: InstancedMesh | Mesh;
     upperArmR?: InstancedMesh | Mesh;
+    elbowL?: InstancedMesh | Mesh;
+    elbowR?: InstancedMesh | Mesh;
     forearmL?: InstancedMesh | Mesh;
     forearmR?: InstancedMesh | Mesh;
     handL?: InstancedMesh | Mesh;

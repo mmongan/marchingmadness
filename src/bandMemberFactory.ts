@@ -38,6 +38,8 @@ export class BandMemberFactory {
     private baseUpperArmR!: Mesh;
     private baseForearmL!: Mesh;
     private baseForearmR!: Mesh;
+    private baseElbowL!: Mesh;
+    private baseElbowR!: Mesh;
     private baseHandL!: Mesh;
     private baseHandR!: Mesh;
     private baseUpperLegL!: Mesh;
@@ -89,7 +91,7 @@ export class BandMemberFactory {
         this.baseHead.material = this.skinMat;
 
         // === NECK (small cylinder) ===
-        this.baseNeck = MeshBuilder.CreateCylinder("baseNeck", { diameter: 0.15, height: 0.15 }, scene);
+        this.baseNeck = MeshBuilder.CreateCylinder("baseNeck", { diameter: 0.15, height: 0.12 }, scene);
         this.baseNeck.material = this.skinMat;
 
         // === TORSO (realistic tapered shape) ===
@@ -116,11 +118,18 @@ export class BandMemberFactory {
         this.baseForearmR = MeshBuilder.CreateCylinder("baseForearmR", { diameter: 0.12, height: 0.45 }, scene);
         this.baseForearmR.material = this.skinMat;
 
+        // === ELBOWS (small spheres at joint, ~3cm diameter) ===
+        this.baseElbowL = MeshBuilder.CreateSphere("baseElbowL", { diameter: 0.12, segments: 8 }, scene);
+        this.baseElbowL.material = this.skinMat;
+
+        this.baseElbowR = MeshBuilder.CreateSphere("baseElbowR", { diameter: 0.12, segments: 8 }, scene);
+        this.baseElbowR.material = this.skinMat;
+
         // === HANDS (small boxes at end of arms) ===
-        this.baseHandL = MeshBuilder.CreateBox("baseHandL", { width: 0.12, height: 0.15, depth: 0.08 }, scene);
+        this.baseHandL = MeshBuilder.CreateBox("baseHandL", { width: 0.12, height: 0.15, depth: 0.1 }, scene);
         this.baseHandL.material = this.skinMat;
 
-        this.baseHandR = MeshBuilder.CreateBox("baseHandR", { width: 0.12, height: 0.15, depth: 0.08 }, scene);
+        this.baseHandR = MeshBuilder.CreateBox("baseHandR", { width: 0.12, height: 0.15, depth: 0.1 }, scene);
         this.baseHandR.material = this.skinMat;
 
         // === UPPER LEGS (realistic cylinders, ~5cm diameter) ===
@@ -164,6 +173,7 @@ export class BandMemberFactory {
             this.baseHead, this.baseNeck, this.baseTorso,
             this.baseUpperArmL, this.baseUpperArmR,
             this.baseForearmL, this.baseForearmR,
+            this.baseElbowL, this.baseElbowR,
             this.baseHandL, this.baseHandR,
             this.baseUpperLegL, this.baseUpperLegR,
             this.baseLowerLegL, this.baseLowerLegR,
@@ -186,57 +196,67 @@ export class BandMemberFactory {
 
         // === BUILD SKELETON HIERARCHY ===
         
-        // Head positioned at ~1.7m (realistic standing height)
-        const head = isBase ? this.baseHead : this.baseHead.createInstance(`head_${r}_${c}`);
-        head.parent = anchor;
-        head.position.set(0, 1.7, 0);
-
-        // Neck below head
-        const neck = isBase ? this.baseNeck : this.baseNeck.createInstance(`neck_${r}_${c}`);
-        neck.parent = anchor;
-        neck.position.set(0, 1.55, 0);
-
-        // Torso at ~base 1.2m
+        // Torso at ~base 1.2m (height 0.7, spans 0.85 to 1.55)
         const torso = isBase ? this.baseTorso : this.baseTorso.createInstance(`torso_${r}_${c}`);
         torso.parent = anchor;
         torso.position.set(0, 1.2, 0);
 
+        // Neck positioned to sit on top of torso (height 0.12, spans 1.55 to 1.67)
+        const neck = isBase ? this.baseNeck : this.baseNeck.createInstance(`neck_${r}_${c}`);
+        neck.parent = anchor;
+        neck.position.set(0, 1.61, 0);
+
+        // Head positioned to sit on top of neck (radius 0.175, spans 1.675 to 2.025)
+        const head = isBase ? this.baseHead : this.baseHead.createInstance(`head_${r}_${c}`);
+        head.parent = anchor;
+        head.position.set(0, 1.85, 0);
+
         // === LEFT ARM ===
-        // Upper arm at shoulder
+        // Upper arm at shoulder (height 0.5, spans 1.3 to 1.8)
         const upperArmL = isBase ? this.baseUpperArmL : this.baseUpperArmL.createInstance(`upperArmL_${r}_${c}`);
         upperArmL.parent = anchor;
-        upperArmL.position.set(-0.25, 1.5, 0);  // Left shoulder
+        upperArmL.position.set(-0.22, 1.55, 0);  // Left shoulder, connected to torso top
         
-        // Forearm - CHILD of upper arm, positioned at elbow (0.25m down = half of 0.5m upper arm)
+        // Elbow - CHILD of upper arm, positioned at joint (visual only, no rotation)
+        const elbowL = isBase ? this.baseElbowL : this.baseElbowL.createInstance(`elbowL_${r}_${c}`);
+        elbowL.parent = upperArmL;
+        elbowL.position.set(0, -0.25, 0.05);  // At elbow joint
+        
+        // Forearm - CHILD of upper arm, positioned just AFTER elbow (rotates at elbow on X axis)
         const forearmL = isBase ? this.baseForearmL : this.baseForearmL.createInstance(`forearmL_${r}_${c}`);
         forearmL.parent = upperArmL;
-        forearmL.position.set(0, -0.25, 0.05);  // At elbow joint, slightly forward
+        forearmL.position.set(0, -0.475, 0.05);  // Positioned below elbow sphere (0.25 + 0.12 radius + small gap)
         
-        // Hand - CHILD of forearm, positioned at wrist (0.225m = half of 0.45m forearm)
+        // Hand - CHILD of forearm, positioned at wrist
         const handL = isBase ? this.baseHandL : this.baseHandL.createInstance(`handL_${r}_${c}`);
         handL.parent = forearmL;
-        handL.position.set(0, -0.225, 0.05);  // At wrist
+        handL.position.set(0, -0.225, 0.05);  // At wrist (half of 0.45m forearm)
 
         // === RIGHT ARM ===
-        // Upper arm at shoulder
+        // Upper arm at shoulder (height 0.5, spans 1.3 to 1.8)
         const upperArmR = isBase ? this.baseUpperArmR : this.baseUpperArmR.createInstance(`upperArmR_${r}_${c}`);
         upperArmR.parent = anchor;
-        upperArmR.position.set(0.25, 1.5, 0);  // Right shoulder
+        upperArmR.position.set(0.22, 1.55, 0);  // Right shoulder, connected to torso top
         
-        // Forearm - CHILD of upper arm, positioned at elbow (0.25m down = half of 0.5m upper arm)
+        // Elbow - CHILD of upper arm, positioned at joint (visual only, no rotation)
+        const elbowR = isBase ? this.baseElbowR : this.baseElbowR.createInstance(`elbowR_${r}_${c}`);
+        elbowR.parent = upperArmR;
+        elbowR.position.set(0, -0.25, 0.05);  // At elbow joint
+        
+        // Forearm - CHILD of upper arm, positioned just AFTER elbow (rotates at elbow on X axis)
         const forearmR = isBase ? this.baseForearmR : this.baseForearmR.createInstance(`forearmR_${r}_${c}`);
         forearmR.parent = upperArmR;
-        forearmR.position.set(0, -0.25, 0.05);  // At elbow joint, slightly forward
+        forearmR.position.set(0, -0.475, 0.05);  // Positioned below elbow sphere (0.25 + 0.12 radius + small gap)
         
-        // Hand - CHILD of forearm, positioned at wrist (0.225m = half of 0.45m forearm)
+        // Hand - CHILD of forearm, positioned at wrist
         const handR = isBase ? this.baseHandR : this.baseHandR.createInstance(`handR_${r}_${c}`);
         handR.parent = forearmR;
-        handR.position.set(0, -0.225, 0.05);  // At wrist
+        handR.position.set(0, -0.225, 0.05);  // At wrist (half of 0.45m forearm)
 
         // === LEFT LEG (animated) ===
         const upperLegL = isBase ? this.baseUpperLegL : this.baseUpperLegL.createInstance(`upperLegL_${r}_${c}`);
         upperLegL.parent = anchor;
-        upperLegL.position.set(-0.15, 0.8, 0);
+        upperLegL.position.set(-0.15, 0.85, 0);
 
         // Lower leg is CHILD of upper leg so it rotates with it
         const lowerLegL = isBase ? this.baseLowerLegL : this.baseLowerLegL.createInstance(`lowerLegL_${r}_${c}`);
@@ -256,7 +276,7 @@ export class BandMemberFactory {
         // === RIGHT LEG (animated) ===
         const upperLegR = isBase ? this.baseUpperLegR : this.baseUpperLegR.createInstance(`upperLegR_${r}_${c}`);
         upperLegR.parent = anchor;
-        upperLegR.position.set(0.15, 0.8, 0);
+        upperLegR.position.set(0.15, 0.85, 0);
 
         // Lower leg is CHILD of upper leg so it rotates with it
         const lowerLegR = isBase ? this.baseLowerLegR : this.baseLowerLegR.createInstance(`lowerLegR_${r}_${c}`);
@@ -311,13 +331,15 @@ export class BandMemberFactory {
             plume,
             bodyParts: {
                 head,
-                headBaseY: 1.7,
+                headBaseY: 1.85,
                 neck,
-                neckBaseY: 1.55,
+                neckBaseY: 1.61,
                 torso,
                 torsoBaseY: 1.2,
                 upperArmL,
                 upperArmR,
+                elbowL,
+                elbowR,
                 forearmL,
                 forearmR,
                 handL,
