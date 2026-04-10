@@ -44,6 +44,8 @@ export class BandMemberFactory {
     private baseHandR!: Mesh;
     private baseUpperLegL!: Mesh;
     private baseUpperLegR!: Mesh;
+    private baseKneeL!: Mesh;
+    private baseKneeR!: Mesh;
     private baseLowerLegL!: Mesh;
     private baseLowerLegR!: Mesh;
     private baseFootL!: Mesh;
@@ -166,6 +168,13 @@ export class BandMemberFactory {
         this.baseUpperLegR = MeshBuilder.CreateCylinder("baseUpperLegR", { diameter: 0.17, height: 0.52 }, scene);
         this.baseUpperLegR.material = this.uniformMat;
 
+        // === KNEES (visible joint spheres, ~0.10m diameter at knee joint) ===
+        this.baseKneeL = MeshBuilder.CreateSphere("baseKneeL", { diameter: 0.10, segments: 8 }, scene);
+        this.baseKneeL.material = this.uniformMat;
+
+        this.baseKneeR = MeshBuilder.CreateSphere("baseKneeR", { diameter: 0.10, segments: 8 }, scene);
+        this.baseKneeR.material = this.uniformMat;
+
         // === LOWER LEGS (standard ~0.45m height = knee to ankle, 0.14m diameter) ===
         this.baseLowerLegL = MeshBuilder.CreateCylinder("baseLowerLegL", { diameter: 0.14, height: 0.45 }, scene);
         this.baseLowerLegL.material = this.uniformMat;
@@ -203,6 +212,7 @@ export class BandMemberFactory {
             this.baseElbowL, this.baseElbowR,
             this.baseHandL, this.baseHandR,
             this.baseUpperLegL, this.baseUpperLegR,
+            this.baseKneeL, this.baseKneeR,
             this.baseLowerLegL, this.baseLowerLegR,
             this.baseFootL, this.baseFootR,
             this.baseHat, this.basePlume
@@ -298,6 +308,11 @@ export class BandMemberFactory {
         upperLegL.parent = anchor;
         upperLegL.position.set(-0.14, 0.80, 0);
 
+        // Knee sphere (visual joint, positioned at knee)
+        const kneeL = isBase ? this.baseKneeL : this.baseKneeL.createInstance(`kneeL_${r}_${c}`);
+        kneeL.parent = upperLegL;
+        kneeL.position.set(0, -0.26, 0.04);  // At knee joint (bottom of upper leg)
+
         // Lower leg is CHILD of upper leg (rotates with it)
         const lowerLegL = isBase ? this.baseLowerLegL : this.baseLowerLegL.createInstance(`lowerLegL_${r}_${c}`);
         lowerLegL.parent = upperLegL;
@@ -317,6 +332,11 @@ export class BandMemberFactory {
         const upperLegR = isBase ? this.baseUpperLegR : this.baseUpperLegR.createInstance(`upperLegR_${r}_${c}`);
         upperLegR.parent = anchor;
         upperLegR.position.set(0.14, 0.80, 0);
+
+        // Knee sphere (visual joint, positioned at knee)
+        const kneeR = isBase ? this.baseKneeR : this.baseKneeR.createInstance(`kneeR_${r}_${c}`);
+        kneeR.parent = upperLegR;
+        kneeR.position.set(0, -0.26, 0.04);  // At knee joint (bottom of upper leg)
 
         // Lower leg is CHILD of upper leg (rotates with it)
         const lowerLegR = isBase ? this.baseLowerLegR : this.baseLowerLegR.createInstance(`lowerLegR_${r}_${c}`);
