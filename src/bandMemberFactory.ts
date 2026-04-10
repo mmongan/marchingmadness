@@ -36,6 +36,8 @@ export class BandMemberFactory {
     private baseTorso!: Mesh;
     private baseUpperArmL!: Mesh;
     private baseUpperArmR!: Mesh;
+    private baseShoulderL!: Mesh;
+    private baseShoulderR!: Mesh;
     private baseForearmL!: Mesh;
     private baseForearmR!: Mesh;
     private baseElbowL!: Mesh;
@@ -44,6 +46,8 @@ export class BandMemberFactory {
     private baseHandR!: Mesh;
     private baseUpperLegL!: Mesh;
     private baseUpperLegR!: Mesh;
+    private baseHipL!: Mesh;
+    private baseHipR!: Mesh;
     private baseKneeL!: Mesh;
     private baseKneeR!: Mesh;
     private baseLowerLegL!: Mesh;
@@ -133,6 +137,20 @@ export class BandMemberFactory {
         const toTransform = Matrix.Scaling(1.0, 1.0, 1.0);
         this.baseTorso.bakeTransformIntoVertices(toTransform);
 
+        // === SHOULDERS (visible joint spheres, ~0.10m diameter at shoulder joint) ===
+        this.baseShoulderL = MeshBuilder.CreateSphere("baseShoulderL", { diameter: 0.10, segments: 8 }, scene);
+        this.baseShoulderL.material = this.shirtMat;
+
+        this.baseShoulderR = MeshBuilder.CreateSphere("baseShoulderR", { diameter: 0.10, segments: 8 }, scene);
+        this.baseShoulderR.material = this.shirtMat;
+
+        // === HIPS (visible joint spheres, ~0.10m diameter at hip joint) ===
+        this.baseHipL = MeshBuilder.CreateSphere("baseHipL", { diameter: 0.10, segments: 8 }, scene);
+        this.baseHipL.material = this.uniformMat;
+
+        this.baseHipR = MeshBuilder.CreateSphere("baseHipR", { diameter: 0.10, segments: 8 }, scene);
+        this.baseHipR.material = this.uniformMat;
+
         // === UPPER ARMS (standard ~0.36m height = shoulder to elbow, 0.13m diameter) ===
         this.baseUpperArmL = MeshBuilder.CreateCylinder("baseUpperArmL", { diameter: 0.13, height: 0.36 }, scene);
         this.baseUpperArmL.material = this.shirtMat;
@@ -207,10 +225,12 @@ export class BandMemberFactory {
         // Hide all base meshes (used for instancing)
         const baseMeshes = [
             this.baseHead, this.baseNeck, this.baseTorso,
+            this.baseShoulderL, this.baseShoulderR,
             this.baseUpperArmL, this.baseUpperArmR,
             this.baseForearmL, this.baseForearmR,
             this.baseElbowL, this.baseElbowR,
             this.baseHandL, this.baseHandR,
+            this.baseHipL, this.baseHipR,
             this.baseUpperLegL, this.baseUpperLegR,
             this.baseKneeL, this.baseKneeR,
             this.baseLowerLegL, this.baseLowerLegR,
@@ -251,23 +271,28 @@ export class BandMemberFactory {
         torso.parent = anchor;
         torso.position.set(0, 1.20, 0);
 
-        // Neck (center 1.50, height 0.10, positioned to sit on top of torso)
+        // Neck (child of torso, positioned at torso top)
         const neck = isBase ? this.baseNeck : this.baseNeck.createInstance(`neck_${r}_${c}`);
-        neck.parent = anchor;
-        neck.position.set(0, 1.50, 0);
+        neck.parent = torso;
+        neck.position.set(0, 0.25, 0);  // Positioned at torso top in local coords
 
-        // Head (center 1.665, diameter 0.21, positioned to sit on top of neck)
+        // Head (child of neck, positioned at neck top)
         const head = isBase ? this.baseHead : this.baseHead.createInstance(`head_${r}_${c}`);
-        head.parent = anchor;
-        head.position.set(0, 1.665, 0);
+        head.parent = neck;
+        head.position.set(0, 0.15, 0);  // Positioned at neck top in local coords
 
-        // === LEFT ARM (at shoulder level 1.38) ===
-        // Upper arm at shoulder (height 0.36, spans 1.20 to 1.56)
-        const upperArmL = isBase ? this.baseUpperArmL : this.baseUpperArmL.createInstance(`upperArmL_${r}_${c}`);
-        upperArmL.parent = anchor;
-        upperArmL.position.set(-0.21, 1.38, 0);  // Left shoulder, at torso top
+        // === LEFT SHOULDER & ARM ===
+        // Left shoulder (child of torso at shoulder joint)
+        const shoulderL = isBase ? this.baseShoulderL : this.baseShoulderL.createInstance(`shoulderL_${r}_${c}`);
+        shoulderL.parent = torso;
+        shoulderL.position.set(-0.19, 0.20, 0.04);  // At torso top, left side
         
-        // Elbow sphere (visual joint, ~0.10m diameter, positioned at elbow)
+        // Upper arm (child of shoulder)
+        const upperArmL = isBase ? this.baseUpperArmL : this.baseUpperArmL.createInstance(`upperArmL_${r}_${c}`);
+        upperArmL.parent = shoulderL;
+        upperArmL.position.set(0, -0.02, 0);  // Just below shoulder joint
+        
+        // Elbow sphere (visual joint, child of upper arm)
         const elbowL = isBase ? this.baseElbowL : this.baseElbowL.createInstance(`elbowL_${r}_${c}`);
         elbowL.parent = upperArmL;
         elbowL.position.set(0, -0.18, 0.04);  // At arm midpoint
@@ -280,15 +305,20 @@ export class BandMemberFactory {
         // Hand (child of forearm, positioned at wrist)
         const handL = isBase ? this.baseHandL : this.baseHandL.createInstance(`handL_${r}_${c}`);
         handL.parent = forearmL;
-        handL.position.set(0, -0.16, 0.04);  // At wrist (half of 0.32m forearm)
+        handL.position.set(0, -0.16, 0.04);  // At wrist
 
-        // === RIGHT ARM (at shoulder level 1.38) ===
-        // Upper arm at shoulder (height 0.36, spans 1.20 to 1.56)
-        const upperArmR = isBase ? this.baseUpperArmR : this.baseUpperArmR.createInstance(`upperArmR_${r}_${c}`);
-        upperArmR.parent = anchor;
-        upperArmR.position.set(0.21, 1.38, 0);  // Right shoulder, at torso top
+        // === RIGHT SHOULDER & ARM ===
+        // Right shoulder (child of torso at shoulder joint)
+        const shoulderR = isBase ? this.baseShoulderR : this.baseShoulderR.createInstance(`shoulderR_${r}_${c}`);
+        shoulderR.parent = torso;
+        shoulderR.position.set(0.19, 0.20, 0.04);  // At torso top, right side
         
-        // Elbow sphere (visual joint, ~0.10m diameter, positioned at elbow)
+        // Upper arm (child of shoulder)
+        const upperArmR = isBase ? this.baseUpperArmR : this.baseUpperArmR.createInstance(`upperArmR_${r}_${c}`);
+        upperArmR.parent = shoulderR;
+        upperArmR.position.set(0, -0.02, 0);  // Just below shoulder joint
+        
+        // Elbow sphere (visual joint, child of upper arm)
         const elbowR = isBase ? this.baseElbowR : this.baseElbowR.createInstance(`elbowR_${r}_${c}`);
         elbowR.parent = upperArmR;
         elbowR.position.set(0, -0.18, 0.04);  // At arm midpoint
@@ -301,66 +331,78 @@ export class BandMemberFactory {
         // Hand (child of forearm, positioned at wrist)
         const handR = isBase ? this.baseHandR : this.baseHandR.createInstance(`handR_${r}_${c}`);
         handR.parent = forearmR;
-        handR.position.set(0, -0.16, 0.04);  // At wrist (half of 0.32m forearm)
+        handR.position.set(0, -0.16, 0.04);  // At wrist
 
-        // === LEFT LEG (animated) ===
+        // === LEFT HIP & LEG ===
+        // Left hip (child of torso at hip joint)
+        const hipL = isBase ? this.baseHipL : this.baseHipL.createInstance(`hipL_${r}_${c}`);
+        hipL.parent = torso;
+        hipL.position.set(-0.14, -0.20, 0.04);  // At torso bottom, left side
+        
+        // Upper leg (child of hip)
         const upperLegL = isBase ? this.baseUpperLegL : this.baseUpperLegL.createInstance(`upperLegL_${r}_${c}`);
-        upperLegL.parent = anchor;
-        upperLegL.position.set(-0.14, 0.80, 0);
+        upperLegL.parent = hipL;
+        upperLegL.position.set(0, -0.20, 0);  // Below hip joint
 
         // Knee sphere (visual joint, positioned at knee)
         const kneeL = isBase ? this.baseKneeL : this.baseKneeL.createInstance(`kneeL_${r}_${c}`);
         kneeL.parent = upperLegL;
-        kneeL.position.set(0, -0.26, 0.04);  // At knee joint (bottom of upper leg)
+        kneeL.position.set(0, -0.26, 0.04);  // At knee joint
 
-        // Lower leg is CHILD of upper leg (rotates with it)
+        // Lower leg (child of upper leg)
         const lowerLegL = isBase ? this.baseLowerLegL : this.baseLowerLegL.createInstance(`lowerLegL_${r}_${c}`);
         lowerLegL.parent = upperLegL;
-        lowerLegL.position.set(0, -0.485, 0);  // Positioned from upper leg center (0.54 total offset)
+        lowerLegL.position.set(0, -0.485, 0);  // Positioned from upper leg center
 
         // Foot (child of lower leg, positioned at ankle)
         const footL = isBase ? this.baseFootL : this.baseFootL.createInstance(`footL_${r}_${c}`);
         footL.parent = lowerLegL;
-        footL.position.set(0, -0.225, 0.075);  // At ankle, slight lift to prevent clipping
+        footL.position.set(0, -0.225, 0.075);  // At ankle
 
-        // Spat (white ankle cover, child of lower leg at ankle)
+        // Spat (white ankle cover, child of lower leg)
         const spatL = isBase ? this.baseSpatL : this.baseSpatL.createInstance(`spatL_${r}_${c}`);
         spatL.parent = lowerLegL;
         spatL.position.set(0, -0.18, 0);  // Just above ankle
 
-        // === RIGHT LEG (animated) ===
+        // === RIGHT HIP & LEG ===
+        // Right hip (child of torso at hip joint)
+        const hipR = isBase ? this.baseHipR : this.baseHipR.createInstance(`hipR_${r}_${c}`);
+        hipR.parent = torso;
+        hipR.position.set(0.14, -0.20, 0.04);  // At torso bottom, right side
+        
+        // Upper leg (child of hip)
         const upperLegR = isBase ? this.baseUpperLegR : this.baseUpperLegR.createInstance(`upperLegR_${r}_${c}`);
-        upperLegR.parent = anchor;
-        upperLegR.position.set(0.14, 0.80, 0);
+        upperLegR.parent = hipR;
+        upperLegR.position.set(0, -0.20, 0);  // Below hip joint
 
         // Knee sphere (visual joint, positioned at knee)
         const kneeR = isBase ? this.baseKneeR : this.baseKneeR.createInstance(`kneeR_${r}_${c}`);
         kneeR.parent = upperLegR;
-        kneeR.position.set(0, -0.26, 0.04);  // At knee joint (bottom of upper leg)
+        kneeR.position.set(0, -0.26, 0.04);  // At knee joint
 
-        // Lower leg is CHILD of upper leg (rotates with it)
+        // Lower leg (child of upper leg)
         const lowerLegR = isBase ? this.baseLowerLegR : this.baseLowerLegR.createInstance(`lowerLegR_${r}_${c}`);
         lowerLegR.parent = upperLegR;
-        lowerLegR.position.set(0, -0.485, 0);  // Positioned from upper leg center (0.54 total offset)
+        lowerLegR.position.set(0, -0.485, 0);  // Positioned from upper leg center
 
         // Foot (child of lower leg, positioned at ankle)
         const footR = isBase ? this.baseFootR : this.baseFootR.createInstance(`footR_${r}_${c}`);
         footR.parent = lowerLegR;
-        footR.position.set(0, -0.225, 0.075);  // At ankle, slight lift to prevent clipping
+        footR.position.set(0, -0.225, 0.075);  // At ankle
 
-        // Spat (white ankle cover, child of lower leg at ankle)
+        // Spat (white ankle cover, child of lower leg)
         const spatR = isBase ? this.baseSpatR : this.baseSpatR.createInstance(`spatR_${r}_${c}`);
         spatR.parent = lowerLegR;
         spatR.position.set(0, -0.18, 0);  // Just above ankle
 
-        // === HAT & PLUME ===
+        // === HAT & PLUME (anchored to head) ===
         const hat = isBase ? this.baseHat : this.baseHat.createInstance(`hat_${r}_${c}`);
-        hat.parent = anchor;
-        hat.position.set(0, 1.665, 0);  // Center on head
+        hat.parent = head;
+        hat.position.set(0, 0.15, 0);  // On top of head
 
         const plume = isBase ? this.basePlume : this.basePlume.createInstance(`plume_${r}_${c}`);
-        plume.parent = anchor;
-        plume.position.set(0, 1.88, 0);  // Above head
+        plume.parent = hat;
+        plume.position.set(0, 0.23, 0);  // Above hat on top of head
 
         // Add instruments
         this.instrumentFactory.createInstrument(type, r, c, anchor);
