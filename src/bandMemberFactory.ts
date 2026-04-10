@@ -438,7 +438,7 @@ export class BandMemberFactory {
         // Foot (child of connector, rotates around connector center)
         const footL = isBase ? this.baseFootL : this.baseFootL.createInstance(`footL_${r}_${c}`);
         footL.parent = lowerLegFootConnectorL;
-        footL.position.set(0, 0.04, 0.035);  // Positioned at connector center
+        footL.position.set(0, -0.05, 0.035);  // Positioned below connector to touch ground
 
         // Spat (white ankle cover, child of lower leg)
         const spatL = isBase ? this.baseSpatL : this.baseSpatL.createInstance(`spatL_${r}_${c}`);
@@ -474,7 +474,7 @@ export class BandMemberFactory {
         // Foot (child of connector, rotates around connector center)
         const footR = isBase ? this.baseFootR : this.baseFootR.createInstance(`footR_${r}_${c}`);
         footR.parent = lowerLegFootConnectorR;
-        footR.position.set(0, 0.04, 0.035);  // Positioned at connector center
+        footR.position.set(0, -0.05, 0.035);  // Positioned below connector to touch ground
 
         // Spat (white ankle cover, child of lower leg)
         const spatR = isBase ? this.baseSpatR : this.baseSpatR.createInstance(`spatR_${r}_${c}`);
