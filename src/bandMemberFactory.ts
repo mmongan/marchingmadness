@@ -194,11 +194,11 @@ export class BandMemberFactory {
         this.baseUpperLegR = MeshBuilder.CreateCylinder("baseUpperLegR", { diameter: 0.17, height: 0.52 }, scene);
         this.baseUpperLegR.material = this.uniformMat;
 
-        // === KNEES (visible joint spheres, ~0.10m diameter at knee joint) ===
-        this.baseKneeL = MeshBuilder.CreateSphere("baseKneeL", { diameter: 0.10, segments: 8 }, scene);
+        // === KNEES (visible joint spheres, 0.15m diameter at knee joint) ===
+        this.baseKneeL = MeshBuilder.CreateSphere("baseKneeL", { diameter: 0.15, segments: 8 }, scene);
         this.baseKneeL.material = this.uniformMat;
 
-        this.baseKneeR = MeshBuilder.CreateSphere("baseKneeR", { diameter: 0.10, segments: 8 }, scene);
+        this.baseKneeR = MeshBuilder.CreateSphere("baseKneeR", { diameter: 0.15, segments: 8 }, scene);
         this.baseKneeR.material = this.uniformMat;
 
         // === LOWER LEGS (standard ~0.45m height = knee to ankle, 0.14m diameter) ===
