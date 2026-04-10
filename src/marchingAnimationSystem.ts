@@ -102,25 +102,27 @@ export class MarchingAnimationSystem {
         const elbowBendMax = isSettled ? 0.4 : 0.5;
         
         if (bodyParts.upperArmL) {
-            // Left arm swings opposite to left leg (with right leg)
-            bodyParts.upperArmL.rotation.z = -Math.sin(marchPhase + Math.PI) * armAmplitude;
+            // Left arm swings forward/back opposite to left leg (with right leg)
+            // Positive X = forward, so arm swings front as right leg extends forward
+            bodyParts.upperArmL.rotation.x = -Math.sin(marchPhase + Math.PI) * armAmplitude;
         }
         
         if (bodyParts.forearmL) {
-            // Elbow bends on X axis (rotate forward/back to flex/extend elbow)
+            // Elbow bends forward on X axis to hold instrument in front
+            // Always slightly bent, bends more when arm swings forward
             const elbowBend = elbowBendMax + Math.sin(marchPhase + Math.PI) * 0.2;
-            bodyParts.forearmL.rotation.x = elbowBend;
+            bodyParts.forearmL.rotation.x = -elbowBend;  // Negative = forward/down
         }
         
         if (bodyParts.upperArmR) {
-            // Right arm swings opposite to right leg (with left leg)
-            bodyParts.upperArmR.rotation.z = -Math.sin(marchPhase) * armAmplitude;
+            // Right arm swings forward/back opposite to right leg (with left leg)
+            bodyParts.upperArmR.rotation.x = -Math.sin(marchPhase) * armAmplitude;
         }
         
         if (bodyParts.forearmR) {
-            // Elbow bends on X axis (rotate forward/back to flex/extend elbow)
+            // Elbow bends forward on X axis to hold instrument in front
             const elbowBend = elbowBendMax + Math.sin(marchPhase) * 0.2;
-            bodyParts.forearmR.rotation.x = elbowBend;
+            bodyParts.forearmR.rotation.x = -elbowBend;  // Negative = forward/down
         }
         
         // === TORSO ANIMATION ===
