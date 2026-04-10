@@ -1178,14 +1178,13 @@ engine.runRenderLoop(() => {
                 // This ensures marchers route around blockages and don't pile up behind player
                 if (scene.activeCamera) {
                     const playerPos = scene.activeCamera.globalPosition;
-                    const playerAvoidRadius = 5.0; // Increased: marchers see player from further away
+                    const playerAvoidRadius = 5.0;
                     const playerDx = anchor.position.x - playerPos.x;
                     const playerDz = anchor.position.z - playerPos.z;
                     const playerDistSq = playerDx * playerDx + playerDz * playerDz;
                     
                     if (playerDistSq < playerAvoidRadius * playerAvoidRadius && playerDistSq > 0.1) {
                         const playerDist = Math.sqrt(playerDistSq);
-                        // Stronger avoidance force when very close (to escape pileups)
                         const playerAvoidForce = (1 - playerDist / playerAvoidRadius) * (playerDist < 1.5 ? 1.5 : 0.8);
                         
                         avoidanceX += (playerDx / playerDist) * playerAvoidForce;
@@ -1193,10 +1192,40 @@ engine.runRenderLoop(() => {
                     }
                 }
                 
+                // === MARCHER-TO-MARCHER COLLISION AVOIDANCE (ALWAYS - prevents intersection) ===
+                // This is critical: marchers should NEVER occupy same space, settled or not
+                const collisionRadius = 0.8;
+                const collisionRadius2 = collisionRadius * collisionRadius;
+                let collisionX = 0;
+                let collisionZ = 0;
+                let collisionCount = 0;
+                
+                for (let j = 0; j < bandLegs.length; j++) {
+                    if (j === index) continue;
+                    
+                    const otherAnchor = bandLegs[j].anchor;
+                    const cdx = otherAnchor.position.x - anchor.position.x;
+                    const cdz = otherAnchor.position.z - anchor.position.z;
+                    const collisionDistSq = cdx * cdx + cdz * cdz;
+                    
+                    if (collisionDistSq < collisionRadius2 && collisionDistSq > 0.01) {
+                        const collisionDist = Math.sqrt(collisionDistSq);
+                        const repelStrength = (1 - collisionDist / collisionRadius) * 0.5;
+                        collisionX += (cdx / collisionDist) * repelStrength;
+                        collisionZ += (cdz / collisionDist) * repelStrength;
+                        collisionCount++;
+                    }
+                }
+                
+                if (collisionCount > 0) {
+                    avoidanceX += collisionX;
+                    avoidanceZ += collisionZ;
+                }
+                
                 if (isSettled) {
-                    // SETTLED IN FORMATION: March smoothly at normal pace, no avoidance interference
+                    // SETTLED IN FORMATION: March smoothly at normal pace
                     moveAmount = 0.04;
-                    // Only player avoidance applies - skip other calculations for smooth marching
+                    // Only player & collision avoidance applies - skip other calculations for smooth marching
                 } else {
                     // OUT OF FORMATION: Catch up with longer strides and active avoidance
                     const baseRate = 0.04; // base stride length
@@ -1204,36 +1233,6 @@ engine.runRenderLoop(() => {
                     moveAmount = gap > 0.05 
                         ? baseRate + (maxCatchupRate - baseRate) * Math.min(1.0, gap / 3.0)
                         : baseRate;
-                    
-                    // Only calculate avoidance when out of formation
-                    // === GENERAL MARCHER COLLISION AVOIDANCE (Prevent overlap) ===
-                    const collisionRadius = 0.8;
-                    const collisionRadius2 = collisionRadius * collisionRadius;
-                    let collisionX = 0;
-                    let collisionZ = 0;
-                    let collisionCount = 0;
-                    
-                    for (let j = 0; j < bandLegs.length; j++) {
-                        if (j === index) continue;
-                        
-                        const otherAnchor = bandLegs[j].anchor;
-                        const cdx = otherAnchor.position.x - anchor.position.x;
-                        const cdz = otherAnchor.position.z - anchor.position.z;
-                        const collisionDistSq = cdx * cdx + cdz * cdz;
-                        
-                        if (collisionDistSq < collisionRadius2 && collisionDistSq > 0.01) {
-                            const collisionDist = Math.sqrt(collisionDistSq);
-                            const repelStrength = (1 - collisionDist / collisionRadius) * 0.5;
-                            collisionX += (cdx / collisionDist) * repelStrength;
-                            collisionZ += (cdz / collisionDist) * repelStrength;
-                            collisionCount++;
-                        }
-                    }
-                    
-                    if (collisionCount > 0) {
-                        avoidanceX += collisionX;
-                        avoidanceZ += collisionZ;
-                    }
                     
                     // === DETECT OUT-OF-FORMATION MARCHERS & ROUTE AROUND THEM ===
                     const outOfFormationRadius = 2.5;
