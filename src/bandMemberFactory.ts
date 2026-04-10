@@ -370,7 +370,7 @@ export class BandMemberFactory {
         // Upper arm (child of shoulder)
         const upperArmL = isBase ? this.baseUpperArmL : this.baseUpperArmL.createInstance(`upperArmL_${r}_${c}`);
         upperArmL.parent = shoulderL;
-        upperArmL.position.set(0, -0.18, 0.04);  // Positioned to end at elbow
+        upperArmL.position.set(0, -0.18, 0);  // Center at midpoint, extends from 0 to -0.36
         
         // Elbow sphere (visual joint, child of upper arm, serves as forearm pivot)
         const elbowL = isBase ? this.baseElbowL : this.baseElbowL.createInstance(`elbowL_${r}_${c}`);
@@ -380,7 +380,7 @@ export class BandMemberFactory {
         // Forearm (child of elbow sphere, rotates around elbow center)
         const forearmL = isBase ? this.baseForearmL : this.baseForearmL.createInstance(`forearmL_${r}_${c}`);
         forearmL.parent = elbowL;
-        forearmL.position.set(0, -0.16, 0);  // Positioned to extend from elbow to wrist
+        forearmL.position.set(0, -0.16, 0);  // Center at midpoint, top touches elbow (0), extends to -0.32
         
         // Sleeve (uniform material covering forearm, child of forearm)
         const sleeveL = isBase ? this.baseSleeveL : this.baseSleeveL.createInstance(`sleeveL_${r}_${c}`);
@@ -406,7 +406,7 @@ export class BandMemberFactory {
         // Upper arm (child of shoulder)
         const upperArmR = isBase ? this.baseUpperArmR : this.baseUpperArmR.createInstance(`upperArmR_${r}_${c}`);
         upperArmR.parent = shoulderR;
-        upperArmR.position.set(0, -0.18, 0.04);  // Positioned to end at elbow
+        upperArmR.position.set(0, -0.18, 0);  // Center at midpoint, extends from 0 to -0.36
         
         // Elbow sphere (visual joint, child of upper arm, serves as forearm pivot)
         const elbowR = isBase ? this.baseElbowR : this.baseElbowR.createInstance(`elbowR_${r}_${c}`);
@@ -416,7 +416,7 @@ export class BandMemberFactory {
         // Forearm (child of elbow sphere, rotates around elbow center)
         const forearmR = isBase ? this.baseForearmR : this.baseForearmR.createInstance(`forearmR_${r}_${c}`);
         forearmR.parent = elbowR;
-        forearmR.position.set(0, -0.16, 0);  // Positioned to extend from elbow to wrist
+        forearmR.position.set(0, -0.16, 0);  // Center at midpoint, top touches elbow (0), extends to -0.32
         
         // Sleeve (uniform material covering forearm, child of forearm)
         const sleeveR = isBase ? this.baseSleeveR : this.baseSleeveR.createInstance(`sleeveR_${r}_${c}`);
@@ -447,7 +447,7 @@ export class BandMemberFactory {
         // Upper leg (child of hip)
         const upperLegL = isBase ? this.baseUpperLegL : this.baseUpperLegL.createInstance(`upperLegL_${r}_${c}`);
         upperLegL.parent = hipL;
-        upperLegL.position.set(0, -0.16, 0);  // Positioned to end at knee
+        upperLegL.position.set(0, -0.26, 0);  // Center at midpoint, extends from 0 to -0.52
 
         // Knee sphere (visual joint, child of upper leg, serves as lower leg pivot)
         const kneeL = isBase ? this.baseKneeL : this.baseKneeL.createInstance(`kneeL_${r}_${c}`);
@@ -457,7 +457,7 @@ export class BandMemberFactory {
         // Lower leg (child of knee, rotates around knee center)
         const lowerLegL = isBase ? this.baseLowerLegL : this.baseLowerLegL.createInstance(`lowerLegL_${r}_${c}`);
         lowerLegL.parent = kneeL;
-        lowerLegL.position.set(0, -0.225, 0.04);  // Positioned to extend from knee to ankle
+        lowerLegL.position.set(0, -0.225, 0.04);  // Center at midpoint, top touches knee (0), extends to -0.45
 
         // Lower Leg-Foot connector (fills gap at ankle, serves as rotation pivot)
         const lowerLegFootConnectorL = isBase ? this.baseLowerLegFootConnectorL : this.baseLowerLegFootConnectorL.createInstance(`lowerLegFootConnectorL_${r}_${c}`);
@@ -483,7 +483,7 @@ export class BandMemberFactory {
         // Upper leg (child of hip)
         const upperLegR = isBase ? this.baseUpperLegR : this.baseUpperLegR.createInstance(`upperLegR_${r}_${c}`);
         upperLegR.parent = hipR;
-        upperLegR.position.set(0, -0.16, 0);  // Positioned to end at knee
+        upperLegR.position.set(0, -0.26, 0);  // Center at midpoint, extends from 0 to -0.52
 
         // Knee sphere (visual joint, child of upper leg, serves as lower leg pivot)
         const kneeR = isBase ? this.baseKneeR : this.baseKneeR.createInstance(`kneeR_${r}_${c}`);
@@ -493,7 +493,7 @@ export class BandMemberFactory {
         // Lower leg (child of knee, rotates around knee center)
         const lowerLegR = isBase ? this.baseLowerLegR : this.baseLowerLegR.createInstance(`lowerLegR_${r}_${c}`);
         lowerLegR.parent = kneeR;
-        lowerLegR.position.set(0, -0.225, 0.04);  // Positioned to extend from knee to ankle
+        lowerLegR.position.set(0, -0.225, 0.04);  // Center at midpoint, top touches knee (0), extends to -0.45
 
         // Lower Leg-Foot connector (fills gap at ankle, serves as rotation pivot)
         const lowerLegFootConnectorR = isBase ? this.baseLowerLegFootConnectorR : this.baseLowerLegFootConnectorR.createInstance(`lowerLegFootConnectorR_${r}_${c}`);
