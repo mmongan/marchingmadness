@@ -15,6 +15,16 @@ export const sfPanners: Map<number, PannerNode> = new Map();
 let crashSynth: Tone.NoiseSynth | null = null;
 let lastCrashTime = -1;
 
+/** Returns true only when the AudioContext is running (user has interacted). */
+function audioReady(): boolean {
+    try {
+        const ctx = Tone.getContext().rawContext as AudioContext;
+        return ctx.state === "running";
+    } catch {
+        return false;
+    }
+}
+
 function getCrashSynth() {
     if (!crashSynth) {
         crashSynth = new Tone.NoiseSynth({
@@ -27,22 +37,24 @@ function getCrashSynth() {
 }
 
 export function playStumbleSound(row: number): void {
+    if (!audioReady()) return;
     const sfIdx = ROW_TO_SF_INDEX[row];
     if (sfIdx == null) {
-        getCrashSynth().triggerAttackRelease("16n");
+        try { getCrashSynth().triggerAttackRelease("16n"); } catch { /* ignored */ }
         return;
     }
     const sf = sfInstruments.get(sfIdx);
     if (!sf) return;
     const baseNote = sfIdx === 4 ? 40 : sfIdx === 3 ? 48 : sfIdx === 5 ? 72 : sfIdx === 8 ? 76 : 60;
     const detune = Math.floor(Math.random() * 5) - 2;
-    sf.start({ note: baseNote + detune, duration: 0.25 });
+    try { sf.start({ note: baseNote + detune, duration: 0.25 }); } catch { /* ignored */ }
 }
 
 export function playCrashSound(row: number): void {
+    if (!audioReady()) return;
     const sfIdx = ROW_TO_SF_INDEX[row];
     if (sfIdx == null) {
-        getCrashSynth().triggerAttackRelease("4n");
+        try { getCrashSynth().triggerAttackRelease("4n"); } catch { /* ignored */ }
         return;
     }
     const sf = sfInstruments.get(sfIdx);
@@ -53,14 +65,19 @@ export function playCrashSound(row: number): void {
     // Ensure start times are strictly increasing to avoid Tone.js timing errors
     // when multiple crash sounds trigger in the same frame
     if (now <= lastCrashTime) {
-        now = lastCrashTime + 0.01; // Larger stagger offset (10ms) for soundfont reliability
+        now = lastCrashTime + 0.01;
     }
     lastCrashTime = now;
     
     // Stagger the three harmonics to create a richer crash sound
-    sf.start({ note: baseNote - 1, duration: 0.1, time: now });
-    sf.start({ note: baseNote + 1, duration: 0.1, time: now + 0.005 });
-    sf.start({ note: baseNote + 6, duration: 0.1, time: now + 0.01 });
+    try {
+        sf.start({ note: baseNote - 1, duration: 0.1, time: now });
+        sf.start({ note: baseNote + 1, duration: 0.1, time: now + 0.005 });
+        sf.start({ note: baseNote + 6, duration: 0.1, time: now + 0.01 });
+    } catch {
+        // Timing assertion can fire if AudioContext was just resumed;
+        // swallow rather than crash the render loop.
+    }
 }
 
 /** Load all SoundFont instruments with spatial PannerNodes. Call after Tone.start(). */
