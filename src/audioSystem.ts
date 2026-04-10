@@ -53,14 +53,14 @@ export function playCrashSound(row: number): void {
     // Ensure start times are strictly increasing to avoid Tone.js timing errors
     // when multiple crash sounds trigger in the same frame
     if (now <= lastCrashTime) {
-        now = lastCrashTime + 0.002; // Small stagger offset
+        now = lastCrashTime + 0.01; // Larger stagger offset (10ms) for soundfont reliability
     }
     lastCrashTime = now;
     
     // Stagger the three harmonics to create a richer crash sound
     sf.start({ note: baseNote - 1, duration: 0.1, time: now });
-    sf.start({ note: baseNote + 1, duration: 0.1, time: now + 0.001 });
-    sf.start({ note: baseNote + 6, duration: 0.1, time: now + 0.002 });
+    sf.start({ note: baseNote + 1, duration: 0.1, time: now + 0.005 });
+    sf.start({ note: baseNote + 6, duration: 0.1, time: now + 0.01 });
 }
 
 /** Load all SoundFont instruments with spatial PannerNodes. Call after Tone.start(). */
