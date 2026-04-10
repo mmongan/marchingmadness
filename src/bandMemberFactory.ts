@@ -305,25 +305,25 @@ export class BandMemberFactory {
         torso.parent = anchor;
         torso.position.set(0, 1.20, 0);
 
-        // Neck (CHILD of torso, positioned relative to torso center)
-        const neck = isBase ? this.baseNeck : this.baseNeck.createInstance(`neck_${r}_${c}`);
-        neck.parent = torso;
-        neck.position.set(0, 0.30, 0);  // Local offset: torso top (0.20) + neck offset (0.10)
-
-        // Neck-Torso connector (fills gap between torso top and neck)
+        // Neck-Torso connector (fills gap between torso top and neck, serves as rotation pivot)
         const neckConnector = isBase ? this.baseNeckConnector : this.baseNeckConnector.createInstance(`neckConnector_${r}_${c}`);
         neckConnector.parent = torso;
         neckConnector.position.set(0, 0.25, 0);  // Midpoint between torso top (0.20) and neck center (0.30)
 
-        // Head (CHILD of neck, positioned relative to neck center)
-        const head = isBase ? this.baseHead : this.baseHead.createInstance(`head_${r}_${c}`);
-        head.parent = neck;
-        head.position.set(0, 0.165, 0);  // Local offset: 1.665 - 1.50 = 0.165
+        // Neck (CHILD of connector, rotates around connector center)
+        const neck = isBase ? this.baseNeck : this.baseNeck.createInstance(`neck_${r}_${c}`);
+        neck.parent = neckConnector;
+        neck.position.set(0, 0.05, 0);  // Local offset from connector to neck center
 
-        // Head-Neck connector (fills gap between neck and head)
+        // Head-Neck connector (fills gap between neck and head, serves as rotation pivot)
         const headConnector = isBase ? this.baseHeadConnector : this.baseHeadConnector.createInstance(`headConnector_${r}_${c}`);
         headConnector.parent = neck;
-        headConnector.position.set(0, 0.10, 0);  // Midpoint between neck top (0.05) and head (0.165)
+        headConnector.position.set(0, 0.10, 0);  // Positioned at top of neck
+
+        // Head (CHILD of connector, rotates around connector center)
+        const head = isBase ? this.baseHead : this.baseHead.createInstance(`head_${r}_${c}`);
+        head.parent = headConnector;
+        head.position.set(0, 0.065, 0);  // Local offset from connector to head center
 
         // === LEFT SHOULDER & ARM ===
         // Left shoulder (child of torso at shoulder joint)
@@ -346,15 +346,15 @@ export class BandMemberFactory {
         forearmL.parent = upperArmL;
         forearmL.position.set(0, -0.34, 0.04);  // Positioned below elbow
         
-        // Forearm-Hand connector (fills gap at wrist)
+        // Forearm-Hand connector (fills gap at wrist, serves as rotation pivot)
         const forearmHandConnectorL = isBase ? this.baseForearmHandConnectorL : this.baseForearmHandConnectorL.createInstance(`forearmHandConnectorL_${r}_${c}`);
         forearmHandConnectorL.parent = forearmL;
         forearmHandConnectorL.position.set(0, -0.16, 0.04);  // At wrist midpoint
         
-        // Hand (child of forearm, positioned at wrist)
+        // Hand (child of connector, rotates around connector center)
         const handL = isBase ? this.baseHandL : this.baseHandL.createInstance(`handL_${r}_${c}`);
-        handL.parent = forearmL;
-        handL.position.set(0, -0.16, 0.04);  // At wrist
+        handL.parent = forearmHandConnectorL;
+        handL.position.set(0, 0, 0);  // Positioned at connector center
 
         // === RIGHT SHOULDER & ARM ===
         // Right shoulder (child of torso at shoulder joint)
@@ -377,15 +377,15 @@ export class BandMemberFactory {
         forearmR.parent = upperArmR;
         forearmR.position.set(0, -0.34, 0.04);  // Positioned below elbow
         
-        // Forearm-Hand connector (fills gap at wrist)
+        // Forearm-Hand connector (fills gap at wrist, serves as rotation pivot)
         const forearmHandConnectorR = isBase ? this.baseForearmHandConnectorR : this.baseForearmHandConnectorR.createInstance(`forearmHandConnectorR_${r}_${c}`);
         forearmHandConnectorR.parent = forearmR;
         forearmHandConnectorR.position.set(0, -0.16, 0.04);  // At wrist midpoint
         
-        // Hand (child of forearm, positioned at wrist)
+        // Hand (child of connector, rotates around connector center)
         const handR = isBase ? this.baseHandR : this.baseHandR.createInstance(`handR_${r}_${c}`);
-        handR.parent = forearmR;
-        handR.position.set(0, -0.16, 0.04);  // At wrist
+        handR.parent = forearmHandConnectorR;
+        handR.position.set(0, 0, 0);  // Positioned at connector center
 
         // === LEFT HIP & LEG ===
         // Left hip (child of torso at hip joint)
@@ -408,15 +408,15 @@ export class BandMemberFactory {
         lowerLegL.parent = upperLegL;
         lowerLegL.position.set(0, -0.485, 0);  // Positioned from upper leg center
 
-        // Lower Leg-Foot connector (fills gap at ankle)
+        // Lower Leg-Foot connector (fills gap at ankle, serves as rotation pivot)
         const lowerLegFootConnectorL = isBase ? this.baseLowerLegFootConnectorL : this.baseLowerLegFootConnectorL.createInstance(`lowerLegFootConnectorL_${r}_${c}`);
         lowerLegFootConnectorL.parent = lowerLegL;
         lowerLegFootConnectorL.position.set(0, -0.225, 0.04);  // At ankle connection point
 
-        // Foot (child of lower leg, positioned at ankle)
+        // Foot (child of connector, rotates around connector center)
         const footL = isBase ? this.baseFootL : this.baseFootL.createInstance(`footL_${r}_${c}`);
-        footL.parent = lowerLegL;
-        footL.position.set(0, -0.225, 0.075);  // At ankle
+        footL.parent = lowerLegFootConnectorL;
+        footL.position.set(0, 0.04, 0.035);  // Positioned at connector center
 
         // Spat (white ankle cover, child of lower leg)
         const spatL = isBase ? this.baseSpatL : this.baseSpatL.createInstance(`spatL_${r}_${c}`);
@@ -444,15 +444,15 @@ export class BandMemberFactory {
         lowerLegR.parent = upperLegR;
         lowerLegR.position.set(0, -0.485, 0);  // Positioned from upper leg center
 
-        // Lower Leg-Foot connector (fills gap at ankle)
+        // Lower Leg-Foot connector (fills gap at ankle, serves as rotation pivot)
         const lowerLegFootConnectorR = isBase ? this.baseLowerLegFootConnectorR : this.baseLowerLegFootConnectorR.createInstance(`lowerLegFootConnectorR_${r}_${c}`);
         lowerLegFootConnectorR.parent = lowerLegR;
         lowerLegFootConnectorR.position.set(0, -0.225, 0.04);  // At ankle connection point
 
-        // Foot (child of lower leg, positioned at ankle)
+        // Foot (child of connector, rotates around connector center)
         const footR = isBase ? this.baseFootR : this.baseFootR.createInstance(`footR_${r}_${c}`);
-        footR.parent = lowerLegR;
-        footR.position.set(0, -0.225, 0.075);  // At ankle
+        footR.parent = lowerLegFootConnectorR;
+        footR.position.set(0, 0.04, 0.035);  // Positioned at connector center
 
         // Spat (white ankle cover, child of lower leg)
         const spatR = isBase ? this.baseSpatR : this.baseSpatR.createInstance(`spatR_${r}_${c}`);
