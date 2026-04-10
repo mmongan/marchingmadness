@@ -59,6 +59,10 @@ export class BandMemberFactory {
     private baseSpatL!: Mesh;
     private baseSpatR!: Mesh;
     
+    // Sleeves (covers for forearms)
+    private baseSleeveL!: Mesh;
+    private baseSleeveR!: Mesh;
+    
     // Connector spheres (small spheres to fill gaps between parent/child joints)
     private baseNeckConnector!: Mesh;
     private baseHeadConnector!: Mesh;
@@ -168,10 +172,17 @@ export class BandMemberFactory {
 
         // === FOREARMS (standard ~0.32m height = elbow to wrist, 0.11m diameter) ===
         this.baseForearmL = MeshBuilder.CreateCylinder("baseForearmL", { diameter: 0.11, height: 0.32 }, scene);
-        this.baseForearmL.material = this.skinMat;
+        this.baseForearmL.material = this.shirtMat;
 
         this.baseForearmR = MeshBuilder.CreateCylinder("baseForearmR", { diameter: 0.11, height: 0.32 }, scene);
-        this.baseForearmR.material = this.skinMat;
+        this.baseForearmR.material = this.shirtMat;
+
+        // === SLEEVES (uniform material covering forearms, 0.14m diameter) ===
+        this.baseSleeveL = MeshBuilder.CreateCylinder("baseSleeveL", { diameter: 0.14, height: 0.32 }, scene);
+        this.baseSleeveL.material = this.shirtMat;
+
+        this.baseSleeveR = MeshBuilder.CreateCylinder("baseSleeveR", { diameter: 0.14, height: 0.32 }, scene);
+        this.baseSleeveR.material = this.shirtMat;
 
         // === ELBOWS (visible joint spheres, 0.13m diameter) ===
         this.baseElbowL = MeshBuilder.CreateSphere("baseElbowL", { diameter: 0.13, segments: 8 }, scene);
@@ -259,6 +270,7 @@ export class BandMemberFactory {
             this.baseShoulderL, this.baseShoulderR,
             this.baseUpperArmL, this.baseUpperArmR,
             this.baseForearmL, this.baseForearmR,
+            this.baseSleeveL, this.baseSleeveR,
             this.baseElbowL, this.baseElbowR,
             this.baseHandL, this.baseHandR,
             this.baseHipL, this.baseHipR,
@@ -346,6 +358,11 @@ export class BandMemberFactory {
         forearmL.parent = elbowL;
         forearmL.position.set(0, -0.16, 0);  // Positioned below elbow in local coords
         
+        // Sleeve (uniform material covering forearm, child of forearm)
+        const sleeveL = isBase ? this.baseSleeveL : this.baseSleeveL.createInstance(`sleeveL_${r}_${c}`);
+        sleeveL.parent = forearmL;
+        sleeveL.position.set(0, 0, 0);  // At same position as forearm
+        
         // Forearm-Hand connector (fills gap at wrist, serves as rotation pivot)
         const forearmHandConnectorL = isBase ? this.baseForearmHandConnectorL : this.baseForearmHandConnectorL.createInstance(`forearmHandConnectorL_${r}_${c}`);
         forearmHandConnectorL.parent = forearmL;
@@ -376,6 +393,11 @@ export class BandMemberFactory {
         const forearmR = isBase ? this.baseForearmR : this.baseForearmR.createInstance(`forearmR_${r}_${c}`);
         forearmR.parent = elbowR;
         forearmR.position.set(0, -0.16, 0);  // Positioned below elbow in local coords
+        
+        // Sleeve (uniform material covering forearm, child of forearm)
+        const sleeveR = isBase ? this.baseSleeveR : this.baseSleeveR.createInstance(`sleeveR_${r}_${c}`);
+        sleeveR.parent = forearmR;
+        sleeveR.position.set(0, 0, 0);  // At same position as forearm
         
         // Forearm-Hand connector (fills gap at wrist, serves as rotation pivot)
         const forearmHandConnectorR = isBase ? this.baseForearmHandConnectorR : this.baseForearmHandConnectorR.createInstance(`forearmHandConnectorR_${r}_${c}`);

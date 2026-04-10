@@ -95,33 +95,30 @@ export class MarchingAnimationSystem {
         }
         
         // === ARM ANIMATION ===
-        // Counterpoint to legs: left arm forward with right leg, vice versa
-        // More pronounced when catching up
+        // Arms hold instruments in front - minimal movement
+        // Fixed forward posture to maintain instrument position
         
-        const armAmplitude = (isSettled ? 0.3 : 0.4 + 0.2 * catchupFactor) * (isSettled ? 0.8 : 1.0);
-        const elbowBendMax = isSettled ? 0.4 : 0.5;
+        const elbowBendMax = isSettled ? 0.4 : 0.45;
         
         if (bodyParts.upperArmL) {
-            // Left arm swings forward/back opposite to left leg (with right leg)
-            // Positive X = forward, so arm swings front as right leg extends forward
-            bodyParts.upperArmL.rotation.x = -Math.sin(marchPhase + Math.PI) * armAmplitude;
+            // Keep left arm pointing slightly forward (minimal rotation)
+            bodyParts.upperArmL.rotation.x = -0.2;  // Slight forward angle
         }
         
         if (bodyParts.forearmL) {
-            // Elbow bends forward on X axis to hold instrument in front
-            // Always slightly bent, bends more when arm swings forward
-            const elbowBend = elbowBendMax + Math.sin(marchPhase + Math.PI) * 0.2;
+            // Forearm holds instrument in front, slight variation for natural feel
+            const elbowBend = elbowBendMax + Math.sin(marchPhase * 0.5) * 0.08;  // Very subtle flex
             bodyParts.forearmL.rotation.x = -elbowBend;  // Negative = forward/down
         }
         
         if (bodyParts.upperArmR) {
-            // Right arm swings forward/back opposite to right leg (with left leg)
-            bodyParts.upperArmR.rotation.x = -Math.sin(marchPhase) * armAmplitude;
+            // Keep right arm pointing slightly forward (minimal rotation)
+            bodyParts.upperArmR.rotation.x = -0.2;  // Slight forward angle
         }
         
         if (bodyParts.forearmR) {
-            // Elbow bends forward on X axis to hold instrument in front
-            const elbowBend = elbowBendMax + Math.sin(marchPhase) * 0.2;
+            // Forearm holds instrument in front, slight variation for natural feel
+            const elbowBend = elbowBendMax + Math.sin(marchPhase * 0.5) * 0.08;  // Very subtle flex
             bodyParts.forearmR.rotation.x = -elbowBend;  // Negative = forward/down
         }
         
