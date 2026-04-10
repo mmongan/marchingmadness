@@ -1,20 +1,28 @@
 import { Mesh, InstancedMesh, TransformNode } from "@babylonjs/core";
 
 /**
- * Body part references for realistic animation
- * 
- * Now uses JOINT NODES (TransformNodes) instead of bone meshes.
- * When a joint rotates, all bones attached to it rotate around that joint's position.
- * This creates proper skeletal animation where limbs rotate at their endpoints.
+ * Body part references for joint-based skeletal animation.
+ *
+ * HIERARCHY (each joint is a TransformNode; rotating a joint pivots
+ * everything below it around that joint's position):
+ *
+ *   anchor
+ *   └─ torsoJoint (at hip level)
+ *       ├─ pelvis mesh
+ *       ├─ spineJoint (at torso bottom)
+ *       │   ├─ torso mesh
+ *       │   ├─ neckJoint → neck mesh → headJoint → head mesh
+ *       │   ├─ shoulderJointL → upperArmL → elbowJointL → forearmL → wristJointL → handL
+ *       │   └─ shoulderJointR → upperArmR → elbowJointR → forearmR → wristJointR → handR
+ *       ├─ hipJointL → upperLegL → kneeJointL → lowerLegL → ankleJointL → footL
+ *       └─ hipJointR → upperLegR → kneeJointR → lowerLegR → ankleJointR → footR
  */
 export interface BodyParts {
-    // Bone meshes (for reference, but NOT animated directly)
+    // Bone meshes (positioned as children of joints, NOT animated directly)
     head?: InstancedMesh | Mesh;
-    headBaseY?: number;
     neck?: InstancedMesh | Mesh;
-    neckBaseY?: number;
     torso?: InstancedMesh | Mesh;
-    torsoBaseY?: number;
+    pelvis?: InstancedMesh | Mesh;
     upperArmL?: InstancedMesh | Mesh;
     upperArmR?: InstancedMesh | Mesh;
     forearmL?: InstancedMesh | Mesh;
@@ -27,9 +35,10 @@ export interface BodyParts {
     lowerLegR?: InstancedMesh | Mesh;
     footL?: InstancedMesh | Mesh;
     footR?: InstancedMesh | Mesh;
-    
-    // JOINT NODES (animated)
-    torsoJoint?: TransformNode;
+
+    // JOINT NODES — these are rotated by the animation system
+    torsoJoint?: TransformNode;   // root body joint at hip level
+    spineJoint?: TransformNode;   // spine base (torso bottom)
     neckJoint?: TransformNode;
     headJoint?: TransformNode;
     shoulderJointL?: TransformNode;
@@ -38,7 +47,8 @@ export interface BodyParts {
     elbowJointR?: TransformNode;
     wristJointL?: TransformNode;
     wristJointR?: TransformNode;
-    hipJoint?: TransformNode;
+    hipJointL?: TransformNode;    // independent left hip pivot
+    hipJointR?: TransformNode;    // independent right hip pivot
     kneeJointL?: TransformNode;
     kneeJointR?: TransformNode;
     ankleJointL?: TransformNode;
@@ -46,25 +56,15 @@ export interface BodyParts {
 }
 
 /**
- * High-fidelity marching animation system
- * 
- * Creates realistic band member animations with:
- * - Sophisticated leg motion (not just simple sine wave)
- * - Arm swing in counterpoint to legs
- * - Torso bounce and hip rotation
- * - Head tilt and neck movement
- * - Natural cadence and marching feel
+ * Marching-band high-step animation system.
+ *
+ * KEY PRINCIPLE: only TransformNode joints are rotated.
+ * - hipJointL / hipJointR  → swing the ENTIRE leg forward / back
+ * - kneeJointL / kneeJointR → bend the lower leg only
+ * - ankleJointL / ankleJointR → flex the foot
+ * - shoulderJoint → swing the arm; elbowJoint → bend forearm
  */
 export class MarchingAnimationSystem {
-    /**
-     * Animates a single marcher with physiology-based marching motion
-     * 
-     * @param marchPhase - Animation phase (0-2π) for one complete stride (2 beats)
-     * @param bodyParts - References to animated body parts
-     * @param isSettled - Whether marcher is in formation (affects animation style)
-     * @param catchupFactor - 0-1, how much marcher is catching up (0=settled, 1=max catch-up)
-     * @param swayAmplitude - Torso sway (twist) amplitude in radians (default: 0, disabled)
-     */
     static animateMarcher(
         marchPhase: number,
         bodyParts: BodyParts,
@@ -72,128 +72,105 @@ export class MarchingAnimationSystem {
         catchupFactor: number,
         swayAmplitude: number = 0
     ): void {
-        // Normalize phase to 0-1 for easier calculation
-        const phaseNorm = marchPhase / (Math.PI * 2);
-        
-        // Which leg is in swing vs stance phase (0-1)
-        // Leg swing happens from 0-0.5 phase, stance from 0.5-1
-        const legSwing = (phaseNorm % 1 < 0.5) ? (phaseNorm % 1) * 2 : (1 - (phaseNorm % 1)) * 2;
-        
-        // Smooth step function: 0 at boundaries, 1 at middle
-        const stepCurve = Math.sin(legSwing * Math.PI);
-        
-        // === LEG ANIMATION ===
-        // More realistic leg motion: hip rise with forward leg, proper knee bend
-        // Rotate JOINTS so bones rotate around joint endpoints
-        
-        // Left leg (forward on first half)
-        const legAmplitudeBase = isSettled ? 0.6 : 0.5 + 0.2 * catchupFactor;
-        const legAmplitude = legAmplitudeBase * (isSettled ? 0.9 : 1.0); // Slightly less when settled
-        
+        // ─── LEG ANIMATION ─────────────────────────────────────────
+        // Hip joint swings the whole leg (upper + knee + lower + foot).
+        // Knee joint bends the lower leg during the forward-swing phase.
+        // Ankle joint gives a subtle toe-lift during the swing.
+
+        const hipSwing = isSettled ? 0.45 : 0.35 + 0.20 * catchupFactor;
+        const kneeBendMax = isSettled ? 0.85 : 0.65;
+
+        // Left leg — leads at phase 0→π
+        if (bodyParts.hipJointL) {
+            bodyParts.hipJointL.rotation.x = -Math.sin(marchPhase) * hipSwing;
+            bodyParts.hipJointL.rotation.z = 0; // no lateral splay
+        }
         if (bodyParts.kneeJointL) {
-            // Swing forward/back
-            bodyParts.kneeJointL.rotation.x = Math.sin(marchPhase) * legAmplitude;
-            // Slight hip rotation for realistic gait
-            bodyParts.kneeJointL.rotation.z = Math.sin(marchPhase * 0.5) * 0.15;
+            // Knee bends only when leg is swinging forward (sin > 0)
+            bodyParts.kneeJointL.rotation.x = Math.max(0, Math.sin(marchPhase)) * kneeBendMax;
         }
-        
         if (bodyParts.ankleJointL) {
-            // Knee bend during swing (straightens at bottom)
-            const kneeBend = Math.max(0, Math.sin(legSwing * Math.PI) * 0.8);
-            bodyParts.ankleJointL.rotation.x = kneeBend;
+            // Slight dorsiflexion during swing, plantarflexion at toe-off
+            bodyParts.ankleJointL.rotation.x = Math.sin(marchPhase) * 0.15;
         }
-        
-        // Right leg (opposite phase)
+
+        // Right leg — opposite phase
+        if (bodyParts.hipJointR) {
+            bodyParts.hipJointR.rotation.x = -Math.sin(marchPhase + Math.PI) * hipSwing;
+            bodyParts.hipJointR.rotation.z = 0;
+        }
         if (bodyParts.kneeJointR) {
-            bodyParts.kneeJointR.rotation.x = Math.sin(marchPhase + Math.PI) * legAmplitude;
-            bodyParts.kneeJointR.rotation.z = Math.sin((marchPhase + Math.PI) * 0.5) * 0.15;
+            bodyParts.kneeJointR.rotation.x = Math.max(0, Math.sin(marchPhase + Math.PI)) * kneeBendMax;
         }
-        
         if (bodyParts.ankleJointR) {
-            const kneeBendR = Math.max(0, Math.sin((phaseNorm + 0.5) % 1 * Math.PI) * 0.8);
-            bodyParts.ankleJointR.rotation.x = kneeBendR;
+            bodyParts.ankleJointR.rotation.x = Math.sin(marchPhase + Math.PI) * 0.15;
         }
-        
-        // === ARM ANIMATION ===
-        // Arms hold instruments in front - minimal movement
-        // Animate ELBOW and WRIST joints
-        // Fixed forward posture to maintain instrument position
-        
-        const elbowBendMax = isSettled ? 0.4 : 0.45;
-        
+
+        // ─── ARM ANIMATION ─────────────────────────────────────────
+        // Arms mostly fixed forward (holding instruments).
+        // Slight counter-swing to legs for natural feel.
+
+        const armSwing = isSettled ? 0.12 : 0.08;
+        const elbowBend = isSettled ? 0.4 : 0.45;
+
+        if (bodyParts.shoulderJointL) {
+            // Counter to right leg: when right leg forward, left arm forward
+            bodyParts.shoulderJointL.rotation.x = Math.sin(marchPhase + Math.PI) * armSwing - 0.15;
+        }
         if (bodyParts.elbowJointL) {
-            // Keep elbow pointed slightly forward (minimal rotation)
-            bodyParts.elbowJointL.rotation.x = -0.2;  // Slight forward angle
+            bodyParts.elbowJointL.rotation.x = elbowBend;
         }
-        
         if (bodyParts.wristJointL) {
-            // Wrist holds instrument in front, slight variation for natural feel
-            const wristBend = elbowBendMax + Math.sin(marchPhase * 0.5) * 0.08;  // Very subtle flex
-            bodyParts.wristJointL.rotation.x = -wristBend;  // Negative = forward/down
+            bodyParts.wristJointL.rotation.x = 0;
         }
-        
+
+        if (bodyParts.shoulderJointR) {
+            // Counter to left leg
+            bodyParts.shoulderJointR.rotation.x = Math.sin(marchPhase) * armSwing - 0.15;
+        }
         if (bodyParts.elbowJointR) {
-            // Keep right elbow pointed slightly forward (minimal rotation)
-            bodyParts.elbowJointR.rotation.x = -0.2;  // Slight forward angle
+            bodyParts.elbowJointR.rotation.x = elbowBend;
         }
-        
         if (bodyParts.wristJointR) {
-            // Wrist holds instrument in front, slight variation for natural feel
-            const wristBend = elbowBendMax + Math.sin(marchPhase * 0.5) * 0.08;  // Very subtle flex
-            bodyParts.wristJointR.rotation.x = -wristBend;  // Negative = forward/down
+            bodyParts.wristJointR.rotation.x = 0;
         }
-        
-        // === TORSO ANIMATION ===
-        // Bounce during stepping, rotation with gait
-        // Animate torsoJoint for sway/rotation
-        
-        if (bodyParts.torsoJoint) {
-            // Torso sway (twist) following legs, controlled by swayAmplitude parameter
-            bodyParts.torsoJoint.rotation.z = Math.sin(marchPhase * 0.5) * swayAmplitude;
-            
-            // Crunch forward slightly when catching up
+
+        // ─── TORSO / SPINE ─────────────────────────────────────────
+        // Subtle vertical bounce (two bounces per stride = abs(sin))
+        // Slight sway controlled by swayAmplitude parameter.
+
+        if (bodyParts.spineJoint) {
+            bodyParts.spineJoint.rotation.z = Math.sin(marchPhase) * swayAmplitude;
             if (!isSettled) {
-                bodyParts.torsoJoint.rotation.x = catchupFactor * 0.15;
+                bodyParts.spineJoint.rotation.x = catchupFactor * 0.12;
+            } else {
+                bodyParts.spineJoint.rotation.x = 0;
             }
         }
-        
-        if (bodyParts.torso) {
-            // Subtle vertical bounce (easier to feel than see in marching)
-            const bodyBounce = stepCurve * 0.05; // 5cm bounce
-            const torsoBaseY = bodyParts.torsoBaseY ?? 1.2;
-            bodyParts.torso.position.y = torsoBaseY + bodyBounce;
+
+        if (bodyParts.torsoJoint) {
+            // Vertical bounce on the root joint
+            const bounce = Math.abs(Math.sin(marchPhase)) * 0.03;
+            bodyParts.torsoJoint.position.y = 1.12 + bounce;
         }
-        
-        // === NECK & HEAD ===
-        // Head follows torch rhythm with slight bob
-        // Animate neck and head JOINTS
-        
+
+        // ─── NECK & HEAD ───────────────────────────────────────────
         if (bodyParts.neckJoint) {
-            // Neck leans with torso sway, controlled by swayAmplitude parameter
-            bodyParts.neckJoint.rotation.z = Math.sin(marchPhase * 0.5) * swayAmplitude * 1.2;
-            // Slight nod during step
-            bodyParts.neckJoint.rotation.x = stepCurve * 0.08;
+            bodyParts.neckJoint.rotation.z = Math.sin(marchPhase) * swayAmplitude * 0.5;
+            bodyParts.neckJoint.rotation.x = Math.abs(Math.sin(marchPhase)) * 0.04;
         }
-        
         if (bodyParts.headJoint) {
-            // Head tilts with torso sway, controlled by swayAmplitude parameter
-            bodyParts.headJoint.rotation.z = Math.sin(marchPhase * 0.5) * swayAmplitude * 1.5;
-            // Slight forward/back during catch-up
+            bodyParts.headJoint.rotation.z = 0;
             if (!isSettled) {
-                bodyParts.headJoint.rotation.x = catchupFactor * 0.1;
+                bodyParts.headJoint.rotation.x = catchupFactor * 0.08;
+            } else {
+                bodyParts.headJoint.rotation.x = 0;
             }
         }
     }
-    
-    /**
-     * Get catch-up factor (0-1) based on distance from formation position
-     * @param gap - Distance from formation position in meters
-     * @param settleZone - Distance threshold for settling (default 0.25m)
-     * @returns 0 if settled, approaching 1 as gap increases
-     */
+
     static getCatchupFactor(gap: number, settleZone: number = 0.25): number {
         if (gap <= settleZone) return 0;
-        // Gradually increases from 0 at settle zone to 1 at 2m gap
         return Math.min(1.0, (gap - settleZone) / 2.0);
     }
 }
