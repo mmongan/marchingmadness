@@ -428,12 +428,12 @@ export class BandMemberFactory {
         // Lower leg (child of knee, rotates around knee center)
         const lowerLegL = isBase ? this.baseLowerLegL : this.baseLowerLegL.createInstance(`lowerLegL_${r}_${c}`);
         lowerLegL.parent = kneeL;
-        lowerLegL.position.set(0, 0, 0);  // Top end positioned at knee
+        lowerLegL.position.set(0, -0.225, 0);  // Center of lower leg segment, extends to ankle
 
         // Lower Leg-Foot connector (fills gap at ankle, serves as rotation pivot)
         const lowerLegFootConnectorL = isBase ? this.baseLowerLegFootConnectorL : this.baseLowerLegFootConnectorL.createInstance(`lowerLegFootConnectorL_${r}_${c}`);
         lowerLegFootConnectorL.parent = lowerLegL;
-        lowerLegFootConnectorL.position.set(0, -0.225, 0.04);  // At bottom of lower leg (ankle point)
+        lowerLegFootConnectorL.position.set(0, -0.225, 0.04);  // At bottom of lower leg
 
         // Foot (child of connector, rotates around connector center)
         const footL = isBase ? this.baseFootL : this.baseFootL.createInstance(`footL_${r}_${c}`);
@@ -464,12 +464,12 @@ export class BandMemberFactory {
         // Lower leg (child of knee, rotates around knee center)
         const lowerLegR = isBase ? this.baseLowerLegR : this.baseLowerLegR.createInstance(`lowerLegR_${r}_${c}`);
         lowerLegR.parent = kneeR;
-        lowerLegR.position.set(0, 0, 0);  // Top end positioned at knee
+        lowerLegR.position.set(0, -0.225, 0);  // Center of lower leg segment, extends to ankle
 
         // Lower Leg-Foot connector (fills gap at ankle, serves as rotation pivot)
         const lowerLegFootConnectorR = isBase ? this.baseLowerLegFootConnectorR : this.baseLowerLegFootConnectorR.createInstance(`lowerLegFootConnectorR_${r}_${c}`);
         lowerLegFootConnectorR.parent = lowerLegR;
-        lowerLegFootConnectorR.position.set(0, -0.225, 0.04);  // At bottom of lower leg (ankle point)
+        lowerLegFootConnectorR.position.set(0, -0.225, 0.04);  // At bottom of lower leg
 
         // Foot (child of connector, rotates around connector center)
         const footR = isBase ? this.baseFootR : this.baseFootR.createInstance(`footR_${r}_${c}`);
