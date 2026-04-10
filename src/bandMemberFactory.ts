@@ -58,6 +58,14 @@ export class BandMemberFactory {
     private basePlume!: Mesh;
     private baseSpatL!: Mesh;
     private baseSpatR!: Mesh;
+    
+    // Connector spheres (small spheres to fill gaps between parent/child joints)
+    private baseNeckConnector!: Mesh;
+    private baseHeadConnector!: Mesh;
+    private baseForearmHandConnectorL!: Mesh;
+    private baseForearmHandConnectorR!: Mesh;
+    private baseLowerLegFootConnectorL!: Mesh;
+    private baseLowerLegFootConnectorR!: Mesh;
 
     private firstBodyPlaced = false;
 
@@ -214,6 +222,29 @@ export class BandMemberFactory {
         this.baseSpatR = MeshBuilder.CreateCylinder("baseSpatR", { diameter: 0.16, height: 0.08 }, scene);
         this.baseSpatR.material = this.spatMat;
 
+        // === CONNECTOR SPHERES (small spheres to fill gaps at joint connections) ===
+        // Neck-Torso connector (fills gap between torso top and neck)
+        this.baseNeckConnector = MeshBuilder.CreateSphere("baseNeckConnector", { diameter: 0.08, segments: 6 }, scene);
+        this.baseNeckConnector.material = this.skinMat;
+
+        // Head-Neck connector (fills gap between neck and head)
+        this.baseHeadConnector = MeshBuilder.CreateSphere("baseHeadConnector", { diameter: 0.08, segments: 6 }, scene);
+        this.baseHeadConnector.material = this.skinMat;
+
+        // Forearm-Hand connectors (fills gap at wrist)
+        this.baseForearmHandConnectorL = MeshBuilder.CreateSphere("baseForearmHandConnectorL", { diameter: 0.07, segments: 6 }, scene);
+        this.baseForearmHandConnectorL.material = this.skinMat;
+
+        this.baseForearmHandConnectorR = MeshBuilder.CreateSphere("baseForearmHandConnectorR", { diameter: 0.07, segments: 6 }, scene);
+        this.baseForearmHandConnectorR.material = this.skinMat;
+
+        // Lower Leg-Foot connectors (fills gap at ankle)
+        this.baseLowerLegFootConnectorL = MeshBuilder.CreateSphere("baseLowerLegFootConnectorL", { diameter: 0.08, segments: 6 }, scene);
+        this.baseLowerLegFootConnectorL.material = this.shoeMat;
+
+        this.baseLowerLegFootConnectorR = MeshBuilder.CreateSphere("baseLowerLegFootConnectorR", { diameter: 0.08, segments: 6 }, scene);
+        this.baseLowerLegFootConnectorR.material = this.shoeMat;
+
         // === HAT (proportional to new head size, 0.22m diameter, 0.12m height) ===
         this.baseHat = MeshBuilder.CreateCylinder("baseHat", { diameter: 0.22, height: 0.12 }, scene);
         this.baseHat.material = this.hatMat;
@@ -235,9 +266,12 @@ export class BandMemberFactory {
             this.baseKneeL, this.baseKneeR,
             this.baseLowerLegL, this.baseLowerLegR,
             this.baseFootL, this.baseFootR,
-            this.baseHat, this.basePlume
+            this.baseHat, this.basePlume,
+            this.baseSpatL, this.baseSpatR,
+            this.baseNeckConnector, this.baseHeadConnector,
+            this.baseForearmHandConnectorL, this.baseForearmHandConnectorR,
+            this.baseLowerLegFootConnectorL, this.baseLowerLegFootConnectorR
         ];
-        baseMeshes.push(this.baseSpatL, this.baseSpatR);
         baseMeshes.forEach(m => m.isVisible = false);
     }
 
@@ -271,15 +305,25 @@ export class BandMemberFactory {
         torso.parent = anchor;
         torso.position.set(0, 1.20, 0);
 
-        // Neck (positioned at correct world height, NOT child of torso)
+        // Neck (CHILD of torso, positioned relative to torso center)
         const neck = isBase ? this.baseNeck : this.baseNeck.createInstance(`neck_${r}_${c}`);
-        neck.parent = anchor;
-        neck.position.set(0, 1.50, 0);  // Absolute position at torso top + offset
+        neck.parent = torso;
+        neck.position.set(0, 0.30, 0);  // Local offset: torso top (0.20) + neck offset (0.10)
 
-        // Head (positioned at correct world height, NOT child of neck)
+        // Neck-Torso connector (fills gap between torso top and neck)
+        const neckConnector = isBase ? this.baseNeckConnector : this.baseNeckConnector.createInstance(`neckConnector_${r}_${c}`);
+        neckConnector.parent = torso;
+        neckConnector.position.set(0, 0.25, 0);  // Midpoint between torso top (0.20) and neck center (0.30)
+
+        // Head (CHILD of neck, positioned relative to neck center)
         const head = isBase ? this.baseHead : this.baseHead.createInstance(`head_${r}_${c}`);
-        head.parent = anchor;
-        head.position.set(0, 1.665, 0);  // Absolute position at correct height
+        head.parent = neck;
+        head.position.set(0, 0.165, 0);  // Local offset: 1.665 - 1.50 = 0.165
+
+        // Head-Neck connector (fills gap between neck and head)
+        const headConnector = isBase ? this.baseHeadConnector : this.baseHeadConnector.createInstance(`headConnector_${r}_${c}`);
+        headConnector.parent = neck;
+        headConnector.position.set(0, 0.10, 0);  // Midpoint between neck top (0.05) and head (0.165)
 
         // === LEFT SHOULDER & ARM ===
         // Left shoulder (child of torso at shoulder joint)
@@ -301,6 +345,11 @@ export class BandMemberFactory {
         const forearmL = isBase ? this.baseForearmL : this.baseForearmL.createInstance(`forearmL_${r}_${c}`);
         forearmL.parent = upperArmL;
         forearmL.position.set(0, -0.34, 0.04);  // Positioned below elbow
+        
+        // Forearm-Hand connector (fills gap at wrist)
+        const forearmHandConnectorL = isBase ? this.baseForearmHandConnectorL : this.baseForearmHandConnectorL.createInstance(`forearmHandConnectorL_${r}_${c}`);
+        forearmHandConnectorL.parent = forearmL;
+        forearmHandConnectorL.position.set(0, -0.16, 0.04);  // At wrist midpoint
         
         // Hand (child of forearm, positioned at wrist)
         const handL = isBase ? this.baseHandL : this.baseHandL.createInstance(`handL_${r}_${c}`);
@@ -328,6 +377,11 @@ export class BandMemberFactory {
         forearmR.parent = upperArmR;
         forearmR.position.set(0, -0.34, 0.04);  // Positioned below elbow
         
+        // Forearm-Hand connector (fills gap at wrist)
+        const forearmHandConnectorR = isBase ? this.baseForearmHandConnectorR : this.baseForearmHandConnectorR.createInstance(`forearmHandConnectorR_${r}_${c}`);
+        forearmHandConnectorR.parent = forearmR;
+        forearmHandConnectorR.position.set(0, -0.16, 0.04);  // At wrist midpoint
+        
         // Hand (child of forearm, positioned at wrist)
         const handR = isBase ? this.baseHandR : this.baseHandR.createInstance(`handR_${r}_${c}`);
         handR.parent = forearmR;
@@ -353,6 +407,11 @@ export class BandMemberFactory {
         const lowerLegL = isBase ? this.baseLowerLegL : this.baseLowerLegL.createInstance(`lowerLegL_${r}_${c}`);
         lowerLegL.parent = upperLegL;
         lowerLegL.position.set(0, -0.485, 0);  // Positioned from upper leg center
+
+        // Lower Leg-Foot connector (fills gap at ankle)
+        const lowerLegFootConnectorL = isBase ? this.baseLowerLegFootConnectorL : this.baseLowerLegFootConnectorL.createInstance(`lowerLegFootConnectorL_${r}_${c}`);
+        lowerLegFootConnectorL.parent = lowerLegL;
+        lowerLegFootConnectorL.position.set(0, -0.225, 0.04);  // At ankle connection point
 
         // Foot (child of lower leg, positioned at ankle)
         const footL = isBase ? this.baseFootL : this.baseFootL.createInstance(`footL_${r}_${c}`);
@@ -384,6 +443,11 @@ export class BandMemberFactory {
         const lowerLegR = isBase ? this.baseLowerLegR : this.baseLowerLegR.createInstance(`lowerLegR_${r}_${c}`);
         lowerLegR.parent = upperLegR;
         lowerLegR.position.set(0, -0.485, 0);  // Positioned from upper leg center
+
+        // Lower Leg-Foot connector (fills gap at ankle)
+        const lowerLegFootConnectorR = isBase ? this.baseLowerLegFootConnectorR : this.baseLowerLegFootConnectorR.createInstance(`lowerLegFootConnectorR_${r}_${c}`);
+        lowerLegFootConnectorR.parent = lowerLegR;
+        lowerLegFootConnectorR.position.set(0, -0.225, 0.04);  // At ankle connection point
 
         // Foot (child of lower leg, positioned at ankle)
         const footR = isBase ? this.baseFootR : this.baseFootR.createInstance(`footR_${r}_${c}`);

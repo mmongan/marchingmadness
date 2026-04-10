@@ -1306,7 +1306,7 @@ engine.runRenderLoop(() => {
                 // === ANIMATE ENTIRE MARCHER BODY ===
                 // Real marching animation with arm swing, torso bounce, head tilt, etc.
                 const catchupFactor = MarchingAnimationSystem.getCatchupFactor(gap, settleThreshold);
-                MarchingAnimationSystem.animateMarcher(marchPhase, bodyParts, isSettled, catchupFactor);
+                MarchingAnimationSystem.animateMarcher(marchPhase, bodyParts, isSettled, catchupFactor, 0);
             }
 
             // Face direction of movement / drill target

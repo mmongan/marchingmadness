@@ -44,12 +44,14 @@ export class MarchingAnimationSystem {
      * @param bodyParts - References to animated body parts
      * @param isSettled - Whether marcher is in formation (affects animation style)
      * @param catchupFactor - 0-1, how much marcher is catching up (0=settled, 1=max catch-up)
+     * @param swayAmplitude - Torso sway (twist) amplitude in radians (default: 0, disabled)
      */
     static animateMarcher(
         marchPhase: number,
         bodyParts: BodyParts,
         isSettled: boolean,
-        catchupFactor: number
+        catchupFactor: number,
+        swayAmplitude: number = 0
     ): void {
         // Normalize phase to 0-1 for easier calculation
         const phaseNorm = marchPhase / (Math.PI * 2);
@@ -130,8 +132,8 @@ export class MarchingAnimationSystem {
             const torsoBaseY = bodyParts.torsoBaseY ?? 1.2;
             bodyParts.torso.position.y = torsoBaseY + bodyBounce;
             
-            // Slight torso twist following legs (creating realistic gait)
-            bodyParts.torso.rotation.z = Math.sin(marchPhase * 0.5) * 0.1;
+            // Torso sway (twist) following legs, controlled by swayAmplitude parameter
+            bodyParts.torso.rotation.z = Math.sin(marchPhase * 0.5) * swayAmplitude;
             
             // Crunch forward slightly when catching up
             if (!isSettled) {
@@ -141,23 +143,19 @@ export class MarchingAnimationSystem {
         
         // === NECK & HEAD ===
         // Head follows torch rhythm with slight bob
+        // Note: Neck and head are now children of their parents, so Y positioning 
+        // propagates through hierarchy automatically. Only animate rotations.
         
         if (bodyParts.neck) {
-            const neckBaseY = bodyParts.neckBaseY ?? 1.55;
-            bodyParts.neck.position.y = neckBaseY;
-            // Neck leans with torso twist
-            bodyParts.neck.rotation.z = Math.sin(marchPhase * 0.5) * 0.12;
+            // Neck leans with torso sway, controlled by swayAmplitude parameter
+            bodyParts.neck.rotation.z = Math.sin(marchPhase * 0.5) * swayAmplitude * 1.2;
             // Slight nod during step
             bodyParts.neck.rotation.x = stepCurve * 0.08;
         }
         
         if (bodyParts.head) {
-            const headBaseY = bodyParts.headBaseY ?? 1.7;
-            const headBob = stepCurve * 0.08;
-            // Head bobs up/down with stride
-            bodyParts.head.position.y = headBaseY + headBob;
-            // Head tilts with torso, amplifying the effect slightly
-            bodyParts.head.rotation.z = Math.sin(marchPhase * 0.5) * 0.15;
+            // Head tilts with torso sway, controlled by swayAmplitude parameter
+            bodyParts.head.rotation.z = Math.sin(marchPhase * 0.5) * swayAmplitude * 1.5;
             // Slight forward/back during catch-up
             if (!isSettled) {
                 bodyParts.head.rotation.x = catchupFactor * 0.1;
