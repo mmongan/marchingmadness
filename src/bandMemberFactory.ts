@@ -271,15 +271,15 @@ export class BandMemberFactory {
         torso.parent = anchor;
         torso.position.set(0, 1.20, 0);
 
-        // Neck (child of torso, positioned at torso top)
+        // Neck (positioned at correct world height, NOT child of torso)
         const neck = isBase ? this.baseNeck : this.baseNeck.createInstance(`neck_${r}_${c}`);
-        neck.parent = torso;
-        neck.position.set(0, 0.25, 0);  // Positioned at torso top in local coords
+        neck.parent = anchor;
+        neck.position.set(0, 1.50, 0);  // Absolute position at torso top + offset
 
-        // Head (child of neck, positioned at neck top)
+        // Head (positioned at correct world height, NOT child of neck)
         const head = isBase ? this.baseHead : this.baseHead.createInstance(`head_${r}_${c}`);
-        head.parent = neck;
-        head.position.set(0, 0.15, 0);  // Positioned at neck top in local coords
+        head.parent = anchor;
+        head.position.set(0, 1.665, 0);  // Absolute position at correct height
 
         // === LEFT SHOULDER & ARM ===
         // Left shoulder (child of torso at shoulder joint)
