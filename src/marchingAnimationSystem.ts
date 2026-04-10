@@ -95,7 +95,7 @@ export class MarchingAnimationSystem {
         // More pronounced when catching up
         
         const armAmplitude = (isSettled ? 0.3 : 0.4 + 0.2 * catchupFactor) * (isSettled ? 0.8 : 1.0);
-        const elbowBendMax = isSettled ? 0.5 : 0.7;
+        const elbowBendMax = isSettled ? 0.4 : 0.5;
         
         if (bodyParts.upperArmL) {
             // Left arm swings opposite to left leg (with right leg)
@@ -103,8 +103,9 @@ export class MarchingAnimationSystem {
         }
         
         if (bodyParts.forearmL) {
-            const elbowBend = elbowBendMax + Math.sin(marchPhase + Math.PI) * 0.3;
-            bodyParts.forearmL.rotation.z = elbowBend;
+            // Elbow bends on X axis (rotate forward/back to flex/extend elbow)
+            const elbowBend = elbowBendMax + Math.sin(marchPhase + Math.PI) * 0.2;
+            bodyParts.forearmL.rotation.x = elbowBend;
         }
         
         if (bodyParts.upperArmR) {
@@ -113,8 +114,9 @@ export class MarchingAnimationSystem {
         }
         
         if (bodyParts.forearmR) {
-            const elbowBend = elbowBendMax + Math.sin(marchPhase) * 0.3;
-            bodyParts.forearmR.rotation.z = elbowBend;
+            // Elbow bends on X axis (rotate forward/back to flex/extend elbow)
+            const elbowBend = elbowBendMax + Math.sin(marchPhase) * 0.2;
+            bodyParts.forearmR.rotation.x = elbowBend;
         }
         
         // === TORSO ANIMATION ===
