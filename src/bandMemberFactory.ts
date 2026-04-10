@@ -280,6 +280,20 @@ export class BandMemberFactory {
             this.baseLowerLegFootConnectorL, this.baseLowerLegFootConnectorR
         ];
         baseMeshes.forEach(m => m.isVisible = false);
+
+        // Hide all joint sphere meshes visually (keep in hierarchy for animation pivot points)
+        this.baseShoulderL.isVisible = false;
+        this.baseShoulderR.isVisible = false;
+        this.baseElbowL.isVisible = false;
+        this.baseElbowR.isVisible = false;
+        this.baseHipL.isVisible = false;
+        this.baseHipR.isVisible = false;
+        this.baseKneeL.isVisible = false;
+        this.baseKneeR.isVisible = false;
+        this.baseForearmHandConnectorL.isVisible = false;
+        this.baseForearmHandConnectorR.isVisible = false;
+        this.baseLowerLegFootConnectorL.isVisible = false;
+        this.baseLowerLegFootConnectorR.isVisible = false;
     }
 
     public createMember(r: number, c: number, type: InstrumentType, xPos: number, zPos: number): BandMemberData {
