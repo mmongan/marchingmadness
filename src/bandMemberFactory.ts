@@ -173,11 +173,11 @@ export class BandMemberFactory {
         this.baseForearmR = MeshBuilder.CreateCylinder("baseForearmR", { diameter: 0.11, height: 0.32 }, scene);
         this.baseForearmR.material = this.skinMat;
 
-        // === ELBOWS (visible joint spheres, ~0.10m diameter) ===
-        this.baseElbowL = MeshBuilder.CreateSphere("baseElbowL", { diameter: 0.10, segments: 8 }, scene);
+        // === ELBOWS (visible joint spheres, 0.13m diameter) ===
+        this.baseElbowL = MeshBuilder.CreateSphere("baseElbowL", { diameter: 0.13, segments: 8 }, scene);
         this.baseElbowL.material = this.skinMat;
 
-        this.baseElbowR = MeshBuilder.CreateSphere("baseElbowR", { diameter: 0.10, segments: 8 }, scene);
+        this.baseElbowR = MeshBuilder.CreateSphere("baseElbowR", { diameter: 0.13, segments: 8 }, scene);
         this.baseElbowR.material = this.skinMat;
 
         // === HANDS (box ~0.08m width, proportional length) ===
