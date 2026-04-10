@@ -1,4 +1,4 @@
-import { Scene, Mesh, MeshBuilder, StandardMaterial, Color3, InstancedMesh, DynamicTexture } from "@babylonjs/core";
+import { Scene, Mesh, MeshBuilder, StandardMaterial, Color3, InstancedMesh, DynamicTexture, TransformNode } from "@babylonjs/core";
 import { InstrumentType, InstrumentFactory } from "./instrumentFactory";
 import { BodyParts } from "./marchingAnimationSystem";
 
@@ -223,153 +223,220 @@ export class BandMemberFactory {
         anchor.isVisible = false;
 
         /**
-         * CLEAN SKELETAL HIERARCHY (Bone chains with no joint spheres)
+         * JOINT-BASED SKELETAL HIERARCHY
          * 
-         * Chain Structure:
-         * SPINE:      Anchor → Torso → Neck → Head
-         * LEFT ARM:   Torso → UpperArm → Forearm → Hand  
-         * RIGHT ARM:  Torso → UpperArm → Forearm → Hand
-         * PELVIS:     Torso → Pelvis
-         * LEFT LEG:   Pelvis → UpperLeg → LowerLeg → Foot
-         * RIGHT LEG:  Pelvis → UpperLeg → LowerLeg → Foot
+         * Bones pivot at their JOINT ENDPOINTS, not at their centers.
+         * Each joint is a TransformNode at the actual anatomical joint position.
+         * Bones are positioned as children of joints, extending FROM the joint.
          * 
-         * Positioning (end-to-end connections):
-         * - Torso center: y=1.52, height 0.40 (extends 1.32 to 1.72)
-         * - Neck center: y=1.77, height 0.10 (extends 1.72 to 1.82, attached to torso top)
-         * - Head center: y=1.665, diameter 0.21 (extends 1.56 to 1.77, attached to neck top)
-         * - Pelvis center: y=1.22, height 0.20 (extends 1.12 to 1.32, attached to torso bottom)
-         * - UpperLeg center: y=0.86, height 0.52 (extends 0.60 to 1.12, attached to pelvis)
-         * - LowerLeg center: y=0.405, height 0.45 (extends 0.18 to 0.63, attached to upperleg bottom)
-         * - Foot center: y=0.10, height 0.10 (extends 0.05 to 0.15, attached to lowerleg bottom)
+         * When a joint rotates, all bones attached to it rotate around that endpoint.
          * 
-         * TOTAL HEIGHT: 1.77m ✓
+         * SPINE CHAIN:
+         *   Anchor → TorsoJoint → Torso → NeckJoint → Neck → HeadJoint → Head
+         * 
+         * ARM CHAINS (L/R):
+         *   Torso → ShoulderJoint → UpperArm → ElbowJoint → Forearm → WristJoint → Hand
+         * 
+         * LEG CHAINS (L/R):
+         *   Torso → HipJoint → UpperLeg → KneeJoint → LowerLeg → AnkleJoint → Foot
+         * 
+         * POSITIONING PRINCIPLE:
+         * - Joints are TransformNodes at actual joint positions
+         * - Bones extend FROM their parent joint TO their child joint
+         * - Bone positioned at (0, ±H/2, 0) relative to joint so it extends ±H from joint origin
+         * 
+         * FINAL DIMENSIONS:
+         * - Feet bottom: y=0.05, top: y=0.15
+         * - Ankle joints: y=0.15
+         * - Head center: y≈1.665
+         * - Total height: 1.77m ✓
          */
 
         // === SPINE CHAIN ===
-        
-        // Torso (root of skeleton, center at 1.52)
+
+        // TorsoJoint (invisible pivot at torso center)
+        const torsoJoint = new TransformNode(`torsoJoint_${r}_${c}`, this.scene);
+        torsoJoint.parent = anchor;
+        torsoJoint.position.set(0, 1.52, 0);
+
+        // Torso (bone extending around its joint)
         const torso = isBase ? this.baseTorso : this.baseTorso.createInstance(`torso_${r}_${c}`);
-        torso.parent = anchor;
-        torso.position.set(0, 1.52, 0);
+        torso.parent = torsoJoint;
+        torso.position.set(0, 0, 0);  // Centered at joint (extends ±0.20 vertically)
 
-        // Neck (child of torso, positioned at torso top)
+        // NeckJoint (at top of torso, where neck pivots)
+        const neckJoint = new TransformNode(`neckJoint_${r}_${c}`, this.scene);
+        neckJoint.parent = torsoJoint;
+        neckJoint.position.set(0, 0.20, 0);  // Local offset to torso top (world y=1.72)
+
+        // Neck (bone extending upward from neck joint)
         const neck = isBase ? this.baseNeck : this.baseNeck.createInstance(`neck_${r}_${c}`);
-        neck.parent = torso;
-        neck.position.set(0, 0.25, 0);  // local y = torso_radius(0.20) + neck_radius(0.05) = 0.25
+        neck.parent = neckJoint;
+        neck.position.set(0, 0.05, 0);  // Extends upward: center at +0.05 (y=1.77 in world)
 
-        // Head (child of neck, positioned at neck top)
+        // HeadJoint (at top of neck, where head pivots)
+        const headJoint = new TransformNode(`headJoint_${r}_${c}`, this.scene);
+        headJoint.parent = neckJoint;
+        headJoint.position.set(0, 0.05, 0);  // Extends from neck center to its top
+
+        // Head (sphere positioned at joint)
         const head = isBase ? this.baseHead : this.baseHead.createInstance(`head_${r}_${c}`);
-        head.parent = neck;
-        head.position.set(0, 0.105, 0);  // local y = neck_radius(0.05) + head_radius(0.105) = 0.155, but adjusted for connection
+        head.parent = headJoint;
+        head.position.set(0, 0, 0);  // Sphere centered at joint
 
         // === LEFT ARM CHAIN ===
-        
-        // Upper arm (child of torso, positioned at left shoulder)
+
+        // ShoulderJointL (at left shoulder on torso)
+        const shoulderJointL = new TransformNode(`shoulderJointL_${r}_${c}`, this.scene);
+        shoulderJointL.parent = torso;
+        shoulderJointL.position.set(-0.19, 0.20, 0);  // At torso top, left side
+
+        // UpperArmL (bone extending downward from shoulder)
         const upperArmL = isBase ? this.baseUpperArmL : this.baseUpperArmL.createInstance(`upperArmL_${r}_${c}`);
-        upperArmL.parent = torso;
-        upperArmL.position.set(-0.23, 0.20, 0);  // At torso top, left side
-        // Upper arm height 0.36: extends from 0.20 to -0.16 (20 + 18 = 0.38, so center should be at 0.02?)
-        // Actually positioned at midpoint: if local parent top is 0.20 and arm is 0.36 tall, center should be 0.20 - 0.18 = 0.02
-        upperArmL.position.y = 0.02;  // Midpoint of 0.36 height = 0.18, so center at 0.20 - 0.18 = 0.02
+        upperArmL.parent = shoulderJointL;
+        upperArmL.position.set(0, -0.18, 0);  // Extends downward: center at -0.18 (height 0.36)
 
-        // Forearm (child of upper arm, positioned at upper arm bottom)
+        // ElbowJointL (at end of upper arm, where forearm pivots)
+        const elbowJointL = new TransformNode(`elbowJointL_${r}_${c}`, this.scene);
+        elbowJointL.parent = shoulderJointL;
+        elbowJointL.position.set(0, -0.36, 0);  // At end of upper arm
+
+        // ForearmL (bone extending downward from elbow)
         const forearmL = isBase ? this.baseForearmL : this.baseForearmL.createInstance(`forearmL_${r}_${c}`);
-        forearmL.parent = upperArmL;
-        forearmL.position.set(0, -0.34, 0);  // To upper arm bottom (0.18 + 0.16 = 0.34 down from center)
-        // Forearm height 0.32: center at midpoint = -0.34 - 0.16 = -0.50
-        forearmL.position.y = -0.16;  // Midpoint of 0.32 height = 0.16 down from attachment
+        forearmL.parent = elbowJointL;
+        forearmL.position.set(0, -0.16, 0);  // Extends downward: center at -0.16 (height 0.32)
 
-        // Sleeve (uniform material covering forearm, child of forearm at same position)
+        // Sleeve (uniform material covering forearm)
         const sleeveL = isBase ? this.baseSleeveL : this.baseSleeveL.createInstance(`sleeveL_${r}_${c}`);
         sleeveL.parent = forearmL;
         sleeveL.position.set(0, 0, 0);  // At forearm center
 
-        // Hand (child of forearm, positioned at forearm bottom)
+        // WristJointL (at end of forearm, where hand pivots)
+        const wristJointL = new TransformNode(`wristJointL_${r}_${c}`, this.scene);
+        wristJointL.parent = elbowJointL;
+        wristJointL.position.set(0, -0.32, 0);  // At end of forearm
+
+        // HandL (box positioned at wrist)
         const handL = isBase ? this.baseHandL : this.baseHandL.createInstance(`handL_${r}_${c}`);
-        handL.parent = forearmL;
-        handL.position.set(0, -0.22, 0);  // To forearm bottom (0.16 + 0.06 = 0.22 down from center)
+        handL.parent = wristJointL;
+        handL.position.set(0, 0, 0);  // Positioned at wrist joint
 
         // === RIGHT ARM CHAIN ===
-        
-        // Upper arm (child of torso, positioned at right shoulder)
+
+        // ShoulderJointR (at right shoulder on torso)
+        const shoulderJointR = new TransformNode(`shoulderJointR_${r}_${c}`, this.scene);
+        shoulderJointR.parent = torso;
+        shoulderJointR.position.set(0.19, 0.20, 0);  // At torso top, right side
+
+        // UpperArmR (bone extending downward from shoulder)
         const upperArmR = isBase ? this.baseUpperArmR : this.baseUpperArmR.createInstance(`upperArmR_${r}_${c}`);
-        upperArmR.parent = torso;
-        upperArmR.position.set(0.23, 0.02, 0);  // At torso top, right side, midpoint
+        upperArmR.parent = shoulderJointR;
+        upperArmR.position.set(0, -0.18, 0);  // Extends downward
 
-        // Forearm (child of upper arm, positioned at upper arm bottom)
+        // ElbowJointR (at end of upper arm)
+        const elbowJointR = new TransformNode(`elbowJointR_${r}_${c}`, this.scene);
+        elbowJointR.parent = shoulderJointR;
+        elbowJointR.position.set(0, -0.36, 0);  // At end of upper arm
+
+        // ForearmR (bone extending downward from elbow)
         const forearmR = isBase ? this.baseForearmR : this.baseForearmR.createInstance(`forearmR_${r}_${c}`);
-        forearmR.parent = upperArmR;
-        forearmR.position.set(0, -0.16, 0);  // Midpoint of 0.32 height
+        forearmR.parent = elbowJointR;
+        forearmR.position.set(0, -0.16, 0);  // Extends downward
 
-        // Sleeve (uniform material covering forearm, child of forearm at same position)
+        // Sleeve (uniform material covering forearm)
         const sleeveR = isBase ? this.baseSleeveR : this.baseSleeveR.createInstance(`sleeveR_${r}_${c}`);
         sleeveR.parent = forearmR;
         sleeveR.position.set(0, 0, 0);  // At forearm center
 
-        // Hand (child of forearm, positioned at forearm bottom)
-        const handR = isBase ? this.baseHandR : this.baseHandR.createInstance(`handR_${r}_${c}`);
-        handR.parent = forearmR;
-        handR.position.set(0, -0.22, 0);  // To forearm bottom
+        // WristJointR (at end of forearm)
+        const wristJointR = new TransformNode(`wristJointR_${r}_${c}`, this.scene);
+        wristJointR.parent = elbowJointR;
+        wristJointR.position.set(0, -0.32, 0);  // At end of forearm
 
-        // === PELVIS ===
-        const pelvis = isBase ? this.basePelvis : this.basePelvis.createInstance(`pelvis_${r}_${c}`);
-        pelvis.parent = torso;
-        pelvis.position.set(0, -0.30, 0);  // Positioned at torso bottom (0.20 + 0.10 = 0.30 down)
+        // HandR (box positioned at wrist)
+        const handR = isBase ? this.baseHandR : this.baseHandR.createInstance(`handR_${r}_${c}`);
+        handR.parent = wristJointR;
+        handR.position.set(0, 0, 0);  // Positioned at wrist joint
+
+        // === HIP JOINT (connects to legs) ===
+
+        // HipJoint (at pelvis center, where legs pivot)
+        const hipJoint = new TransformNode(`hipJoint_${r}_${c}`, this.scene);
+        hipJoint.parent = torsoJoint;
+        hipJoint.position.set(0, -0.30, 0);  // At pelvis level (world y=1.22)
 
         // === LEFT LEG CHAIN ===
-        
-        // Upper leg (child of pelvis, positioned at left hip)
+
+        // UpperLegL (bone extending downward from left hip)
         const upperLegL = isBase ? this.baseUpperLegL : this.baseUpperLegL.createInstance(`upperLegL_${r}_${c}`);
-        upperLegL.parent = pelvis;
-        upperLegL.position.set(-0.17, -0.26, 0);  // Left side, at pelvis bottom (0.10 + 0.16 = 0.26)
-        // Upper leg height 0.52: extends from 0 to -0.52, midpoint at -0.26
+        upperLegL.parent = hipJoint;
+        upperLegL.position.set(-0.17, -0.26, 0);  // Left side, extends downward (height 0.52)
 
-        // Lower leg (child of upper leg, positioned at upper leg bottom)
+        // KneeJointL (at end of upper leg)
+        const kneeJointL = new TransformNode(`kneeJointL_${r}_${c}`, this.scene);
+        kneeJointL.parent = hipJoint;
+        kneeJointL.position.set(-0.17, -0.52, 0);  // At end of upper leg
+
+        // LowerLegL (bone extending downward from knee)
         const lowerLegL = isBase ? this.baseLowerLegL : this.baseLowerLegL.createInstance(`lowerLegL_${r}_${c}`);
-        lowerLegL.parent = upperLegL;
-        lowerLegL.position.set(0, -0.225, 0);  // To upper leg bottom
-        // Lower leg height 0.45: extends from 0 to -0.45, midpoint at -0.225
+        lowerLegL.parent = kneeJointL;
+        lowerLegL.position.set(0, -0.225, 0);  // Extends downward (height 0.45)
 
-        // Foot (child of lower leg, positioned at lower leg bottom)
+        // AnkleJointL (at end of lower leg)
+        const ankleJointL = new TransformNode(`ankleJointL_${r}_${c}`, this.scene);
+        ankleJointL.parent = kneeJointL;
+        ankleJointL.position.set(0, -0.45, 0);  // At end of lower leg (world y=0.15)
+
+        // FootL (box positioned at ankle)
         const footL = isBase ? this.baseFootL : this.baseFootL.createInstance(`footL_${r}_${c}`);
-        footL.parent = lowerLegL;
-        footL.position.set(0, -0.275, 0);  // To lower leg bottom (0.225 + 0.05 = 0.275)
+        footL.parent = ankleJointL;
+        footL.position.set(0, -0.05, 0);  // Extends downward (height 0.10)
 
-        // Spat (white ankle cover, child of lower leg)
+        // SpatL (white ankle cover)
         const spatL = isBase ? this.baseSpatL : this.baseSpatL.createInstance(`spatL_${r}_${c}`);
-        spatL.parent = lowerLegL;
-        spatL.position.set(0, -0.18, 0);  // Just above ankle
+        spatL.parent = ankleJointL;
+        spatL.position.set(0, -0.01, 0);  // Above ankle
 
         // === RIGHT LEG CHAIN ===
-        
-        // Upper leg (child of pelvis, positioned at right hip)
+
+        // UpperLegR (bone extending downward from right hip)
         const upperLegR = isBase ? this.baseUpperLegR : this.baseUpperLegR.createInstance(`upperLegR_${r}_${c}`);
-        upperLegR.parent = pelvis;
-        upperLegR.position.set(0.17, -0.26, 0);  // Right side, at pelvis bottom
+        upperLegR.parent = hipJoint;
+        upperLegR.position.set(0.17, -0.26, 0);  // Right side, extends downward
 
-        // Lower leg (child of upper leg, positioned at upper leg bottom)
+        // KneeJointR (at end of upper leg)
+        const kneeJointR = new TransformNode(`kneeJointR_${r}_${c}`, this.scene);
+        kneeJointR.parent = hipJoint;
+        kneeJointR.position.set(0.17, -0.52, 0);  // At end of upper leg
+
+        // LowerLegR (bone extending downward from knee)
         const lowerLegR = isBase ? this.baseLowerLegR : this.baseLowerLegR.createInstance(`lowerLegR_${r}_${c}`);
-        lowerLegR.parent = upperLegR;
-        lowerLegR.position.set(0, -0.225, 0);  // To upper leg bottom
+        lowerLegR.parent = kneeJointR;
+        lowerLegR.position.set(0, -0.225, 0);  // Extends downward
 
-        // Foot (child of lower leg, positioned at lower leg bottom)
+        // AnkleJointR (at end of lower leg)
+        const ankleJointR = new TransformNode(`ankleJointR_${r}_${c}`, this.scene);
+        ankleJointR.parent = kneeJointR;
+        ankleJointR.position.set(0, -0.45, 0);  // At end of lower leg
+
+        // FootR (box positioned at ankle)
         const footR = isBase ? this.baseFootR : this.baseFootR.createInstance(`footR_${r}_${c}`);
-        footR.parent = lowerLegR;
-        footR.position.set(0, -0.275, 0);  // To lower leg bottom
+        footR.parent = ankleJointR;
+        footR.position.set(0, -0.05, 0);  // Extends downward
 
-        // Spat (white ankle cover, child of lower leg)
+        // SpatR (white ankle cover)
         const spatR = isBase ? this.baseSpatR : this.baseSpatR.createInstance(`spatR_${r}_${c}`);
-        spatR.parent = lowerLegR;
-        spatR.position.set(0, -0.18, 0);  // Just above ankle
+        spatR.parent = ankleJointR;
+        spatR.position.set(0, -0.01, 0);  // Above ankle
 
         // === HAT & PLUME ===
         const hat = isBase ? this.baseHat : this.baseHat.createInstance(`hat_${r}_${c}`);
         hat.parent = head;
-        hat.position.set(0, 0.15, 0);  // On top of head
+        hat.position.set(0, 0.115, 0);  // On top of head
 
         const plume = isBase ? this.basePlume : this.basePlume.createInstance(`plume_${r}_${c}`);
         plume.parent = hat;
-        plume.position.set(0, 0.23, 0);  // Above hat on top of head
+        plume.position.set(0, 0.235, 0);  // Above hat
 
         // Add instruments
         this.instrumentFactory.createInstrument(type, r, c, anchor);
