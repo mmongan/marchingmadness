@@ -1,6 +1,7 @@
 import { BandMemberFactory, InstrumentType, BandMemberData } from "./bandMemberFactory";
 import { FirstPersonBody } from "./firstPersonBody";
 import { startMetronomeAndMusic } from "./musicManager";
+import { MarchingAnimationSystem } from "./marchingAnimationSystem";
 import { sfPanners, playStumbleSound, playCrashSound, loadInstruments, updateAudioListener, updateSpatialAudio } from "./audioSystem";
 import { 
     StumbleState, createStumbleState, BPM, WHOLE_NOTE_DURATION, FLY_SPEED,
@@ -1148,7 +1149,7 @@ engine.runRenderLoop(() => {
         // Update player body position based on camera
         playerBody.setBodyPosition(new Vector3(camera.position.x, 0, camera.position.z));
 
-        bandLegs.forEach(({ legL, legR, anchor, plume }, index) => {
+        bandLegs.forEach(({ legL, legR, anchor, plume, bodyParts }, index) => {
             const st = stumbleStates[index];
             const isStumbling = st.tilt > 0.3 || st.downTimer > 0;
 
@@ -1276,17 +1277,10 @@ engine.runRenderLoop(() => {
                 anchor.position.x += dx * moveAmount + avoidanceX;
                 anchor.position.z += dz * moveAmount + avoidanceZ;
 
-                // Set leg animation - consistent and smooth when settled
-                let legAmplitude = 0.6; // consistent amplitude for smooth marching
-                if (!isSettled) {
-                    // Only vary amplitude when catching up
-                    const maxAmplitude = 0.7;
-                    const minAmplitude = 0.5;
-                    legAmplitude = minAmplitude + (maxAmplitude - minAmplitude) * Math.min(1.0, gap / 2.0);
-                }
-                
-                legL.rotation.x = Math.sin(marchPhase) * legAmplitude;
-                legR.rotation.x = -Math.sin(marchPhase) * legAmplitude;
+                // === ANIMATE ENTIRE MARCHER BODY ===
+                // Real marching animation with arm swing, torso bounce, head tilt, etc.
+                const catchupFactor = MarchingAnimationSystem.getCatchupFactor(gap, settleZone);
+                MarchingAnimationSystem.animateMarcher(marchPhase, bodyParts, isSettled, catchupFactor);
             }
 
             // Face direction of movement / drill target

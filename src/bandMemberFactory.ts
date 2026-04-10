@@ -1,5 +1,6 @@
 import { Scene, Mesh, MeshBuilder, StandardMaterial, Color3, Matrix, InstancedMesh, DynamicTexture } from "@babylonjs/core";
 import { InstrumentType, InstrumentFactory } from "./instrumentFactory";
+import { BodyParts } from "./marchingAnimationSystem";
 
 export type { InstrumentType };
 
@@ -8,6 +9,7 @@ export interface BandMemberData {
     legR: InstancedMesh | Mesh;
     anchor: Mesh;
     plume: InstancedMesh | Mesh; // for health coloring
+    bodyParts: BodyParts; // All animated body parts for realistic animation
     startZ: number;
     startX: number;
     row: number;
@@ -306,6 +308,36 @@ export class BandMemberFactory {
         labelPlane.isVisible = false;
 
         // Use left upper leg for animations (its rotation drives the marching)
-        return { legL: upperLegL, legR: upperLegR, anchor, plume, startZ: zPos, startX: xPos, row: r, col: c, health: 100 };
+        return {
+            legL: upperLegL,
+            legR: upperLegR,
+            anchor,
+            plume,
+            bodyParts: {
+                head,
+                headBaseY: 1.7,
+                neck,
+                neckBaseY: 1.55,
+                torso,
+                torsoBaseY: 1.2,
+                upperArmL,
+                upperArmR,
+                forearmL,
+                forearmR,
+                handL,
+                handR,
+                upperLegL,
+                upperLegR,
+                lowerLegL,
+                lowerLegR,
+                footL,
+                footR,
+            },
+            startZ: zPos,
+            startX: xPos,
+            row: r,
+            col: c,
+            health: 100,
+        };
     }
 }
