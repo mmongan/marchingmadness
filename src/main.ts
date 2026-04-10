@@ -1148,6 +1148,9 @@ engine.runRenderLoop(() => {
         // Player position is controlled by firstPersonBody input, not drill position
         // Update player body position based on camera
         playerBody.setBodyPosition(new Vector3(camera.position.x, 0, camera.position.z));
+        
+        // Initialize settled state tracking for hysteresis (prevent oscillation at settle zone boundary)
+        let marchersSettledState: boolean[] = [];
 
         bandLegs.forEach(({ legL, legR, anchor, plume, bodyParts }, index) => {
             const st = stumbleStates[index];
@@ -1167,9 +1170,24 @@ engine.runRenderLoop(() => {
                 const dz = targetZ - anchor.position.z;
                 const gap = Math.sqrt(dx * dx + dz * dz);
 
-                // SETTLE ZONE: Marchers in proper formation position march smoothly without interference
-                const settleZone = 0.25; // meters - marchers within this distance are "settled"
-                const isSettled = gap <= settleZone;
+                // SETTLE ZONE WITH HYSTERESIS: Prevent oscillation at boundary
+                // Once settled, need to be >0.35m away to unsettled; once unsettled, need to be ≤0.25m to settle
+                // This prevents rapid flip-flopping around the 0.25m boundary
+                const settleThreshold = 0.25;
+                const unSettleThreshold = 0.35;
+                let isSettled: boolean;
+                
+                // Check if we stored a previous settled state for this marcher
+                const prevSettled = marchersSettledState[index] ?? gap <= settleThreshold;
+                
+                if (prevSettled) {
+                    // Already settled: need larger gap to unsettled (hysteresis)
+                    isSettled = gap <= unSettleThreshold;
+                } else {
+                    // Not settled: need smaller gap to settle
+                    isSettled = gap <= settleThreshold;
+                }
+                marchersSettledState[index] = isSettled;
                 
                 let moveAmount = 0.04; // default: normal formation marching pace
                 let avoidanceX = 0;
@@ -1274,12 +1292,20 @@ engine.runRenderLoop(() => {
                 }
                 
                 // Apply movement with player avoidance always active
-                anchor.position.x += dx * moveAmount + avoidanceX;
-                anchor.position.z += dz * moveAmount + avoidanceZ;
+                // Damping: reduce movement speed when near target to prevent overshoot
+                // This prevents oscillation by limiting how quickly we can cross the settle zone boundary
+                const movementScalar = isSettled 
+                    ? 0.8  // Settled: smooth, controlled movement (80% of calculated)
+                    : Math.max(0.5, Math.min(1.0, gap / 1.0));  // Out-of-formation: scale by gap but min 50%
+                
+                const dampenedMoveX = (dx * moveAmount + avoidanceX) * movementScalar;
+                const dampenedMoveZ = (dz * moveAmount + avoidanceZ) * movementScalar;
+                anchor.position.x += dampenedMoveX;
+                anchor.position.z += dampenedMoveZ;
 
                 // === ANIMATE ENTIRE MARCHER BODY ===
                 // Real marching animation with arm swing, torso bounce, head tilt, etc.
-                const catchupFactor = MarchingAnimationSystem.getCatchupFactor(gap, settleZone);
+                const catchupFactor = MarchingAnimationSystem.getCatchupFactor(gap, settleThreshold);
                 MarchingAnimationSystem.animateMarcher(marchPhase, bodyParts, isSettled, catchupFactor);
             }
 
