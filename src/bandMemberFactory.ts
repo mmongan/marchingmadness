@@ -65,8 +65,6 @@ export class BandMemberFactory {
     private baseSleeveR!: Mesh;
     
     // Connector spheres (small spheres to fill gaps between parent/child joints)
-    private baseNeckConnector!: Mesh;
-    private baseHeadConnector!: Mesh;
     private baseForearmHandConnectorL!: Mesh;
     private baseForearmHandConnectorR!: Mesh;
     private baseLowerLegFootConnectorL!: Mesh;
@@ -239,14 +237,6 @@ export class BandMemberFactory {
         this.baseSpatR.material = this.spatMat;
 
         // === CONNECTOR SPHERES (small spheres to fill gaps at joint connections) ===
-        // Neck-Torso connector (fills gap between torso top and neck)
-        this.baseNeckConnector = MeshBuilder.CreateSphere("baseNeckConnector", { diameter: 0.10, segments: 6 }, scene);
-        this.baseNeckConnector.material = this.skinMat;
-
-        // Head-Neck connector (fills gap between neck and head)
-        this.baseHeadConnector = MeshBuilder.CreateSphere("baseHeadConnector", { diameter: 0.10, segments: 6 }, scene);
-        this.baseHeadConnector.material = this.skinMat;
-
         // Forearm-Hand connectors (fills gap at wrist)
         this.baseForearmHandConnectorL = MeshBuilder.CreateSphere("baseForearmHandConnectorL", { diameter: 0.10, segments: 6 }, scene);
         this.baseForearmHandConnectorL.material = this.shirtMat;
@@ -287,8 +277,7 @@ export class BandMemberFactory {
             this.baseSpatL, this.baseSpatR,
 
             this.baseForearmHandConnectorL, this.baseForearmHandConnectorR,
-            this.baseLowerLegFootConnectorL, this.baseLowerLegFootConnectorR,
-            this.baseNeckConnector, this.baseHeadConnector
+            this.baseLowerLegFootConnectorL, this.baseLowerLegFootConnectorR
         ];
         baseMeshes.forEach(m => m.isVisible = false);
     }
