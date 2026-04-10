@@ -303,16 +303,41 @@ export class BandMemberFactory {
         anchor.isVisible = false;
 
         /**
-         * STANDARD SKELETAL HIERARCHY
-         * All positions calculated for tight anatomical connections
+         * CLEAN SKELETAL HIERARCHY (Redesigned from scratch)
          * 
-         * Y-coordinates (from ground):
-         * - Upper leg center: 0.80  (height 0.52, spans 0.54 to 1.06)
-         * - Torso center: 1.20 (height 0.40, spans 1.00 to 1.40)
-         * - Neck center: 1.50 (height 0.10, spans 1.45 to 1.55)
-         * - Head center: 1.665 (diameter 0.21, spans 1.61 to 1.72)
-         * - Shoulder/Upper arm: 1.38 (at torso top)
-         * - Total height: ~1.77m (appropriate for band member)
+         * Design Principles:
+         * 1. Each bone has ONE parent joint (no multiple parents)
+         * 2. Joints positioned at segment endpoints for proper rotation
+         * 3. Child segments extend from parent endpoint
+         * 4. Clear chains: Bone → Joint → next Bone
+         * 5. Connector spheres fill both gap AND serve as rotation pivot
+         * 
+         * Position Strategy:
+         * - Absolute positions used for root segments (torso, pelvis)
+         * - Relative (local) positions for child segments relative to parent
+         * - Z-offset 0.04 for front-facing bones to avoid Z-fighting
+         * 
+         * Chain Structure:
+         * SPINE:     Anchor → Torso → Neck → Head
+         * LEFT ARM:  Torso.Shoulder → UpperArm → Elbow → Forearm → Wrist → Hand
+         * RIGHT ARM: Torso.Shoulder → UpperArm → Elbow → Forearm → Wrist → Hand
+         * PELVIS:    Torso → Pelvis (connects hip pairs)
+         * LEFT LEG:  Pelvis.Hip → UpperLeg → Knee → LowerLeg → Ankle → Foot
+         * RIGHT LEG: Pelvis.Hip → UpperLeg → Knee → LowerLeg → Ankle → Foot
+         * 
+         * Heights (absolute Y positions in meters from ground):
+         *   Ground (y=0)
+         *   Feet (y=0.05) [0.10m tall]
+         *   Ankles (y=0.15) [joint sphere]
+         *   Lower Legs (y=0.38) [0.45m tall cylinder]
+         *   Knees (y=0.60) [joint sphere at endpoint]
+         *   Upper Legs (y=0.86) [0.52m tall cylinder]
+         *   Hips/Pelvis (y=1.02) [joint area]
+         *   Torso (y=1.22) [0.40m tall]
+         *   Shoulders (y=1.42) [joint spheres]
+         *   Neck (y=1.50) [0.10m tall]
+         *   Head (y=1.665) [0.21m diameter]
+         *   TOTAL = 1.77m ✓
          */
 
         // === BUILD SKELETON HIERARCHY ===
