@@ -362,7 +362,7 @@ export class BandMemberFactory {
         // Left shoulder (child of torso at shoulder joint)
         const shoulderL = isBase ? this.baseShoulderL : this.baseShoulderL.createInstance(`shoulderL_${r}_${c}`);
         shoulderL.parent = torso;
-        shoulderL.position.set(-0.19, 0.20, 0.04);  // At torso top, left side
+        shoulderL.position.set(-0.23, 0.20, 0.04);  // At torso top, left side
         
         // Upper arm (child of shoulder)
         const upperArmL = isBase ? this.baseUpperArmL : this.baseUpperArmL.createInstance(`upperArmL_${r}_${c}`);
@@ -398,7 +398,7 @@ export class BandMemberFactory {
         // Right shoulder (child of torso at shoulder joint)
         const shoulderR = isBase ? this.baseShoulderR : this.baseShoulderR.createInstance(`shoulderR_${r}_${c}`);
         shoulderR.parent = torso;
-        shoulderR.position.set(0.19, 0.20, 0.04);  // At torso top, right side
+        shoulderR.position.set(0.23, 0.20, 0.04);  // At torso top, right side
         
         // Upper arm (child of shoulder)
         const upperArmR = isBase ? this.baseUpperArmR : this.baseUpperArmR.createInstance(`upperArmR_${r}_${c}`);
