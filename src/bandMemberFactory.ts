@@ -235,25 +235,25 @@ export class BandMemberFactory {
 
         // === CONNECTOR SPHERES (small spheres to fill gaps at joint connections) ===
         // Neck-Torso connector (fills gap between torso top and neck)
-        this.baseNeckConnector = MeshBuilder.CreateSphere("baseNeckConnector", { diameter: 0.08, segments: 6 }, scene);
+        this.baseNeckConnector = MeshBuilder.CreateSphere("baseNeckConnector", { diameter: 0.10, segments: 6 }, scene);
         this.baseNeckConnector.material = this.skinMat;
 
         // Head-Neck connector (fills gap between neck and head)
-        this.baseHeadConnector = MeshBuilder.CreateSphere("baseHeadConnector", { diameter: 0.08, segments: 6 }, scene);
+        this.baseHeadConnector = MeshBuilder.CreateSphere("baseHeadConnector", { diameter: 0.10, segments: 6 }, scene);
         this.baseHeadConnector.material = this.skinMat;
 
         // Forearm-Hand connectors (fills gap at wrist)
-        this.baseForearmHandConnectorL = MeshBuilder.CreateSphere("baseForearmHandConnectorL", { diameter: 0.07, segments: 6 }, scene);
-        this.baseForearmHandConnectorL.material = this.skinMat;
+        this.baseForearmHandConnectorL = MeshBuilder.CreateSphere("baseForearmHandConnectorL", { diameter: 0.10, segments: 6 }, scene);
+        this.baseForearmHandConnectorL.material = this.shirtMat;
 
-        this.baseForearmHandConnectorR = MeshBuilder.CreateSphere("baseForearmHandConnectorR", { diameter: 0.07, segments: 6 }, scene);
-        this.baseForearmHandConnectorR.material = this.skinMat;
+        this.baseForearmHandConnectorR = MeshBuilder.CreateSphere("baseForearmHandConnectorR", { diameter: 0.10, segments: 6 }, scene);
+        this.baseForearmHandConnectorR.material = this.shirtMat;
 
         // Lower Leg-Foot connectors (fills gap at ankle)
-        this.baseLowerLegFootConnectorL = MeshBuilder.CreateSphere("baseLowerLegFootConnectorL", { diameter: 0.08, segments: 6 }, scene);
+        this.baseLowerLegFootConnectorL = MeshBuilder.CreateSphere("baseLowerLegFootConnectorL", { diameter: 0.10, segments: 6 }, scene);
         this.baseLowerLegFootConnectorL.material = this.shoeMat;
 
-        this.baseLowerLegFootConnectorR = MeshBuilder.CreateSphere("baseLowerLegFootConnectorR", { diameter: 0.08, segments: 6 }, scene);
+        this.baseLowerLegFootConnectorR = MeshBuilder.CreateSphere("baseLowerLegFootConnectorR", { diameter: 0.10, segments: 6 }, scene);
         this.baseLowerLegFootConnectorR.material = this.shoeMat;
 
         // === HAT (proportional to new head size, 0.22m diameter, 0.12m height) ===
