@@ -433,12 +433,12 @@ export class BandMemberFactory {
         // Lower Leg-Foot connector (fills gap at ankle, serves as rotation pivot)
         const lowerLegFootConnectorL = isBase ? this.baseLowerLegFootConnectorL : this.baseLowerLegFootConnectorL.createInstance(`lowerLegFootConnectorL_${r}_${c}`);
         lowerLegFootConnectorL.parent = lowerLegL;
-        lowerLegFootConnectorL.position.set(0, -0.225, 0.04);  // At ankle connection point
+        lowerLegFootConnectorL.position.set(0, -0.45, 0.04);  // At bottom of lower leg (ankle point)
 
         // Foot (child of connector, rotates around connector center)
         const footL = isBase ? this.baseFootL : this.baseFootL.createInstance(`footL_${r}_${c}`);
         footL.parent = lowerLegFootConnectorL;
-        footL.position.set(0, -0.05, 0.035);  // Positioned below connector to touch ground
+        footL.position.set(0, 0, 0.035);  // Overlaps with connector for seamless connection
 
         // Spat (white ankle cover, child of lower leg)
         const spatL = isBase ? this.baseSpatL : this.baseSpatL.createInstance(`spatL_${r}_${c}`);
@@ -469,12 +469,12 @@ export class BandMemberFactory {
         // Lower Leg-Foot connector (fills gap at ankle, serves as rotation pivot)
         const lowerLegFootConnectorR = isBase ? this.baseLowerLegFootConnectorR : this.baseLowerLegFootConnectorR.createInstance(`lowerLegFootConnectorR_${r}_${c}`);
         lowerLegFootConnectorR.parent = lowerLegR;
-        lowerLegFootConnectorR.position.set(0, -0.225, 0.04);  // At ankle connection point
+        lowerLegFootConnectorR.position.set(0, -0.45, 0.04);  // At bottom of lower leg (ankle point)
 
         // Foot (child of connector, rotates around connector center)
         const footR = isBase ? this.baseFootR : this.baseFootR.createInstance(`footR_${r}_${c}`);
         footR.parent = lowerLegFootConnectorR;
-        footR.position.set(0, -0.05, 0.035);  // Positioned below connector to touch ground
+        footR.position.set(0, 0, 0.035);  // Overlaps with connector for seamless connection
 
         // Spat (white ankle cover, child of lower leg)
         const spatR = isBase ? this.baseSpatR : this.baseSpatR.createInstance(`spatR_${r}_${c}`);
