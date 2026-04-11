@@ -1,14 +1,14 @@
 import { BandMemberFactory, InstrumentType, BandMemberData } from "./bandMemberFactory";
 import { FirstPersonBody } from "./firstPersonBody";
 import { startMetronomeAndMusic } from "./musicManager";
-import { MarchingAnimationSystem } from "./marchingAnimationSystem";
+import { MarchingAnimationSystem, MarchStyle } from "./marchingAnimationSystem";
 import { sfPanners, playStumbleSound, playCrashSound, loadInstruments, updateAudioListener, updateSpatialAudio } from "./audioSystem";
 import { 
     StumbleState, createStumbleState, BPM, WHOLE_NOTE_DURATION, FLY_SPEED,
     COLLISION_RADIUS, STUMBLE_RECOVERY, MAX_TILT, DOWN_DURATION,
     OBSTACLE_RADIUS, OBSTACLE_PUSH, MARCHER_COLLISION_RADIUS,
     PLAYER_DRILL_ROW, PLAYER_DRILL_COL, PLAYER_START_X, PLAYER_START_Z, 
-    STEP_LOOK_AHEAD, STEP_HIT_PERFECT, STEP_HIT_GOOD, FOOT_LATERAL,
+    STEP_HIT_PERFECT, STEP_HIT_GOOD,
     BAND_ROWS, BAND_COLS, SPACING_X, SPACING_Z, BAND_START_Z,
     FIELD_MIN_X, FIELD_MAX_X, FIELD_MIN_Z, FIELD_MAX_Z, MAX_DRILL_START_Z
 } from "./gameConstants";
@@ -240,25 +240,25 @@ const drillShapes: DrillShape[] = [
 ];
 
 const drillTimeline = [
-    { beat: 0, shape: 0, facing: Math.PI },       // face audience (toward camera)
-    { beat: 16, shape: 0, facing: Math.PI },
+    { beat: 0, shape: 0, facing: Math.PI, style: MarchStyle.HighStep },       // face audience (toward camera)
+    { beat: 16, shape: 0, facing: Math.PI, style: MarchStyle.HighStep },
     // Expand transition
-    { beat: 32, shape: 1, facing: Math.PI },
-    { beat: 48, shape: 1, facing: Math.PI * 0.5 }, // face right sideline
+    { beat: 32, shape: 1, facing: Math.PI, style: MarchStyle.Glide },
+    { beat: 48, shape: 1, facing: Math.PI * 0.5, style: MarchStyle.Glide }, // face right sideline
     // Wedge transition
-    { beat: 64, shape: 2, facing: 0 },              // face away from audience
-    { beat: 80, shape: 2, facing: Math.PI },         // snap back to audience
+    { beat: 64, shape: 2, facing: 0, style: MarchStyle.HighStep },              // face away from audience
+    { beat: 80, shape: 2, facing: Math.PI, style: MarchStyle.HighStep },         // snap back to audience
     // Diamond transition
-    { beat: 96, shape: 4, facing: Math.PI * 1.5 },  // face left sideline
-    { beat: 112, shape: 4, facing: Math.PI },
+    { beat: 96, shape: 4, facing: Math.PI * 1.5, style: MarchStyle.Glide },  // face left sideline
+    { beat: 112, shape: 4, facing: Math.PI, style: MarchStyle.Glide },
     // Rings transition
-    { beat: 128, shape: 3, facing: Math.PI },
-    { beat: 144, shape: 3, facing: Math.PI },
+    { beat: 128, shape: 3, facing: Math.PI, style: MarchStyle.HighStep },
+    { beat: 144, shape: 3, facing: Math.PI, style: MarchStyle.HighStep },
     // Back to block transition
-    { beat: 160, shape: 0, facing: Math.PI }, 
+    { beat: 160, shape: 0, facing: Math.PI, style: MarchStyle.HighStep }, 
 ];
 
-function getDrillPosition(currentBeat: number, r: number, c: number, cols: number, rows: number, startX: number, startZ: number): {x: number, z: number, facing: number} {
+function getDrillPosition(currentBeat: number, r: number, c: number, cols: number, rows: number, startX: number, startZ: number): {x: number, z: number, facing: number, style: MarchStyle} {
     // Loop entirely at 160 beats
     const maxBeat = 160;
     let loopedBeat = currentBeat % maxBeat;
@@ -273,7 +273,7 @@ function getDrillPosition(currentBeat: number, r: number, c: number, cols: numbe
     
     if (currentIndex === drillTimeline.length - 1) {
         const pos = drillShapes[currentPhase.shape](r, c, cols, rows, startX, startZ);
-        return { ...pos, facing: currentPhase.facing };
+        return { ...pos, facing: currentPhase.facing, style: currentPhase.style };
     }
     
     const nextPhase = drillTimeline[currentIndex + 1];
@@ -297,7 +297,8 @@ function getDrillPosition(currentBeat: number, r: number, c: number, cols: numbe
     return {
         x: p1.x + (p2.x - p1.x) * smoothProgress,
         z: p1.z + (p2.z - p1.z) * smoothProgress,
-        facing
+        facing,
+        style: currentPhase.style
     };
 }
 
@@ -397,36 +398,7 @@ function emitDustBurst(position: Vector3) {
     ps.start();
 }
 
-// Explosion particle burst when a footstep is missed
-function emitStepExplosion(position: Vector3, isLeft: boolean) {
-    const ps = new ParticleSystem("stepExplosion", 40, scene);
-    ps.createPointEmitter(new Vector3(-0.3, -0.1, -0.3), new Vector3(0.3, 0.2, 0.3));
-    ps.emitter = position.clone();
-    ps.emitter.y = 0.1;
-    ps.minSize = 0.08;
-    ps.maxSize = 0.3;
-    ps.minLifeTime = 0.4;
-    ps.maxLifeTime = 1.0;
-    ps.emitRate = 0; // manual burst only
-    
-    // Color based on foot (left=blue, right=orange)
-    if (isLeft) {
-        ps.color1 = new Color4(0.2, 0.6, 1.0, 0.9);
-        ps.color2 = new Color4(0.1, 0.4, 0.8, 0.7);
-        ps.colorDead = new Color4(0.0, 0.2, 0.5, 0);
-    } else {
-        ps.color1 = new Color4(1.0, 0.6, 0.2, 0.9);
-        ps.color2 = new Color4(0.8, 0.4, 0.1, 0.7);
-        ps.colorDead = new Color4(0.5, 0.2, 0.0, 0);
-    }
-    
-    ps.gravity = new Vector3(0, -2, 0);
-    ps.blendMode = ParticleSystem.BLENDMODE_ADD;
-    ps.manualEmitCount = 40;
-    ps.targetStopDuration = 1.2;
-    ps.disposeOnStop = true;
-    ps.start();
-}
+
 
 // === Player Starting Position in Drill Formation ===
 // Assign player to replace a random band member position
@@ -562,33 +534,19 @@ for (let i = 0; i < bandLegs.length; i++) {
     disc.position.set(bandLegs[i].anchor.position.x, 0.02, bandLegs[i].anchor.position.z);
     shadowDiscs.push(disc);
 }
-// === PLAYER DRILL FOOTSTEP TARGETS ===
-// Constants imported from gameConstants
 
-interface StepMarker {
-    mesh: AbstractMesh;
-    mat: StandardMaterial;
-    beatNum: number;
-    flashTimer: number;
-    beatFlashPhase: number;  // for pulsing animation
-    isExploding: boolean;
-    explosionTime: number;   // time since explosion started
-}
-const stepMarkers: StepMarker[] = [];
-
-for (let i = 0; i < STEP_LOOK_AHEAD; i++) {
-    const mesh = MeshBuilder.CreateTorus(`step_${i}`, { diameter: 0.7, thickness: 0.05, tessellation: 24 }, scene);
-    mesh.rotation.x = Math.PI / 2;
-    mesh.position.y = 0.04;
-    mesh.isPickable = false;
-    mesh.isVisible = false;
-    const mat = new StandardMaterial(`stepMat_${i}`, scene);
-    mat.emissiveColor = new Color3(0, 0.5, 1);
-    mat.disableLighting = true;
-    mat.alpha = 0.6;
-    mesh.material = mat;
-    stepMarkers.push({ mesh, mat, beatNum: -1, flashTimer: 0, beatFlashPhase: 0, isExploding: false, explosionTime: 0 });
-}
+// === PLAYER TARGET SHADOW ===
+// Shows where the first-person player should be positioned
+const playerShadowMat = new StandardMaterial("playerShadowMat", scene);
+playerShadowMat.diffuseColor = new Color3(0, 0.6, 1);  // blue when on-target
+playerShadowMat.specularColor = new Color3(0, 0, 0);
+playerShadowMat.alpha = 0.5;
+const playerShadow = MeshBuilder.CreateDisc("playerShadow", { radius: 0.6, tessellation: 24 }, scene);
+playerShadow.rotation.x = Math.PI / 2;
+playerShadow.material = playerShadowMat;
+playerShadow.isPickable = false;
+playerShadow.position.y = 0.025;
+playerShadow.isVisible = false; // hidden until game starts
 
 let lastScoredBeat = -1;
 let stepStreak = 0;
@@ -878,8 +836,6 @@ function showResults() {
     Tone.Transport.stop();
     beatIndicator.isVisible = false;
     scoreHUD.isVisible = false;
-    // Hide footstep markers
-    for (const m of stepMarkers) m.mesh.isVisible = false;
     resultsMesh.isVisible = true;
 
     const grade = formationQuality >= 90 ? "A" : formationQuality >= 80 ? "B"
@@ -1322,7 +1278,7 @@ engine.runRenderLoop(() => {
                 // === ANIMATE ENTIRE MARCHER BODY ===
                 // Real marching animation with arm swing, torso bounce, head tilt, etc.
                 const catchupFactor = MarchingAnimationSystem.getCatchupFactor(gap, settleThreshold);
-                MarchingAnimationSystem.animateMarcher(marchPhase, bodyParts, isSettled, catchupFactor, 0);
+                MarchingAnimationSystem.animateMarcher(marchPhase, bodyParts, isSettled, catchupFactor, 0, targetPos.style);
             }
 
             // Face the drill-specified direction (smoothly interpolated)
@@ -1373,81 +1329,6 @@ engine.runRenderLoop(() => {
             (plume.material as StandardMaterial).diffuseColor = new Color3(r, g, b);
         });
 
-        // === FOOTSTEP MARKER POSITIONING ===
-        const baseBeat = Math.floor(currentBeat);
-        const dt = engine.getDeltaTime() / 1000;
-        for (let i = 0; i < STEP_LOOK_AHEAD; i++) {
-            const marker = stepMarkers[i];
-            const targetBeat = baseBeat + i + 1;
-            marker.beatNum = targetBeat;
-
-            const drill = getDrillPosition(targetBeat, playerRow, playerCol,
-                BAND_COLS, BAND_ROWS, playerStartX, playerStartZ);
-            const beatTimeSec = targetBeat * secondsPerBeat;
-            const isLeftFoot = targetBeat % 2 === 0;
-            const footX = drill.x + (isLeftFoot ? -FOOT_LATERAL : FOOT_LATERAL);
-            const footZ = drill.z - beatTimeSec * FLY_SPEED;
-
-            marker.mesh.position.x = footX;
-            marker.mesh.position.z = footZ;
-            marker.mesh.isVisible = true;
-
-            // Rotate marker to face the direction of march
-            // Calculate direction from this beat to next beat
-            const nextBeat = targetBeat + 1;
-            const nextDrill = getDrillPosition(nextBeat, playerRow, playerCol,
-                BAND_COLS, BAND_ROWS, playerStartX, playerStartZ);
-            const nextBeatTimeSec = nextBeat * secondsPerBeat;
-            const nextFootZ = nextDrill.z - nextBeatTimeSec * FLY_SPEED;
-            
-            const dx = nextDrill.x - drill.x;
-            const dz = nextFootZ - footZ;
-            const marchAngle = Math.atan2(dx, dz);
-            marker.mesh.rotation.y = marchAngle;
-
-            // Handle explosion animation
-            if (marker.isExploding) {
-                marker.explosionTime += dt;
-                const explosionProgress = Math.min(1, marker.explosionTime / 0.5);
-                marker.mat.alpha = Math.max(0, 0.6 * (1 - explosionProgress));
-                marker.mesh.scaling.y = 1 + explosionProgress * 0.5;
-                if (explosionProgress >= 1) {
-                    marker.isExploding = false;
-                    marker.explosionTime = 0;
-                    marker.mesh.scaling.y = 1;
-                }
-            } else {
-                // Flash countdown (from hit/miss feedback)
-                if (marker.flashTimer > 0) {
-                    marker.flashTimer -= dt;
-                    // Keep normal scaling while flashing
-                    marker.mesh.scaling.x = 1;
-                    marker.mesh.scaling.z = 1;
-                } else {
-                    // Color: left = blue, right = orange; brightness by proximity in time
-                    const beatsAhead = targetBeat - currentBeat;
-                    const nearness = Math.max(0, 1 - beatsAhead / STEP_LOOK_AHEAD);
-                    
-                    // Pulsing animation when beat is imminent (within 1 beat)
-                    const beatProgress = beatsAhead % 1.0;
-                    let pulseScale = 1.0;
-                    if (beatsAhead < 1 && beatsAhead > 0) {
-                        // Pulse when beat is very close
-                        pulseScale = 1 + Math.abs(Math.sin(beatProgress * Math.PI * 4)) * 0.15;
-                    }
-                    marker.mesh.scaling.x = pulseScale;
-                    marker.mesh.scaling.z = pulseScale;
-                    
-                    if (isLeftFoot) {
-                        marker.mat.emissiveColor.set(0.1 + 0.2 * nearness, 0.3 + 0.4 * nearness, 0.7 + 0.3 * nearness);
-                    } else {
-                        marker.mat.emissiveColor.set(0.7 + 0.3 * nearness, 0.3 + 0.2 * nearness, 0.1 + 0.1 * nearness);
-                    }
-                    marker.mat.alpha = 0.25 + 0.55 * nearness;
-                }
-            }
-        }
-
         // === FOOTSTEP SCORING (on each new beat) ===
         const thisBeat = Math.floor(currentBeat);
         if (thisBeat > lastScoredBeat && lastScoredBeat >= 0) {
@@ -1462,32 +1343,20 @@ engine.runRenderLoop(() => {
             const ddz = pPos.z - tgtZ;
             const dist = Math.sqrt(ddx * ddx + ddz * ddz);
 
-            const hitMarker = stepMarkers.find(m => m.beatNum === thisBeat);
-            const isLeftFoot = thisBeat % 2 === 0;
             totalStepsScored++;
 
             if (dist < STEP_HIT_PERFECT) {
                 perfectSteps++;
                 stepStreak++;
                 formationQuality = Math.min(100, formationQuality + 0.8);
-                if (hitMarker) { hitMarker.mat.emissiveColor.set(0, 1, 0); hitMarker.flashTimer = 0.3; }
             } else if (dist < STEP_HIT_GOOD) {
                 goodSteps++;
                 stepStreak++;
                 formationQuality = Math.min(100, formationQuality + 0.2);
-                if (hitMarker) { hitMarker.mat.emissiveColor.set(1, 1, 0); hitMarker.flashTimer = 0.3; }
             } else {
                 missedSteps++;
                 stepStreak = 0;
                 formationQuality = Math.max(0, formationQuality - 0.3);
-                if (hitMarker) { 
-                    hitMarker.mat.emissiveColor.set(1, 0, 0); 
-                    hitMarker.flashTimer = 0.3;
-                    // Trigger explosion animation
-                    hitMarker.isExploding = true;
-                    hitMarker.explosionTime = 0;
-                    emitStepExplosion(hitMarker.mesh.position, isLeftFoot);
-                }
             }
         }
         lastScoredBeat = thisBeat;
