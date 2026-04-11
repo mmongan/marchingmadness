@@ -1211,13 +1211,15 @@ engine.runRenderLoop(() => {
                     }
                 }
                 
-                // === MARCHER-TO-MARCHER COLLISION AVOIDANCE (ALWAYS - prevents intersection) ===
-                // This is critical: marchers should NEVER occupy same space, settled or not
-                const collisionRadius = 0.8;
+                // === MARCHER-TO-MARCHER COLLISION AVOIDANCE ===
+                // Hard-body radius is small — only fires when marchers truly overlap.
+                // Settled marchers in formation are *supposed* to be close, so the
+                // force is heavily dampened to prevent vibration from competing
+                // with the formation pull.
+                const collisionRadius = 0.5;                       // tighter than before
                 const collisionRadius2 = collisionRadius * collisionRadius;
                 let collisionX = 0;
                 let collisionZ = 0;
-                let collisionCount = 0;
                 
                 for (let j = 0; j < bandLegs.length; j++) {
                     if (j === index) continue;
@@ -1229,17 +1231,16 @@ engine.runRenderLoop(() => {
                     
                     if (collisionDistSq < collisionRadius2 && collisionDistSq > 0.01) {
                         const collisionDist = Math.sqrt(collisionDistSq);
-                        const repelStrength = (1 - collisionDist / collisionRadius) * 0.5;
-                        collisionX += (cdx / collisionDist) * repelStrength;
-                        collisionZ += (cdz / collisionDist) * repelStrength;
-                        collisionCount++;
+                        const repelStrength = (1 - collisionDist / collisionRadius) * 0.3;
+                        collisionX -= (cdx / collisionDist) * repelStrength;
+                        collisionZ -= (cdz / collisionDist) * repelStrength;
                     }
                 }
                 
-                if (collisionCount > 0) {
-                    avoidanceX += collisionX;
-                    avoidanceZ += collisionZ;
-                }
+                // Settled marchers barely react to neighbours (they belong close together)
+                const collisionScale = isSettled ? 0.1 : 1.0;
+                avoidanceX += collisionX * collisionScale;
+                avoidanceZ += collisionZ * collisionScale;
                 
                 if (isSettled) {
                     // SETTLED IN FORMATION: March smoothly at normal pace
@@ -1291,17 +1292,19 @@ engine.runRenderLoop(() => {
                     }
                 }
                 
-                // Apply movement with player avoidance always active
-                // Damping: reduce movement speed when near target to prevent overshoot
-                // This prevents oscillation by limiting how quickly we can cross the settle zone boundary
-                const movementScalar = isSettled 
-                    ? 0.8  // Settled: smooth, controlled movement (80% of calculated)
-                    : Math.max(0.5, Math.min(1.0, gap / 1.0));  // Out-of-formation: scale by gap but min 50%
-                
-                const dampenedMoveX = (dx * moveAmount + avoidanceX) * movementScalar;
-                const dampenedMoveZ = (dz * moveAmount + avoidanceZ) * movementScalar;
-                anchor.position.x += dampenedMoveX;
-                anchor.position.z += dampenedMoveZ;
+                // Apply movement with avoidance.
+                // Settled marchers use a soft lerp toward their target — this kills
+                // overshoot/vibration.  Unsettled marchers stride proportionally.
+                if (isSettled) {
+                    // Lerp 6% per frame toward formation target, plus weak avoidance
+                    const lerpFactor = 0.06;
+                    anchor.position.x += dx * lerpFactor + avoidanceX * 0.3;
+                    anchor.position.z += dz * lerpFactor + avoidanceZ * 0.3;
+                } else {
+                    const movementScalar = Math.max(0.5, Math.min(1.0, gap / 1.0));
+                    anchor.position.x += (dx * moveAmount + avoidanceX) * movementScalar;
+                    anchor.position.z += (dz * moveAmount + avoidanceZ) * movementScalar;
+                }
 
                 // === ANIMATE ENTIRE MARCHER BODY ===
                 // Real marching animation with arm swing, torso bounce, head tilt, etc.
