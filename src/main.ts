@@ -344,10 +344,10 @@ const drillShapes: DrillShape[] = [
         return clampToFieldBounds(px, pz);
     },
 
-    // 14: Breathe — alternate rows expand apart in Z (no path crossing)
+    // 14: Breathe — alternate rows shift laterally (X, not Z — avoids row overlap)
     (_r, _c, _cols, _rows, startX, startZ) => {
-        const zShift = (_r % 2 === 0) ? -3.0 : 3.0;
-        return clampToFieldBounds(startX, startZ + zShift);
+        const xShift = (_r % 2 === 0) ? -2.5 : 2.5;
+        return clampToFieldBounds(startX + xShift, startZ);
     },
 
     // 15: Scatter — random-looking positions (deterministic from row/col)
@@ -504,105 +504,166 @@ const drillTimeline = drillSequence.map((entry, i) => {
     return { ...entry, style };
 });
 
-// === BUILD-TIME VALIDATION: ensure all formations maintain minimum spacing ===
-const MIN_MARCHER_DIST = 1.0; // metres
-{
-    const allPositions = (shape: number) => {
-        const pts: {x: number, z: number, r: number, c: number}[] = [];
-        for (let r = 0; r < BAND_ROWS; r++) {
-            for (let c = 0; c < BAND_COLS; c++) {
-                const sx = (c - BAND_COLS / 2 + 0.5) * SPACING_X;
-                const sz = BAND_START_Z + r * SPACING_Z;
-                const p = drillShapes[shape](r, c, BAND_COLS, BAND_ROWS, sx, sz);
-                pts.push({...p, r, c});
+// === PRECOMPUTED COLLISION-FREE DRILL POSITIONS ===
+const MIN_SPACING = 1.0; // metres — minimum distance between any two marchers
+const TOTAL_MARCHERS = BAND_ROWS * BAND_COLS;
+
+/**
+ * Iterative relaxation: push positions apart until all pairs are >= minDist.
+ * Returns a new array (does not mutate input).
+ */
+function enforceMinSpacing(
+    positions: {x: number, z: number}[],
+    minDist: number
+): {x: number, z: number}[] {
+    const out = positions.map(p => ({x: p.x, z: p.z}));
+    const minDist2 = minDist * minDist;
+    for (let pass = 0; pass < 30; pass++) {
+        let moved = false;
+        for (let i = 0; i < out.length; i++) {
+            for (let j = i + 1; j < out.length; j++) {
+                const dx = out[j].x - out[i].x;
+                const dz = out[j].z - out[i].z;
+                const d2 = dx * dx + dz * dz;
+                if (d2 < minDist2) {
+                    if (d2 < 0.0001) {
+                        // Coincident — push apart deterministically
+                        const angle = i * 2.654 + j * 1.337;
+                        const half = minDist * 0.51;
+                        out[i].x -= Math.cos(angle) * half;
+                        out[i].z -= Math.sin(angle) * half;
+                        out[j].x += Math.cos(angle) * half;
+                        out[j].z += Math.sin(angle) * half;
+                    } else {
+                        const d = Math.sqrt(d2);
+                        const overlap = (minDist - d) / 2;
+                        const nx = dx / d;
+                        const nz = dz / d;
+                        out[i].x -= nx * overlap;
+                        out[i].z -= nz * overlap;
+                        out[j].x += nx * overlap;
+                        out[j].z += nz * overlap;
+                    }
+                    moved = true;
+                }
             }
         }
-        return pts;
-    };
-    // Check each shape endpoint
-    for (let s = 0; s < drillShapes.length; s++) {
-        const pts = allPositions(s);
-        let minD = Infinity;
-        let pairA = '', pairB = '';
-        for (let i = 0; i < pts.length; i++) {
-            for (let j = i + 1; j < pts.length; j++) {
-                const dx = pts[i].x - pts[j].x;
-                const dz = pts[i].z - pts[j].z;
-                const d = Math.sqrt(dx * dx + dz * dz);
-                if (d < minD) { minD = d; pairA = `(${pts[i].r},${pts[i].c})`; pairB = `(${pts[j].r},${pts[j].c})`; }
-            }
-        }
-        if (minD < MIN_MARCHER_DIST) {
-            console.warn(`⚠ Shape ${s} min distance ${minD.toFixed(2)}m between ${pairA} and ${pairB} (< ${MIN_MARCHER_DIST}m)`);
-        }
+        if (!moved) break;
     }
-    // Check transition midpoints (t = 0.5)
-    for (let t = 0; t < drillTimeline.length - 1; t++) {
-        const shapeA = drillTimeline[t].shape;
-        const shapeB = drillTimeline[t + 1].shape;
-        if (shapeA === shapeB) continue;
-        const midPts: {x: number, z: number}[] = [];
-        for (let r = 0; r < BAND_ROWS; r++) {
-            for (let c = 0; c < BAND_COLS; c++) {
-                const sx = (c - BAND_COLS / 2 + 0.5) * SPACING_X;
-                const sz = BAND_START_Z + r * SPACING_Z;
-                const a = drillShapes[shapeA](r, c, BAND_COLS, BAND_ROWS, sx, sz);
-                const b = drillShapes[shapeB](r, c, BAND_COLS, BAND_ROWS, sx, sz);
-                midPts.push({x: (a.x + b.x) / 2, z: (a.z + b.z) / 2});
-            }
-        }
-        let minD = Infinity;
-        for (let i = 0; i < midPts.length; i++) {
-            for (let j = i + 1; j < midPts.length; j++) {
-                const dx = midPts[i].x - midPts[j].x;
-                const dz = midPts[i].z - midPts[j].z;
-                const d = Math.sqrt(dx * dx + dz * dz);
-                if (d < minD) minD = d;
-            }
-        }
-        if (minD < MIN_MARCHER_DIST) {
-            console.warn(`⚠ Transition ${shapeA}→${shapeB} midpoint min distance: ${minD.toFixed(2)}m (< ${MIN_MARCHER_DIST}m)`);
-        }
+    // Clamp to field bounds
+    for (const p of out) {
+        p.x = Math.max(FIELD_MIN_X, Math.min(FIELD_MAX_X, p.x));
+        p.z = Math.max(FIELD_MIN_Z, Math.min(FIELD_MAX_Z, p.z));
     }
+    return out;
 }
 
-function getDrillPosition(currentBeat: number, r: number, c: number, cols: number, rows: number, startX: number, startZ: number): {x: number, z: number, facing: number, style: MarchStyle} {
-    // Loop entirely at 320 beats
+/** Compute raw (unseparated) positions for all marchers in a given shape */
+function computeRawPositions(shapeIdx: number): {x: number, z: number}[] {
+    const pts: {x: number, z: number}[] = [];
+    for (let r = 0; r < BAND_ROWS; r++) {
+        for (let c = 0; c < BAND_COLS; c++) {
+            const sx = (c - BAND_COLS / 2 + 0.5) * SPACING_X;
+            const sz = BAND_START_Z + r * SPACING_Z;
+            pts.push(drillShapes[shapeIdx](r, c, BAND_COLS, BAND_ROWS, sx, sz));
+        }
+    }
+    return pts;
+}
+
+// Precompute collision-free positions for every drill shape
+const precomputedShapePos: {x: number, z: number}[][] = [];
+for (let s = 0; s < drillShapes.length; s++) {
+    precomputedShapePos[s] = enforceMinSpacing(computeRawPositions(s), MIN_SPACING);
+}
+
+// Precompute collision-free transition waypoints at t = 0.25, 0.5, 0.75
+const WAYPOINT_T = [0.25, 0.5, 0.75];
+const precomputedWaypoints: ({x: number, z: number}[][] | null)[] = [];
+for (let i = 0; i < drillTimeline.length; i++) {
+    if (i === drillTimeline.length - 1) {
+        precomputedWaypoints.push(null);
+        continue;
+    }
+    const shapeA = drillTimeline[i].shape;
+    const shapeB = drillTimeline[i + 1].shape;
+    if (shapeA === shapeB) {
+        precomputedWaypoints.push(null);
+        continue;
+    }
+    const posA = precomputedShapePos[shapeA];
+    const posB = precomputedShapePos[shapeB];
+    const wps: {x: number, z: number}[][] = [];
+    for (const t of WAYPOINT_T) {
+        const smooth = t * t * (3 - 2 * t); // smoothstep
+        const midPts: {x: number, z: number}[] = [];
+        for (let m = 0; m < TOTAL_MARCHERS; m++) {
+            midPts.push({
+                x: posA[m].x + (posB[m].x - posA[m].x) * smooth,
+                z: posA[m].z + (posB[m].z - posA[m].z) * smooth,
+            });
+        }
+        wps.push(enforceMinSpacing(midPts, MIN_SPACING));
+    }
+    precomputedWaypoints.push(wps);
+}
+
+function getDrillPosition(currentBeat: number, r: number, c: number, cols: number, _rows: number, _startX: number, _startZ: number): {x: number, z: number, facing: number, style: MarchStyle} {
     const maxBeat = 320;
-    let loopedBeat = currentBeat % maxBeat;
-    
+    const loopedBeat = currentBeat % maxBeat;
+    const marcherIdx = r * cols + c;
+
     // Find phase
     let currentIndex = 0;
-    while(currentIndex < drillTimeline.length - 1 && drillTimeline[currentIndex + 1].beat <= loopedBeat) {
+    while (currentIndex < drillTimeline.length - 1 && drillTimeline[currentIndex + 1].beat <= loopedBeat) {
         currentIndex++;
     }
-    
-    const currentPhase = drillTimeline[currentIndex];
-    
-    if (currentIndex === drillTimeline.length - 1) {
-        const pos = drillShapes[currentPhase.shape](r, c, cols, rows, startX, startZ);
-        return { ...pos, facing: currentPhase.facing, style: currentPhase.style };
-    }
-    
-    const nextPhase = drillTimeline[currentIndex + 1];
-    
-    // Lerp between shapes
-    const progress = (loopedBeat - currentPhase.beat) / (nextPhase.beat - currentPhase.beat);
-    
-    const p1 = drillShapes[currentPhase.shape](r, c, cols, rows, startX, startZ);
-    const p2 = drillShapes[nextPhase.shape](r, c, cols, rows, startX, startZ);
-    
-    // Smooth transition
-    const smoothProgress = progress * progress * (3 - 2 * progress); // smoothstep
 
-    // Facing holds at current phase value — the clamped MAX_TURN_SPEED
-    // in the render loop animates the turn when the target changes at a
-    // phase boundary, so every marcher starts turning at the same beat.
+    const currentPhase = drillTimeline[currentIndex];
+
+    if (currentIndex === drillTimeline.length - 1) {
+        const pos = precomputedShapePos[currentPhase.shape][marcherIdx];
+        return { x: pos.x, z: pos.z, facing: currentPhase.facing, style: currentPhase.style };
+    }
+
+    const nextPhase = drillTimeline[currentIndex + 1];
+    const progress = (loopedBeat - currentPhase.beat) / (nextPhase.beat - currentPhase.beat);
+    const smoothProgress = progress * progress * (3 - 2 * progress);
     const facing = currentPhase.facing;
 
+    const posA = precomputedShapePos[currentPhase.shape][marcherIdx];
+    const posB = precomputedShapePos[nextPhase.shape][marcherIdx];
+
+    const wps = precomputedWaypoints[currentIndex];
+    if (!wps) {
+        // Same shape or simple transition — linear interpolation (already separated at endpoints)
+        return {
+            x: posA.x + (posB.x - posA.x) * smoothProgress,
+            z: posA.z + (posB.z - posA.z) * smoothProgress,
+            facing,
+            style: currentPhase.style
+        };
+    }
+
+    // Piecewise interpolation through precomputed separated waypoints
+    // Control points: [posA, wp[0], wp[1], wp[2], posB] at smoothProgress [0, 0.25, 0.5, 0.75, 1.0]
+    const sT = [0, 0.25, 0.5, 0.75, 1.0];
+    const sP = [posA, wps[0][marcherIdx], wps[1][marcherIdx], wps[2][marcherIdx], posB];
+
+    // Find which segment contains smoothProgress
+    let seg = sT.length - 2;
+    for (let s = 0; s < sT.length - 1; s++) {
+        if (smoothProgress <= sT[s + 1]) {
+            seg = s;
+            break;
+        }
+    }
+
+    const localT = (smoothProgress - sT[seg]) / (sT[seg + 1] - sT[seg]);
+
     return {
-        x: p1.x + (p2.x - p1.x) * smoothProgress,
-        z: p1.z + (p2.z - p1.z) * smoothProgress,
+        x: sP[seg].x + (sP[seg + 1].x - sP[seg].x) * localT,
+        z: sP[seg].z + (sP[seg + 1].z - sP[seg].z) * localT,
         facing,
         style: currentPhase.style
     };
@@ -1559,85 +1620,16 @@ engine.runRenderLoop(() => {
                     }
                 }
                 
-                // === MARCHER-TO-MARCHER COLLISION AVOIDANCE ===
-                // Hard-body radius is small — only fires when marchers truly overlap.
-                // Settled marchers in formation are *supposed* to be close, so the
-                // force is heavily dampened to prevent vibration from competing
-                // with the formation pull.
-                const collisionRadius = 1.0;                       // minimum separation distance
-                const collisionRadius2 = collisionRadius * collisionRadius;
-                let collisionX = 0;
-                let collisionZ = 0;
-                
-                for (let j = 0; j < bandLegs.length; j++) {
-                    if (j === index) continue;
-                    
-                    const otherAnchor = bandLegs[j].anchor;
-                    const cdx = otherAnchor.position.x - anchor.position.x;
-                    const cdz = otherAnchor.position.z - anchor.position.z;
-                    const collisionDistSq = cdx * cdx + cdz * cdz;
-                    
-                    if (collisionDistSq < collisionRadius2 && collisionDistSq > 0.01) {
-                        const collisionDist = Math.sqrt(collisionDistSq);
-                        const repelStrength = (1 - collisionDist / collisionRadius) * 0.6;
-                        collisionX -= (cdx / collisionDist) * repelStrength;
-                        collisionZ -= (cdz / collisionDist) * repelStrength;
-                    }
-                }
-                
-                // Settled marchers lightly react; unsettled get full separation force
-                const collisionScale = isSettled ? 0.15 : 1.0;
-                avoidanceX += collisionX * collisionScale;
-                avoidanceZ += collisionZ * collisionScale;
-                
                 if (isSettled) {
                     // SETTLED IN FORMATION: March smoothly at normal pace
                     moveAmount = 0.04;
-                    // Only player & collision avoidance applies - skip other calculations for smooth marching
                 } else {
-                    // OUT OF FORMATION: Catch up with longer strides and active avoidance
+                    // OUT OF FORMATION: Catch up with longer strides
                     const baseRate = 0.04; // base stride length
                     const maxCatchupRate = 0.09; // max stride when far from target
                     moveAmount = gap > 0.05 
                         ? baseRate + (maxCatchupRate - baseRate) * Math.min(1.0, gap / 3.0)
                         : baseRate;
-                    
-                    // === DETECT OUT-OF-FORMATION MARCHERS & ROUTE AROUND THEM ===
-                    const outOfFormationRadius = 2.5;
-                    const avoidanceRadius = 1.8;
-                    const avoidanceRadius2 = avoidanceRadius * avoidanceRadius;
-                    
-                    for (let j = 0; j < bandLegs.length; j++) {
-                        if (j === index) continue;
-                        
-                        const otherMember = bandLegs[j];
-                        const otherDrill = getDrillPosition(currentBeat, otherMember.row, otherMember.col, 5, 15, otherMember.startX, otherMember.startZ);
-                        const otherDrillX = otherDrill.x;
-                        const otherDrillZ = otherDrill.z;
-                        
-                        const markerDistX = otherMember.anchor.position.x - otherDrillX;
-                        const markerDistZ = otherMember.anchor.position.z - otherDrillZ;
-                        const markerDist = Math.sqrt(markerDistX * markerDistX + markerDistZ * markerDistZ);
-                        
-                        const isOutOfFormation = markerDist > outOfFormationRadius;
-                        const st = stumbleStates[j];
-                        const isDown = st.tilt >= MAX_TILT * 0.7;
-                        
-                        if (!isOutOfFormation && !isDown) continue;
-                        
-                        const otherAnchor = otherMember.anchor;
-                        const odx = otherAnchor.position.x - anchor.position.x;
-                        const odz = otherAnchor.position.z - anchor.position.z;
-                        const distSq = odx * odx + odz * odz;
-                        
-                        if (distSq < avoidanceRadius2 && distSq > 0.01) {
-                            const dist = Math.sqrt(distSq);
-                            const strength = isDown ? 0.6 : 0.4;
-                            const pushForce = (1 - dist / avoidanceRadius) * strength;
-                            avoidanceX -= (odx / dist) * pushForce;
-                            avoidanceZ -= (odz / dist) * pushForce;
-                        }
-                    }
                 }
                 
                 // Apply movement with avoidance.
