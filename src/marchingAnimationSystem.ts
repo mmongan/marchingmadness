@@ -27,6 +27,25 @@ export enum MarchStyle {
 }
 
 /**
+ * Velocity range per style in meters-per-beat.
+ * minVelocity: comfortable slowest pace. maxVelocity: fastest before it looks wrong.
+ * Styles with 0 min are usable when stationary (same formation held).
+ */
+export const STYLE_VELOCITY: Record<MarchStyle, { min: number; max: number }> = {
+    [MarchStyle.Halt]:      { min: 0,    max: 0 },       // no movement
+    [MarchStyle.MarkTime]:  { min: 0,    max: 0 },       // in-place only
+    [MarchStyle.HighStep]:  { min: 0.3,  max: 0.7 },     // standard 8-to-5 pace
+    [MarchStyle.Glide]:     { min: 0.2,  max: 0.6 },     // smooth, moderate
+    [MarchStyle.DragStep]:  { min: 0.15, max: 0.5 },     // slow corps style
+    [MarchStyle.BackMarch]: { min: 0.15, max: 0.45 },    // careful backward
+    [MarchStyle.SideStep]:  { min: 0.1,  max: 0.4 },     // lateral, slower
+    [MarchStyle.CrabWalk]:  { min: 0.1,  max: 0.4 },     // grapevine, slower
+    [MarchStyle.Pivot]:     { min: 0.05, max: 0.35 },    // mostly rotational
+    [MarchStyle.JazzRun]:   { min: 0.6,  max: 1.2 },     // fast traversal
+    [MarchStyle.Scatter]:   { min: 0.5,  max: 1.0 },     // free-form run
+};
+
+/**
  * Body part references for joint-based skeletal animation.
  *
  * HIERARCHY (each joint is a TransformNode; rotating a joint pivots

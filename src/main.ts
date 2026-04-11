@@ -1,7 +1,7 @@
 import { BandMemberFactory, InstrumentType, BandMemberData } from "./bandMemberFactory";
 import { FirstPersonBody } from "./firstPersonBody";
 import { startMetronomeAndMusic } from "./musicManager";
-import { MarchingAnimationSystem, MarchStyle } from "./marchingAnimationSystem";
+import { MarchingAnimationSystem, MarchStyle, STYLE_VELOCITY } from "./marchingAnimationSystem";
 import { sfPanners, playStumbleSound, playCrashSound, loadInstruments, updateAudioListener, updateSpatialAudio } from "./audioSystem";
 import { 
     StumbleState, createStumbleState, BPM, WHOLE_NOTE_DURATION, FLY_SPEED,
@@ -390,42 +390,116 @@ const drillShapes: DrillShape[] = [
     },
 ];
 
-const drillTimeline = [
+// Drill sequence: shape + facing per phase. Style is auto-selected from distance.
+const drillSequence: { beat: number; shape: number; facing: number }[] = [
     // === ACT 1: Opening (beats 0-63) ===
-    { beat: 0,   shape: 0,  facing: Math.PI,       style: MarchStyle.Halt },         // Block, attention
-    { beat: 8,   shape: 0,  facing: Math.PI,       style: MarchStyle.MarkTime },     // Mark time in place
-    { beat: 16,  shape: 0,  facing: Math.PI,       style: MarchStyle.HighStep },     // Step off in block
-    { beat: 32,  shape: 1,  facing: Math.PI,       style: MarchStyle.Glide },        // Expand block
-    { beat: 48,  shape: 5,  facing: Math.PI,       style: MarchStyle.SideStep },     // Company front
-    { beat: 64,  shape: 5,  facing: Math.PI * 0.5, style: MarchStyle.SideStep },     // Turn right
+    { beat: 0,   shape: 0,  facing: Math.PI },          // Block, attention
+    { beat: 8,   shape: 0,  facing: Math.PI },          // Hold block (mark time)
+    { beat: 16,  shape: 0,  facing: Math.PI },          // Step off in block
+    { beat: 32,  shape: 1,  facing: Math.PI },          // Expand block
+    { beat: 48,  shape: 5,  facing: Math.PI },          // Company front
+    { beat: 64,  shape: 5,  facing: Math.PI * 0.5 },    // Turn right
 
     // === ACT 2: Formations (beats 64-143) ===
-    { beat: 80,  shape: 2,  facing: 0,             style: MarchStyle.HighStep },     // Wedge, face away
-    { beat: 96,  shape: 2,  facing: Math.PI,       style: MarchStyle.BackMarch },    // Back-march to audience
-    { beat: 112, shape: 7,  facing: Math.PI * 0.75, style: MarchStyle.JazzRun },     // Echelon diagonal
-    { beat: 128, shape: 12, facing: Math.PI,       style: MarchStyle.Glide },        // Gate/fold open
-    { beat: 144, shape: 14, facing: Math.PI,       style: MarchStyle.HighStep },     // Pass-through
+    { beat: 80,  shape: 2,  facing: 0 },                // Wedge, face away
+    { beat: 96,  shape: 2,  facing: Math.PI },           // Hold wedge, snap to audience
+    { beat: 112, shape: 7,  facing: Math.PI * 0.75 },   // Echelon diagonal
+    { beat: 128, shape: 12, facing: Math.PI },           // Gate/fold open
+    { beat: 144, shape: 14, facing: Math.PI },           // Pass-through
 
     // === ACT 3: Curves (beats 144-223) ===
-    { beat: 160, shape: 8,  facing: Math.PI,       style: MarchStyle.DragStep },     // Circle
-    { beat: 176, shape: 9,  facing: Math.PI,       style: MarchStyle.Glide },        // Figure-8
-    { beat: 192, shape: 10, facing: Math.PI * 1.5, style: MarchStyle.CrabWalk },     // Spiral, face left
-    { beat: 208, shape: 4,  facing: Math.PI,       style: MarchStyle.Glide },        // S-Curve wave
-    { beat: 224, shape: 11, facing: Math.PI,       style: MarchStyle.JazzRun },      // Starburst
+    { beat: 160, shape: 8,  facing: Math.PI },           // Circle
+    { beat: 176, shape: 9,  facing: Math.PI },           // Figure-8
+    { beat: 192, shape: 10, facing: Math.PI * 1.5 },    // Spiral, face left
+    { beat: 208, shape: 4,  facing: Math.PI },           // S-Curve wave
+    { beat: 224, shape: 11, facing: Math.PI },           // Starburst
 
     // === ACT 4: Showcase (beats 224-303) ===
-    { beat: 240, shape: 18, facing: Math.PI,       style: MarchStyle.Pivot },        // Pinwheel
-    { beat: 256, shape: 13, facing: Math.PI,       style: MarchStyle.HighStep },     // Box/window
-    { beat: 272, shape: 3,  facing: Math.PI,       style: MarchStyle.DragStep },     // Diamond bow
-    { beat: 288, shape: 15, facing: Math.PI,       style: MarchStyle.Scatter },      // Scatter
-    { beat: 296, shape: 16, facing: Math.PI,       style: MarchStyle.HighStep },     // Goal post
+    { beat: 240, shape: 18, facing: Math.PI },           // Pinwheel
+    { beat: 256, shape: 13, facing: Math.PI },           // Box/window
+    { beat: 272, shape: 3,  facing: Math.PI },           // Diamond bow
+    { beat: 288, shape: 15, facing: Math.PI },           // Scatter
+    { beat: 296, shape: 16, facing: Math.PI },           // Goal post
 
     // === ACT 5: Finale (beats 304-319) ===
-    { beat: 304, shape: 17, facing: Math.PI,       style: MarchStyle.MarkTime },     // Checkerboard
-    { beat: 312, shape: 6,  facing: Math.PI,       style: MarchStyle.BackMarch },    // Column
-    { beat: 316, shape: 0,  facing: Math.PI,       style: MarchStyle.HighStep },     // Back to block
-    { beat: 320, shape: 0,  facing: Math.PI,       style: MarchStyle.Halt },         // Final halt
+    { beat: 304, shape: 17, facing: Math.PI },           // Checkerboard
+    { beat: 312, shape: 6,  facing: Math.PI },           // Column
+    { beat: 316, shape: 0,  facing: Math.PI },           // Back to block
+    { beat: 320, shape: 0,  facing: Math.PI },           // Final halt
 ];
+
+/**
+ * Compute the worst-case (maximum) distance any single marcher must travel
+ * between two drill shapes, sampling every grid position.
+ */
+function maxShapeDistance(shapeA: number, shapeB: number): number {
+    let maxDist = 0;
+    for (let r = 0; r < BAND_ROWS; r++) {
+        for (let c = 0; c < BAND_COLS; c++) {
+            const sx = (c - BAND_COLS / 2 + 0.5) * SPACING_X;
+            const sz = BAND_START_Z + r * SPACING_Z;
+            const a = drillShapes[shapeA](r, c, BAND_COLS, BAND_ROWS, sx, sz);
+            const b = drillShapes[shapeB](r, c, BAND_COLS, BAND_ROWS, sx, sz);
+            const dx = b.x - a.x;
+            const dz = b.z - a.z;
+            const d = Math.sqrt(dx * dx + dz * dz);
+            if (d > maxDist) maxDist = d;
+        }
+    }
+    return maxDist;
+}
+
+/**
+ * Pick the best MarchStyle whose velocity range can cover the required
+ * distance in the given number of beats.  Prefers slower, more visually
+ * interesting styles when the distance allows.
+ */
+function pickStyleForDistance(distance: number, beats: number): MarchStyle {
+    // Required velocity: meters-per-beat needed
+    const needed = beats > 0 ? distance / beats : 0;
+
+    // Stationary — no shape change
+    if (distance < 0.5) {
+        // Alternate between Halt and MarkTime for variety
+        return needed < 0.01 ? MarchStyle.Halt : MarchStyle.MarkTime;
+    }
+
+    // Preference order: slowest/most-visual first, fastest last
+    const preference: MarchStyle[] = [
+        MarchStyle.DragStep,
+        MarchStyle.SideStep,
+        MarchStyle.CrabWalk,
+        MarchStyle.Pivot,
+        MarchStyle.BackMarch,
+        MarchStyle.Glide,
+        MarchStyle.HighStep,
+        MarchStyle.JazzRun,
+        MarchStyle.Scatter,
+    ];
+
+    for (const style of preference) {
+        const v = STYLE_VELOCITY[style];
+        // Style can handle this transition if needed speed is within its range
+        if (needed >= v.min && needed <= v.max) {
+            return style;
+        }
+    }
+
+    // If nothing fits perfectly, use the fastest available
+    return needed > 0.8 ? MarchStyle.Scatter : MarchStyle.HighStep;
+}
+
+// Build the final timeline by computing distances and selecting styles
+const drillTimeline = drillSequence.map((entry, i) => {
+    if (i === 0) {
+        return { ...entry, style: MarchStyle.Halt };
+    }
+    const prev = drillSequence[i - 1];
+    const beats = entry.beat - prev.beat;
+    const dist = maxShapeDistance(prev.shape, entry.shape);
+    const style = pickStyleForDistance(dist, beats);
+    return { ...entry, style };
+});
 
 function getDrillPosition(currentBeat: number, r: number, c: number, cols: number, rows: number, startX: number, startZ: number): {x: number, z: number, facing: number, style: MarchStyle} {
     // Loop entirely at 320 beats
@@ -1298,10 +1372,15 @@ engine.runRenderLoop(() => {
             const targetX = targetPos.x;
             const targetZ = targetPos.z;
 
+            const isHalted = targetPos.style === MarchStyle.Halt;
+
             if (isStumbling) {
                 // Fallen/stumbling: stop legs, freeze in place
                 legL.rotation.x = 0;
                 legR.rotation.x = 0;
+            } else if (isHalted) {
+                // Halt: freeze position, play standing pose only
+                MarchingAnimationSystem.animateMarcher(marchPhase, bodyParts, true, 0, 0, MarchStyle.Halt);
             } else {
                 // Smooth movement toward drill position with intelligent avoidance
                 const dx = targetX - anchor.position.x;
@@ -1331,21 +1410,32 @@ engine.runRenderLoop(() => {
                 let avoidanceX = 0;
                 let avoidanceZ = 0;
                 
-                // === PLAYER AVOIDANCE (Check for ALL marchers - settled or not) ===
-                // This ensures marchers route around blockages and don't pile up behind player
-                if (scene.activeCamera) {
+                // === PLAYER AVOIDANCE ===
+                // Only push marchers away from player when the player is far from
+                // their own drill target (i.e. out of formation / running around).
+                // Skip the player's own marcher slot entirely.
+                if (scene.activeCamera && index !== playerMarcherIndex) {
                     const playerPos = scene.activeCamera.globalPosition;
-                    const playerAvoidRadius = 5.0;
-                    const playerDx = anchor.position.x - playerPos.x;
-                    const playerDz = anchor.position.z - playerPos.z;
-                    const playerDistSq = playerDx * playerDx + playerDz * playerDz;
+                    // Check how far the player is from their own drill target
+                    const playerDrill = drillPositions[playerMarcherIndex];
+                    const pOffX = playerPos.x - playerDrill.x;
+                    const pOffZ = playerPos.z - playerDrill.z;
+                    const playerOffFormation = Math.sqrt(pOffX * pOffX + pOffZ * pOffZ);
+
+                    // Only repel if the player is noticeably out of position (>2m)
+                    if (playerOffFormation > 2.0) {
+                        const playerAvoidRadius = 3.0;
+                        const playerDx = anchor.position.x - playerPos.x;
+                        const playerDz = anchor.position.z - playerPos.z;
+                        const playerDistSq = playerDx * playerDx + playerDz * playerDz;
                     
-                    if (playerDistSq < playerAvoidRadius * playerAvoidRadius && playerDistSq > 0.1) {
-                        const playerDist = Math.sqrt(playerDistSq);
-                        const playerAvoidForce = (1 - playerDist / playerAvoidRadius) * (playerDist < 1.5 ? 1.5 : 0.8);
+                        if (playerDistSq < playerAvoidRadius * playerAvoidRadius && playerDistSq > 0.1) {
+                            const playerDist = Math.sqrt(playerDistSq);
+                            const playerAvoidForce = (1 - playerDist / playerAvoidRadius) * (playerDist < 1.5 ? 1.2 : 0.5);
                         
-                        avoidanceX += (playerDx / playerDist) * playerAvoidForce;
-                        avoidanceZ += (playerDz / playerDist) * playerAvoidForce;
+                            avoidanceX += (playerDx / playerDist) * playerAvoidForce;
+                            avoidanceZ += (playerDz / playerDist) * playerAvoidForce;
+                        }
                     }
                 }
                 
@@ -1451,7 +1541,8 @@ engine.runRenderLoop(() => {
             }
 
             // Face the drill-specified direction (smoothly interpolated)
-            if (!isStumbling) {
+            // Only turn when not stumbling and not halted
+            if (!isStumbling && !isHalted) {
                 const targetFacing = targetPos.facing;
                 // Shortest-arc interpolation toward target facing
                 let facingDelta = targetFacing - anchor.rotation.y;
