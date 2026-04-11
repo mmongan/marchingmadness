@@ -1910,19 +1910,13 @@ engine.runRenderLoop(() => {
         const { movement, turnY } = playerBody.update(scene.activeCamera, beatPhase, currentBeat, gameStartTime !== null, dt);
 
         if (autoMarch && gameStartTime !== null) {
-            // Auto-march: smoothly lerp camera toward the player's drill target
+            // Auto-march: snap camera to the player's drill target position
             const playerDrill = getDrillPosition(currentBeat, playerRow, playerCol, 5, 15, playerStartX, playerStartZ);
-            const targetX = playerDrill.x;
-            const targetZ = playerDrill.z;
-            const lerpRate = 0.08; // smooth follow
-            scene.activeCamera.position.x += (targetX - scene.activeCamera.position.x) * lerpRate;
-            scene.activeCamera.position.z += (targetZ - scene.activeCamera.position.z) * lerpRate;
-            // Smoothly rotate to face drill facing direction
+            scene.activeCamera.position.x = playerDrill.x;
+            scene.activeCamera.position.z = playerDrill.z;
+            // Snap facing direction
             if ("rotation" in scene.activeCamera) {
-                let facingDelta = playerDrill.facing - (scene.activeCamera as any).rotation.y;
-                while (facingDelta > Math.PI) facingDelta -= Math.PI * 2;
-                while (facingDelta < -Math.PI) facingDelta += Math.PI * 2;
-                (scene.activeCamera as any).rotation.y += facingDelta * 0.04;
+                (scene.activeCamera as any).rotation.y = playerDrill.facing;
             }
         } else {
             // Manual control: apply treadmill locomotion to camera position and rotation
