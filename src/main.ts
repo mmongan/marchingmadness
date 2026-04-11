@@ -522,7 +522,7 @@ function enforceMinSpacing(
 ): {x: number, z: number}[] {
     const out = positions.map(p => ({x: p.x, z: p.z}));
     const minDist2 = minDist * minDist;
-    for (let pass = 0; pass < 30; pass++) {
+    for (let pass = 0; pass < 50; pass++) {
         let moved = false;
         for (let i = 0; i < out.length; i++) {
             for (let j = i + 1; j < out.length; j++) {
@@ -581,8 +581,86 @@ for (let s = 0; s < drillShapes.length; s++) {
     precomputedShapePos[s] = enforceMinSpacing(computeRawPositions(s), MIN_SPACING);
 }
 
-// Precompute collision-free transition waypoints at t = 0.25, 0.5, 0.75
-const WAYPOINT_T = [0.25, 0.5, 0.75];
+/**
+ * Greedy nearest-neighbor slot assignment: for each source position, assign
+ * the closest available destination slot. This minimises total path length
+ * and virtually eliminates path crossings compared to identity assignment.
+ * Returns a permutation array where perm[srcIdx] = dstIdx.
+ */
+function computeSlotAssignment(
+    srcPositions: {x: number, z: number}[],
+    dstPositions: {x: number, z: number}[]
+): number[] {
+    const n = srcPositions.length;
+    const perm = new Array<number>(n);
+    const taken = new Uint8Array(n); // 0 = available
+
+    // Build sorted list of (distance², srcIdx, dstIdx)
+    const edges: {d2: number, s: number, d: number}[] = [];
+    for (let s = 0; s < n; s++) {
+        for (let d = 0; d < n; d++) {
+            const dx = dstPositions[d].x - srcPositions[s].x;
+            const dz = dstPositions[d].z - srcPositions[s].z;
+            edges.push({ d2: dx * dx + dz * dz, s, d });
+        }
+    }
+    edges.sort((a, b) => a.d2 - b.d2);
+
+    const srcAssigned = new Uint8Array(n);
+    let assigned = 0;
+    for (let e = 0; e < edges.length && assigned < n; e++) {
+        const { s, d } = edges[e];
+        if (srcAssigned[s] || taken[d]) continue;
+        perm[s] = d;
+        srcAssigned[s] = 1;
+        taken[d] = 1;
+        assigned++;
+    }
+    return perm;
+}
+
+/**
+ * Compose two permutations: result[i] = b[a[i]]
+ */
+function composePerms(a: number[], b: number[]): number[] {
+    return a.map(ai => b[ai]);
+}
+
+// === Build per-transition slot assignments ===
+// cumulativePerm[i] maps original marcher index → slot in shape i's precomputedShapePos.
+// This ensures each marcher follows a short, non-crossing path between shapes.
+const cumulativePerm: number[][] = [];
+{
+    // Start with identity for the first shape
+    const identity = Array.from({ length: TOTAL_MARCHERS }, (_, i) => i);
+    cumulativePerm.push(identity);
+
+    for (let i = 0; i < drillTimeline.length - 1; i++) {
+        const shapeA = drillTimeline[i].shape;
+        const shapeB = drillTimeline[i + 1].shape;
+        const prevPerm = cumulativePerm[i];
+
+        if (shapeA === shapeB) {
+            // No transition — keep same slot assignment
+            cumulativePerm.push([...prevPerm]);
+        } else {
+            // Get actual positions of marchers in shape A (after previous permutation)
+            const srcPos = prevPerm.map(slot => precomputedShapePos[shapeA][slot]);
+            const dstPos = precomputedShapePos[shapeB];
+
+            // Find optimal assignment from current positions to next shape slots
+            const localPerm = computeSlotAssignment(srcPos, dstPos);
+            // Compose: new cumulative perm maps marcher → slot in shape B
+            cumulativePerm.push(composePerms(prevPerm, localPerm));
+        }
+    }
+}
+
+// Precompute collision-free transition waypoints at fine intervals
+const WAYPOINT_COUNT = 19; // t = 0.05, 0.10, ..., 0.95  (every 5% of the transition)
+const WAYPOINT_T: number[] = [];
+for (let w = 1; w <= WAYPOINT_COUNT; w++) WAYPOINT_T.push(w / (WAYPOINT_COUNT + 1));
+
 const precomputedWaypoints: ({x: number, z: number}[][] | null)[] = [];
 for (let i = 0; i < drillTimeline.length; i++) {
     if (i === drillTimeline.length - 1) {
@@ -595,19 +673,35 @@ for (let i = 0; i < drillTimeline.length; i++) {
         precomputedWaypoints.push(null);
         continue;
     }
-    const posA = precomputedShapePos[shapeA];
-    const posB = precomputedShapePos[shapeB];
+    const permA = cumulativePerm[i];
+    const permB = cumulativePerm[i + 1];
+    const posAArr = permA.map(slot => precomputedShapePos[shapeA][slot]);
+    const posBArr = permB.map(slot => precomputedShapePos[shapeB][slot]);
     const wps: {x: number, z: number}[][] = [];
-    for (const t of WAYPOINT_T) {
-        const smooth = t * t * (3 - 2 * t); // smoothstep
+
+    // Build waypoints sequentially: each one interpolates between previous resolved
+    // position and the endpoint, then enforces spacing. This prevents discontinuous
+    // jumps between waypoints while maintaining separation at every step.
+    let prevPositions = posAArr; // start from shape A's resolved positions
+    for (let wIdx = 0; wIdx < WAYPOINT_T.length; wIdx++) {
+        const t = WAYPOINT_T[wIdx];
+        const smooth = t * t * (3 - 2 * t); // global smoothstep progress
+        // Compute how far along we are from prevPositions to posB
+        const prevT = wIdx === 0 ? 0 : WAYPOINT_T[wIdx - 1];
+        const prevSmooth = prevT * prevT * (3 - 2 * prevT);
+        const remainingProgress = (smooth - prevSmooth) / (1 - prevSmooth);
+
         const midPts: {x: number, z: number}[] = [];
         for (let m = 0; m < TOTAL_MARCHERS; m++) {
+            // Interpolate from previous resolved position toward final destination
             midPts.push({
-                x: posA[m].x + (posB[m].x - posA[m].x) * smooth,
-                z: posA[m].z + (posB[m].z - posA[m].z) * smooth,
+                x: prevPositions[m].x + (posBArr[m].x - prevPositions[m].x) * remainingProgress,
+                z: prevPositions[m].z + (posBArr[m].z - prevPositions[m].z) * remainingProgress,
             });
         }
-        wps.push(enforceMinSpacing(midPts, MIN_SPACING));
+        const resolved = enforceMinSpacing(midPts, MIN_SPACING);
+        wps.push(resolved);
+        prevPositions = resolved;
     }
     precomputedWaypoints.push(wps);
 }
@@ -624,9 +718,10 @@ function getDrillPosition(currentBeat: number, r: number, c: number, cols: numbe
     }
 
     const currentPhase = drillTimeline[currentIndex];
+    const slotA = cumulativePerm[currentIndex][marcherIdx];
 
     if (currentIndex === drillTimeline.length - 1) {
-        const pos = precomputedShapePos[currentPhase.shape][marcherIdx];
+        const pos = precomputedShapePos[currentPhase.shape][slotA];
         return { x: pos.x, z: pos.z, facing: currentPhase.facing, style: currentPhase.style };
     }
 
@@ -635,8 +730,9 @@ function getDrillPosition(currentBeat: number, r: number, c: number, cols: numbe
     const smoothProgress = progress * progress * (3 - 2 * progress);
     const facing = currentPhase.facing;
 
-    const posA = precomputedShapePos[currentPhase.shape][marcherIdx];
-    const posB = precomputedShapePos[nextPhase.shape][marcherIdx];
+    const slotB = cumulativePerm[currentIndex + 1][marcherIdx];
+    const posA = precomputedShapePos[currentPhase.shape][slotA];
+    const posB = precomputedShapePos[nextPhase.shape][slotB];
 
     const wps = precomputedWaypoints[currentIndex];
     if (!wps) {
@@ -650,9 +746,16 @@ function getDrillPosition(currentBeat: number, r: number, c: number, cols: numbe
     }
 
     // Piecewise interpolation through precomputed separated waypoints
-    // Control points: [posA, wp[0], wp[1], wp[2], posB] at smoothProgress [0, 0.25, 0.5, 0.75, 1.0]
-    const sT = [0, 0.25, 0.5, 0.75, 1.0];
-    const sP = [posA, wps[0][marcherIdx], wps[1][marcherIdx], wps[2][marcherIdx], posB];
+    // Control points: [posA, wp[0], wp[1], ..., wp[N-1], posB]
+    const numWps = wps.length;
+    const totalSegments = numWps + 1;
+    const sT: number[] = [0];
+    for (let w = 0; w < numWps; w++) sT.push((w + 1) / totalSegments);
+    sT.push(1.0);
+
+    const sP: {x: number, z: number}[] = [posA];
+    for (let w = 0; w < numWps; w++) sP.push(wps[w][marcherIdx]);
+    sP.push(posB);
 
     // Find which segment contains smoothProgress
     let seg = sT.length - 2;
@@ -780,6 +883,11 @@ const playerMarcher = factory.createMember(playerRow, playerCol, playerInstrumen
 // Replace the standard marcher with the player marcher
 bandLegs[playerMarcherIndex] = playerMarcher;
 
+// Hide the simple FirstPersonBody visuals — the player marcher's full skeleton
+// (created above) is animated by MarchingAnimationSystem alongside all other marchers.
+// playerBody still handles VR controller tracking and locomotion computation.
+playerBody.hideVisuals();
+
 // Initialize camera to player's starting drill position
 camera.position = new Vector3(playerStartX, 1.8, playerStartZ);
 camera.setTarget(new Vector3(playerStartX, 1.8, playerStartZ - 5));
@@ -787,21 +895,19 @@ camera.setTarget(new Vector3(playerStartX, 1.8, playerStartZ - 5));
 // Position the player's VR body at the marcher location
 playerBody.setBodyPosition(new Vector3(playerStartX, 0, playerStartZ));
 
-// Ground shadow discs under each marcher (per-marcher material for error colouring)
-const shadowMats: StandardMaterial[] = [];
+// Ground shadow discs under each marcher
 const shadowDiscs: AbstractMesh[] = [];
 const baseShadow = MeshBuilder.CreateDisc("shadow_base", { radius: 0.5, tessellation: 16 }, scene);
 baseShadow.rotation.x = Math.PI / 2; // lay flat
 baseShadow.isPickable = false;
 baseShadow.isVisible = false; // template only
+const shadowMat = new StandardMaterial("shadowMat", scene);
+shadowMat.diffuseColor = new Color3(0, 0, 0);
+shadowMat.specularColor = new Color3(0, 0, 0);
+shadowMat.alpha = 0.35;
 for (let i = 0; i < bandLegs.length; i++) {
-    const mat = new StandardMaterial(`shadowMat_${i}`, scene);
-    mat.diffuseColor = new Color3(0, 0, 0);
-    mat.specularColor = new Color3(0, 0, 0);
-    mat.alpha = 0.35;
-    shadowMats.push(mat);
     const disc = baseShadow.clone(`shadow_${i}`);
-    disc.material = mat;
+    disc.material = shadowMat;
     disc.isVisible = true;
     disc.position.set(bandLegs[i].anchor.position.x, 0.02, bandLegs[i].anchor.position.z);
     shadowDiscs.push(disc);
@@ -841,9 +947,10 @@ beatMat.disableLighting = true;
 beatIndicator.material = beatMat;
 beatIndicator.isVisible = false;
 
-// Formation Quality HUD — wrist-mounted display on right arm
+// Formation Quality HUD — wrist-mounted display on right arm of player marcher
 const scoreHUD = MeshBuilder.CreatePlane("scoreHUD", { width: 0.18, height: 0.06 }, scene);
-scoreHUD.parent = playerBody.getRightArm();
+const playerForearmR = playerMarcher.bodyParts.forearmR;
+scoreHUD.parent = playerForearmR ?? playerBody.getRightArm();
 // Position on the wrist: far down the arm (+Y = toward hand)
 // and outward (-Z = face away from buttons side so you can glance down at it)
 scoreHUD.position.set(0, 0.45, -0.08);
@@ -1065,7 +1172,7 @@ buttonMaterials.push(btnMat);
 buttonMeshes.push(startBtnMesh);
 
 // === Attach UI buttons to right arm sleeve ===
-const rightArm = playerBody.getRightArm();
+const rightArm = playerMarcher.bodyParts.forearmR ?? playerBody.getRightArm();
 for (const buttonMesh of buttonMeshes) {
     buttonMesh.parent = rightArm;
     // Offset relative to arm: position on the sleeve
@@ -1441,11 +1548,13 @@ engine.runRenderLoop(() => {
         });
 
         // Player position is controlled by firstPersonBody input, not drill position
-        // Update player body position based on camera
-        playerBody.setBodyPosition(new Vector3(camera.position.x, 0, camera.position.z));
-        
-        // Initialize settled state tracking for hysteresis (prevent oscillation at settle zone boundary)
-        let marchersSettledState: boolean[] = [];
+        // In free-fly, keep the body marching with the band at its drill slot
+        if (freeFly && gameStartTime !== null) {
+            const playerDrill = getDrillPosition(currentBeat, playerRow, playerCol, 5, 15, playerStartX, playerStartZ);
+            playerBody.setBodyPosition(new Vector3(playerDrill.x, 0, playerDrill.z));
+        } else {
+            playerBody.setBodyPosition(new Vector3(camera.position.x, 0, camera.position.z));
+        }
 
         bandLegs.forEach(({ anchor, plume, bodyParts }, index) => {
             const targetPos = drillPositions[index];
@@ -1454,97 +1563,14 @@ engine.runRenderLoop(() => {
 
             const isHalted = targetPos.style === MarchStyle.Halt;
 
+            // Snap directly to precomputed collision-free position
+            anchor.position.x = targetX;
+            anchor.position.z = targetZ;
+
             if (isHalted) {
-                // Halt: freeze position, play standing pose only
                 MarchingAnimationSystem.animateMarcher(marchPhase, bodyParts, true, 0, 0, MarchStyle.Halt);
             } else {
-                // Smooth movement toward drill position with intelligent avoidance
-                const dx = targetX - anchor.position.x;
-                const dz = targetZ - anchor.position.z;
-                const gap = Math.sqrt(dx * dx + dz * dz);
-
-                // SETTLE ZONE WITH HYSTERESIS: Prevent oscillation at boundary
-                // Once settled, need to be >0.35m away to unsettled; once unsettled, need to be ≤0.25m to settle
-                // This prevents rapid flip-flopping around the 0.25m boundary
-                const settleThreshold = 0.25;
-                const unSettleThreshold = 0.35;
-                let isSettled: boolean;
-                
-                // Check if we stored a previous settled state for this marcher
-                const prevSettled = marchersSettledState[index] ?? gap <= settleThreshold;
-                
-                if (prevSettled) {
-                    // Already settled: need larger gap to unsettled (hysteresis)
-                    isSettled = gap <= unSettleThreshold;
-                } else {
-                    // Not settled: need smaller gap to settle
-                    isSettled = gap <= settleThreshold;
-                }
-                marchersSettledState[index] = isSettled;
-                
-                let moveAmount = 0.04; // default: normal formation marching pace
-                let avoidanceX = 0;
-                let avoidanceZ = 0;
-                
-                // === PLAYER AVOIDANCE ===
-                // Only push marchers away from player when the player is far from
-                // their own drill target (i.e. out of formation / running around).
-                // Skip the player's own marcher slot entirely.
-                if (scene.activeCamera && index !== playerMarcherIndex) {
-                    const playerPos = scene.activeCamera.globalPosition;
-                    // Check how far the player is from their own drill target
-                    const playerDrill = drillPositions[playerMarcherIndex];
-                    const pOffX = playerPos.x - playerDrill.x;
-                    const pOffZ = playerPos.z - playerDrill.z;
-                    const playerOffFormation = Math.sqrt(pOffX * pOffX + pOffZ * pOffZ);
-
-                    // Only repel if the player is noticeably out of position (>2m)
-                    if (playerOffFormation > 2.0) {
-                        const playerAvoidRadius = 3.0;
-                        const playerDx = anchor.position.x - playerPos.x;
-                        const playerDz = anchor.position.z - playerPos.z;
-                        const playerDistSq = playerDx * playerDx + playerDz * playerDz;
-                    
-                        if (playerDistSq < playerAvoidRadius * playerAvoidRadius && playerDistSq > 0.1) {
-                            const playerDist = Math.sqrt(playerDistSq);
-                            const playerAvoidForce = (1 - playerDist / playerAvoidRadius) * (playerDist < 1.5 ? 1.2 : 0.5);
-                        
-                            avoidanceX += (playerDx / playerDist) * playerAvoidForce;
-                            avoidanceZ += (playerDz / playerDist) * playerAvoidForce;
-                        }
-                    }
-                }
-                
-                if (isSettled) {
-                    // SETTLED IN FORMATION: March smoothly at normal pace
-                    moveAmount = 0.04;
-                } else {
-                    // OUT OF FORMATION: Catch up with longer strides
-                    const baseRate = 0.04; // base stride length
-                    const maxCatchupRate = 0.09; // max stride when far from target
-                    moveAmount = gap > 0.05 
-                        ? baseRate + (maxCatchupRate - baseRate) * Math.min(1.0, gap / 3.0)
-                        : baseRate;
-                }
-                
-                // Apply movement with avoidance.
-                // Settled marchers use a soft lerp toward their target — this kills
-                // overshoot/vibration.  Unsettled marchers stride proportionally.
-                if (isSettled) {
-                    // Lerp 6% per frame toward formation target, plus weak avoidance
-                    const lerpFactor = 0.06;
-                    anchor.position.x += dx * lerpFactor + avoidanceX * 0.3;
-                    anchor.position.z += dz * lerpFactor + avoidanceZ * 0.3;
-                } else {
-                    const movementScalar = Math.max(0.5, Math.min(1.0, gap / 1.0));
-                    anchor.position.x += (dx * moveAmount + avoidanceX) * movementScalar;
-                    anchor.position.z += (dz * moveAmount + avoidanceZ) * movementScalar;
-                }
-
-                // === ANIMATE ENTIRE MARCHER BODY ===
-                // Real marching animation with arm swing, torso bounce, head tilt, etc.
-                const catchupFactor = MarchingAnimationSystem.getCatchupFactor(gap, settleThreshold);
-                MarchingAnimationSystem.animateMarcher(marchPhase, bodyParts, isSettled, catchupFactor, 0, targetPos.style);
+                MarchingAnimationSystem.animateMarcher(marchPhase, bodyParts, false, 0, 0, targetPos.style);
             }
 
             // Face the drill-specified direction
@@ -1560,24 +1586,11 @@ engine.runRenderLoop(() => {
                 }
             }
 
-            // Update ground shadow to follow marcher and tint by formation error
+            // Update ground shadow to follow marcher
             const shadow = shadowDiscs[index];
             if (shadow) {
                 shadow.position.x = anchor.position.x;
                 shadow.position.z = anchor.position.z;
-                // Compute distance from correct position (gap already available above)
-                const sdx = targetX - anchor.position.x;
-                const sdz = targetZ - anchor.position.z;
-                const errorDist = Math.sqrt(sdx * sdx + sdz * sdz);
-                // 0m error → black (normal shadow), ≥3m error → fully red
-                const errorT = Math.min(1, errorDist / 3);
-                const sMat = shadowMats[index];
-                if (sMat) {
-                    sMat.diffuseColor.r = errorT;
-                    sMat.diffuseColor.g = 0;
-                    sMat.diffuseColor.b = 0;
-                    sMat.alpha = 0.35 + errorT * 0.35; // more opaque when red
-                }
             }
 
             // Update plume color based on health (green=100% → red=0%)
@@ -1695,7 +1708,12 @@ engine.runRenderLoop(() => {
 
         if (freeFly) {
             // Free-fly: let FreeCamera built-in WASD/mouse handle everything
-            // No position override, no push, no march snap
+            // Keep the body marching at its drill slot (position set above),
+            // override facing to match drill direction instead of camera
+            if (gameStartTime !== null) {
+                const playerDrill = getDrillPosition(currentBeat, playerRow, playerCol, 5, 15, playerStartX, playerStartZ);
+                playerBody.setBodyRotationY(playerDrill.facing);
+            }
         } else if (autoMarch && gameStartTime !== null) {
             // Auto-march: snap position to drill target, let FreeCamera handle mouse look
             const playerDrill = getDrillPosition(currentBeat, playerRow, playerCol, 5, 15, playerStartX, playerStartZ);

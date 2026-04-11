@@ -146,6 +146,20 @@ export class FirstPersonBody {
         this.bodyRoot.position.copyFrom(pos);
     }
 
+    /** Override the body's Y rotation (e.g. to match drill facing in free-fly mode). */
+    public setBodyRotationY(y: number): void {
+        this.bodyRoot.rotation.y = y;
+    }
+
+    /** Hide the visual meshes (torso, arms, legs) so the marcher skeleton is used instead. */
+    public hideVisuals(): void {
+        this.torso.isVisible = false;
+        this.armL.isVisible = false;
+        this.armR.isVisible = false;
+        this.legL.isVisible = false;
+        this.legR.isVisible = false;
+    }
+
     /**
      * Returns movement vector and turn angle driven by treadmill arm-pump locomotion.
      * The caller should apply movement to camera position and turnY to camera rotation.
