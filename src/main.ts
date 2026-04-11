@@ -595,12 +595,10 @@ function getDrillPosition(currentBeat: number, r: number, c: number, cols: numbe
     // Smooth transition
     const smoothProgress = progress * progress * (3 - 2 * progress); // smoothstep
 
-    // Interpolate facing angle (shortest-arc)
-    let facingDelta = nextPhase.facing - currentPhase.facing;
-    // Wrap to [-π, π] for shortest rotation
-    while (facingDelta > Math.PI) facingDelta -= Math.PI * 2;
-    while (facingDelta < -Math.PI) facingDelta += Math.PI * 2;
-    const facing = currentPhase.facing + facingDelta * smoothProgress;
+    // Facing holds at current phase value — the clamped MAX_TURN_SPEED
+    // in the render loop animates the turn when the target changes at a
+    // phase boundary, so every marcher starts turning at the same beat.
+    const facing = currentPhase.facing;
 
     return {
         x: p1.x + (p2.x - p1.x) * smoothProgress,
@@ -1488,7 +1486,7 @@ engine.runRenderLoop(() => {
 
         bandLegs.forEach(({ legL, legR, anchor, plume, bodyParts }, index) => {
             const st = stumbleStates[index];
-            const isStumbling = st.tilt > 0.3 || st.downTimer > 0;
+            const isStumbling = st.tilt > 0.01 || st.downTimer > 0;
 
             const targetPos = drillPositions[index];
             const targetX = targetPos.x;
