@@ -864,6 +864,20 @@ let selectedScoreFile = SONG_LIST[0].file;
 const songButtonsContainer = document.getElementById("songButtons")!;
 const desktopUI = document.getElementById("desktopUI")!;
 const startBtnHTML = document.getElementById("startBtn") as HTMLButtonElement;
+const autoMarchCheckbox = document.getElementById("autoMarchCheck") as HTMLInputElement;
+
+// Auto-march mode: camera follows drill position automatically
+let autoMarch = autoMarchCheckbox ? autoMarchCheckbox.checked : true;
+if (autoMarchCheckbox) {
+    autoMarchCheckbox.addEventListener("change", () => { autoMarch = autoMarchCheckbox.checked; });
+}
+// Toggle with 'M' key during gameplay
+window.addEventListener("keydown", (e) => {
+    if (e.code === "KeyM" && !e.ctrlKey && !e.altKey) {
+        autoMarch = !autoMarch;
+        if (autoMarchCheckbox) autoMarchCheckbox.checked = autoMarch;
+    }
+});
 
 const desktopSongButtons: HTMLButtonElement[] = [];
 for (let i = 0; i < SONG_LIST.length; i++) {
@@ -1894,17 +1908,35 @@ engine.runRenderLoop(() => {
         const secondsPerBeat = 60 / BPM;
         const beatPhase = (currentRenderTime % (secondsPerBeat * 2)) / (secondsPerBeat * 2) * Math.PI * 2; // 0-2π every 2 beats
         const { movement, turnY } = playerBody.update(scene.activeCamera, beatPhase, currentBeat, gameStartTime !== null, dt);
-        // Apply treadmill locomotion to camera position and rotation
-        if (movement.lengthSquared() > 0) {
-            scene.activeCamera.position.addInPlace(movement);
+
+        if (autoMarch && gameStartTime !== null) {
+            // Auto-march: smoothly lerp camera toward the player's drill target
+            const playerDrill = getDrillPosition(currentBeat, playerRow, playerCol, 5, 15, playerStartX, playerStartZ);
+            const targetX = playerDrill.x;
+            const targetZ = playerDrill.z;
+            const lerpRate = 0.08; // smooth follow
+            scene.activeCamera.position.x += (targetX - scene.activeCamera.position.x) * lerpRate;
+            scene.activeCamera.position.z += (targetZ - scene.activeCamera.position.z) * lerpRate;
+            // Smoothly rotate to face drill facing direction
+            if ("rotation" in scene.activeCamera) {
+                let facingDelta = playerDrill.facing - (scene.activeCamera as any).rotation.y;
+                while (facingDelta > Math.PI) facingDelta -= Math.PI * 2;
+                while (facingDelta < -Math.PI) facingDelta += Math.PI * 2;
+                (scene.activeCamera as any).rotation.y += facingDelta * 0.04;
+            }
+        } else {
+            // Manual control: apply treadmill locomotion to camera position and rotation
+            if (movement.lengthSquared() > 0) {
+                scene.activeCamera.position.addInPlace(movement);
+            }
+            if (Math.abs(turnY) > 0.0001 && "rotation" in scene.activeCamera) {
+                (scene.activeCamera as any).rotation.y += turnY;
+            }
         }
         // Push player away from fallen obstacle marchers (only if player is not stumbling)
         if (!playerIsDown && (Math.abs(obstaclePushX) > 0.001 || Math.abs(obstaclePushZ) > 0.001)) {
             scene.activeCamera.position.x += obstaclePushX;
             scene.activeCamera.position.z += obstaclePushZ;
-        }
-        if (Math.abs(turnY) > 0.0001 && "rotation" in scene.activeCamera) {
-            (scene.activeCamera as any).rotation.y += turnY;
         }
     }
 
