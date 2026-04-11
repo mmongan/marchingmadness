@@ -489,14 +489,16 @@ function pickStyleForDistance(distance: number, beats: number): MarchStyle {
     return needed > 0.8 ? MarchStyle.Scatter : MarchStyle.HighStep;
 }
 
-// Build the final timeline by computing distances and selecting styles
+// Build the final timeline by computing distances and selecting styles.
+// Each entry's style governs movement FROM this entry TO the next one.
 const drillTimeline = drillSequence.map((entry, i) => {
-    if (i === 0) {
+    if (i === drillSequence.length - 1) {
+        // Last entry: nowhere to go, halt
         return { ...entry, style: MarchStyle.Halt };
     }
-    const prev = drillSequence[i - 1];
-    const beats = entry.beat - prev.beat;
-    const dist = maxShapeDistance(prev.shape, entry.shape);
+    const next = drillSequence[i + 1];
+    const beats = next.beat - entry.beat;
+    const dist = maxShapeDistance(entry.shape, next.shape);
     const style = pickStyleForDistance(dist, beats);
     return { ...entry, style };
 });
