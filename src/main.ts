@@ -240,25 +240,25 @@ const drillShapes: DrillShape[] = [
 ];
 
 const drillTimeline = [
-    { beat: 0, shape: 0 },
-    { beat: 16, shape: 0 },
+    { beat: 0, shape: 0, facing: Math.PI },       // face audience (toward camera)
+    { beat: 16, shape: 0, facing: Math.PI },
     // Expand transition
-    { beat: 32, shape: 1 },
-    { beat: 48, shape: 1 },
+    { beat: 32, shape: 1, facing: Math.PI },
+    { beat: 48, shape: 1, facing: Math.PI * 0.5 }, // face right sideline
     // Wedge transition
-    { beat: 64, shape: 2 },
-    { beat: 80, shape: 2 },
+    { beat: 64, shape: 2, facing: 0 },              // face away from audience
+    { beat: 80, shape: 2, facing: Math.PI },         // snap back to audience
     // Diamond transition
-    { beat: 96, shape: 4 },
-    { beat: 112, shape: 4 },
+    { beat: 96, shape: 4, facing: Math.PI * 1.5 },  // face left sideline
+    { beat: 112, shape: 4, facing: Math.PI },
     // Rings transition
-    { beat: 128, shape: 3 },
-    { beat: 144, shape: 3 },
+    { beat: 128, shape: 3, facing: Math.PI },
+    { beat: 144, shape: 3, facing: Math.PI },
     // Back to block transition
-    { beat: 160, shape: 0 }, 
+    { beat: 160, shape: 0, facing: Math.PI }, 
 ];
 
-function getDrillPosition(currentBeat: number, r: number, c: number, cols: number, rows: number, startX: number, startZ: number): {x: number, z: number} {
+function getDrillPosition(currentBeat: number, r: number, c: number, cols: number, rows: number, startX: number, startZ: number): {x: number, z: number, facing: number} {
     // Loop entirely at 160 beats
     const maxBeat = 160;
     let loopedBeat = currentBeat % maxBeat;
@@ -272,7 +272,8 @@ function getDrillPosition(currentBeat: number, r: number, c: number, cols: numbe
     const currentPhase = drillTimeline[currentIndex];
     
     if (currentIndex === drillTimeline.length - 1) {
-        return drillShapes[currentPhase.shape](r, c, cols, rows, startX, startZ);
+        const pos = drillShapes[currentPhase.shape](r, c, cols, rows, startX, startZ);
+        return { ...pos, facing: currentPhase.facing };
     }
     
     const nextPhase = drillTimeline[currentIndex + 1];
@@ -286,9 +287,17 @@ function getDrillPosition(currentBeat: number, r: number, c: number, cols: numbe
     // Smooth transition
     const smoothProgress = progress * progress * (3 - 2 * progress); // smoothstep
 
+    // Interpolate facing angle (shortest-arc)
+    let facingDelta = nextPhase.facing - currentPhase.facing;
+    // Wrap to [-π, π] for shortest rotation
+    while (facingDelta > Math.PI) facingDelta -= Math.PI * 2;
+    while (facingDelta < -Math.PI) facingDelta += Math.PI * 2;
+    const facing = currentPhase.facing + facingDelta * smoothProgress;
+
     return {
         x: p1.x + (p2.x - p1.x) * smoothProgress,
-        z: p1.z + (p2.z - p1.z) * smoothProgress
+        z: p1.z + (p2.z - p1.z) * smoothProgress,
+        facing
     };
 }
 
@@ -1316,21 +1325,14 @@ engine.runRenderLoop(() => {
                 MarchingAnimationSystem.animateMarcher(marchPhase, bodyParts, isSettled, catchupFactor, 0);
             }
 
-            // Face direction of movement / drill target
-            const dx = targetX - anchor.position.x;
-            const dz = targetZ - anchor.position.z;
-
-            if (Math.abs(dx) > 0.05 || Math.abs(dz) > 0.05) {
-                const lateralAngle = Math.atan2(dx, dz);
-                const targetRotationY = Math.PI - lateralAngle;
-
-                if (Math.abs(dx) < 0.1) {
-                    anchor.rotation.y = Math.PI;
-                } else {
-                    anchor.rotation.y += (targetRotationY - anchor.rotation.y) * 0.1;
-                }
-            } else if (!isStumbling) {
-                anchor.rotation.y = Math.PI;
+            // Face the drill-specified direction (smoothly interpolated)
+            if (!isStumbling) {
+                const targetFacing = targetPos.facing;
+                // Shortest-arc interpolation toward target facing
+                let facingDelta = targetFacing - anchor.rotation.y;
+                while (facingDelta > Math.PI) facingDelta -= Math.PI * 2;
+                while (facingDelta < -Math.PI) facingDelta += Math.PI * 2;
+                anchor.rotation.y += facingDelta * 0.08;
             }
 
             // Update ground shadow to follow marcher and tint by formation error
