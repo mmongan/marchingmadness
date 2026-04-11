@@ -7,14 +7,6 @@ export const FLY_SPEED = 0.57135 * (BPM / 60);
 
 // Collision / physics
 export const COLLISION_RADIUS = 1.0;
-export const STUMBLE_RECOVERY = 0.5;   // rad/s
-export const MAX_TILT = Math.PI / 2;
-export const DOWN_DURATION = 4.0;      // seconds lying flat
-export const STAND_UP_DURATION = 1.2;  // seconds to animate standing up (like a sit-up)
-export const HEALTH_DAMAGE_PER_FALL = 25; // percentage per fall (0-100)
-export const OBSTACLE_RADIUS = 1.2;
-export const OBSTACLE_PUSH = 3.0;      // m/s
-export const MARCHER_COLLISION_RADIUS = 1.5;
 
 // Spatial audio
 export const SPATIAL_RADIUS = 20;
@@ -129,31 +121,3 @@ export const PERCUSSION_LIST = [
     { row: 13, name: "Bass Drum", display: "🥁 Bass Drum" },
     { row: 14, name: "Cymbals", display: "🥁 Cymbals" },
 ];
-
-// Stumble state per band member (shared between collision and audio systems)
-export interface StumbleState {
-    tilt: number;
-    tiltDirX: number;
-    tiltDirZ: number;
-    recovering: boolean;
-    downTimer: number;
-    standingUp: boolean;            // true while animating stand-up (sit-up motion)
-    standingUpTimer: number;        // progress through stand-up animation (0 to STAND_UP_DURATION)
-    playedStumble: boolean;
-    playedFall: boolean;
-    hitCount: number;              // number of times hit during current stumble
-    hitCountTimer: number;         // time since last hit (resets on new hit)
-}
-
-export function createStumbleState(): StumbleState {
-    return { 
-        tilt: 0, tiltDirX: 0, tiltDirZ: 0, recovering: false, 
-        downTimer: 0, standingUp: false, standingUpTimer: 0,
-        playedStumble: false, playedFall: false,
-        hitCount: 0, hitCountTimer: 0
-    };
-}
-
-// Stumble thresholds
-export const HITS_TO_FALL = 2;          // number of hits required to fall while stumbling
-export const HIT_COUNT_RESET_TIME = 1.5; // seconds without hit to reset counter

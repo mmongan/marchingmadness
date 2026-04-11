@@ -7,78 +7,11 @@ import {
     GM_INSTRUMENT_NAMES, GM_INSTRUMENT_VOLUMES, ROW_TO_SF_INDEX,
     SPATIAL_RADIUS_SQ
 } from "./gameConstants";
-import type { StumbleState } from "./gameConstants";
 
 export const sfInstruments: Map<number, Soundfont> = new Map();
 export const sfPanners: Map<number, PannerNode> = new Map();
 
-let crashSynth: Tone.NoiseSynth | null = null;
-let lastCrashTime = -1;
 
-/** Returns true only when the AudioContext is running (user has interacted). */
-function audioReady(): boolean {
-    try {
-        const ctx = Tone.getContext().rawContext as AudioContext;
-        return ctx.state === "running";
-    } catch {
-        return false;
-    }
-}
-
-function getCrashSynth() {
-    if (!crashSynth) {
-        crashSynth = new Tone.NoiseSynth({
-            noise: { type: "white" },
-            envelope: { attack: 0.01, decay: 0.4, sustain: 0, release: 0.1 },
-            volume: -12,
-        }).toDestination();
-    }
-    return crashSynth;
-}
-
-export function playStumbleSound(row: number): void {
-    if (!audioReady()) return;
-    const sfIdx = ROW_TO_SF_INDEX[row];
-    if (sfIdx == null) {
-        try { getCrashSynth().triggerAttackRelease("16n"); } catch { /* ignored */ }
-        return;
-    }
-    const sf = sfInstruments.get(sfIdx);
-    if (!sf) return;
-    const baseNote = sfIdx === 4 ? 40 : sfIdx === 3 ? 48 : sfIdx === 5 ? 72 : sfIdx === 8 ? 76 : 60;
-    const detune = Math.floor(Math.random() * 5) - 2;
-    try { sf.start({ note: baseNote + detune, duration: 0.25 }); } catch { /* ignored */ }
-}
-
-export function playCrashSound(row: number): void {
-    if (!audioReady()) return;
-    const sfIdx = ROW_TO_SF_INDEX[row];
-    if (sfIdx == null) {
-        try { getCrashSynth().triggerAttackRelease("4n"); } catch { /* ignored */ }
-        return;
-    }
-    const sf = sfInstruments.get(sfIdx);
-    if (!sf) return;
-    const baseNote = sfIdx === 4 ? 40 : sfIdx === 3 ? 48 : sfIdx === 5 ? 72 : sfIdx === 8 ? 76 : 60;
-    let now = Tone.now();
-    
-    // Ensure start times are strictly increasing to avoid Tone.js timing errors
-    // when multiple crash sounds trigger in the same frame
-    if (now <= lastCrashTime) {
-        now = lastCrashTime + 0.01;
-    }
-    lastCrashTime = now;
-    
-    // Stagger the three harmonics to create a richer crash sound
-    try {
-        sf.start({ note: baseNote - 1, duration: 0.1, time: now });
-        sf.start({ note: baseNote + 1, duration: 0.1, time: now + 0.005 });
-        sf.start({ note: baseNote + 6, duration: 0.1, time: now + 0.01 });
-    } catch {
-        // Timing assertion can fire if AudioContext was just resumed;
-        // swallow rather than crash the render loop.
-    }
-}
 
 /** Load all SoundFont instruments with spatial PannerNodes. Call after Tone.start(). */
 export async function loadInstruments(): Promise<void> {
@@ -122,26 +55,20 @@ export function updateAudioListener(camPos: Vector3, camFwd: Vector3): void {
     }
 }
 
-/** Update spatial panner positions and dynamic volume dropout. */
+/** Update spatial panner positions. */
 export function updateSpatialAudio(
     listenerPos: Vector3,
-    bandLegs: BandMemberData[],
-    stumbleStates: StumbleState[]
+    bandLegs: BandMemberData[]
 ): void {
     if (sfPanners.size === 0) return;
 
     const groupSumX: number[] = new Array(GM_INSTRUMENT_NAMES.length).fill(0);
     const groupSumZ: number[] = new Array(GM_INSTRUMENT_NAMES.length).fill(0);
     const groupWeight: number[] = new Array(GM_INSTRUMENT_NAMES.length).fill(0);
-    const groupTotal: number[] = new Array(GM_INSTRUMENT_NAMES.length).fill(0);
-    const groupDown: number[] = new Array(GM_INSTRUMENT_NAMES.length).fill(0);
 
     for (let m = 0; m < bandLegs.length; m++) {
         const sfIdx = ROW_TO_SF_INDEX[bandLegs[m].row];
         if (sfIdx == null) continue;
-        groupTotal[sfIdx]++;
-        const st = stumbleStates[m];
-        if (st.tilt > 0.3 || st.downTimer > 0) groupDown[sfIdx]++;
 
         const ax = bandLegs[m].anchor.position.x;
         const az = bandLegs[m].anchor.position.z;
@@ -159,12 +86,6 @@ export function updateSpatialAudio(
         const panner = sfPanners.get(g);
         if (!panner) continue;
 
-        const sf = sfInstruments.get(g);
-        if (sf && groupTotal[g] > 0) {
-            const activeRatio = 1 - (groupDown[g] / groupTotal[g]);
-            const vol = Math.round(GM_INSTRUMENT_VOLUMES[g] * (0.15 + 0.85 * activeRatio));
-            sf.output.setVolume(vol);
-        }
         if (groupWeight[g] > 0) {
             const cx = groupSumX[g] / groupWeight[g];
             const cz = groupSumZ[g] / groupWeight[g];

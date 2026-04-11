@@ -2,17 +2,15 @@ import { BandMemberFactory, InstrumentType, BandMemberData } from "./bandMemberF
 import { FirstPersonBody } from "./firstPersonBody";
 import { startMetronomeAndMusic } from "./musicManager";
 import { MarchingAnimationSystem, MarchStyle, STYLE_VELOCITY } from "./marchingAnimationSystem";
-import { sfPanners, playStumbleSound, playCrashSound, loadInstruments, updateAudioListener, updateSpatialAudio } from "./audioSystem";
+import { sfPanners, loadInstruments, updateAudioListener, updateSpatialAudio } from "./audioSystem";
 import { 
-    StumbleState, createStumbleState, BPM, WHOLE_NOTE_DURATION, FLY_SPEED,
-    COLLISION_RADIUS, STUMBLE_RECOVERY, MAX_TILT, DOWN_DURATION,
-    OBSTACLE_RADIUS, OBSTACLE_PUSH, MARCHER_COLLISION_RADIUS,
+    BPM, WHOLE_NOTE_DURATION, FLY_SPEED,
     PLAYER_DRILL_ROW, PLAYER_DRILL_COL, PLAYER_START_X, PLAYER_START_Z, 
     STEP_HIT_PERFECT, STEP_HIT_GOOD,
     BAND_ROWS, BAND_COLS, SPACING_X, SPACING_Z, BAND_START_Z,
     FIELD_MIN_X, FIELD_MAX_X, FIELD_MIN_Z, FIELD_MAX_Z, MAX_DRILL_START_Z
 } from "./gameConstants";
-import { Engine, Scene, FreeCamera, Vector3, HemisphericLight, MeshBuilder, StandardMaterial, DynamicTexture, Color3, Texture, CubeTexture, PointerEventTypes, ParticleSystem, Color4, AbstractMesh, Mesh } from "@babylonjs/core";
+import { Engine, Scene, FreeCamera, Vector3, HemisphericLight, MeshBuilder, StandardMaterial, DynamicTexture, Color3, Texture, CubeTexture, PointerEventTypes, AbstractMesh, Mesh } from "@babylonjs/core";
 import "@babylonjs/loaders/glTF";
 import { OpenSheetMusicDisplay } from "opensheetmusicdisplay";
 import * as Tone from "tone";
@@ -671,100 +669,6 @@ function getDrillPosition(currentBeat: number, r: number, c: number, cols: numbe
 
 const bandLegs: BandMemberData[] = [];
 
-// Stumble state per band member (imported from gameConstants)
-const stumbleStates: StumbleState[] = [];
-
-// Physics and collision constants (imported from gameConstants)
-
-// Scattered hat tracking
-interface ScatteredHat {
-    mesh: AbstractMesh;
-    velX: number; velY: number; velZ: number;
-    rotVelX: number; rotVelZ: number;
-    timer: number; // seconds remaining before disposal
-}
-const scatteredHats: ScatteredHat[] = [];
-
-function scatterHat(anchor: AbstractMesh, pushDirX: number, pushDirZ: number) {
-    // Find the hat mesh among anchor's children
-    const children = anchor.getChildMeshes(true);
-    const hat = children.find(c => c.name.startsWith("hat") || c.name.startsWith("baseHat"));
-    const plume = children.find(c => c.name.startsWith("plume") || c.name.startsWith("basePlume"));
-    if (!hat) return;
-
-    // Detach hat from anchor and place at its world position
-    const worldPos = hat.getAbsolutePosition().clone();
-    hat.parent = null;
-    hat.position.copyFrom(worldPos);
-    
-    // Also detach plume (moves with hat)
-    if (plume) {
-        plume.parent = hat;
-        plume.position.set(0, 0.2, 0);
-    }
-
-    // Launch velocity: mostly upward + outward in push direction
-    const speed = 2 + Math.random() * 2;
-    scatteredHats.push({
-        mesh: hat,
-        velX: pushDirX * speed + (Math.random() - 0.5) * 1.5,
-        velY: 3 + Math.random() * 2,
-        velZ: pushDirZ * speed + (Math.random() - 0.5) * 1.5,
-        rotVelX: (Math.random() - 0.5) * 8,
-        rotVelZ: (Math.random() - 0.5) * 8,
-        timer: 6 // seconds before cleanup
-    });
-}
-
-function updateScatteredHats(dt: number) {
-    for (let i = scatteredHats.length - 1; i >= 0; i--) {
-        const h = scatteredHats[i];
-        h.velY -= 9.8 * dt; // gravity
-        h.mesh.position.x += h.velX * dt;
-        h.mesh.position.y += h.velY * dt;
-        h.mesh.position.z += h.velZ * dt;
-        h.mesh.rotation.x += h.rotVelX * dt;
-        h.mesh.rotation.z += h.rotVelZ * dt;
-
-        // Bounce off ground
-        if (h.mesh.position.y < 0.1) {
-            h.mesh.position.y = 0.1;
-            h.velY = Math.abs(h.velY) * 0.3;
-            h.velX *= 0.7;
-            h.velZ *= 0.7;
-            h.rotVelX *= 0.5;
-            h.rotVelZ *= 0.5;
-        }
-        h.timer -= dt;
-        if (h.timer <= 0) {
-            h.mesh.dispose();
-            scatteredHats.splice(i, 1);
-        }
-    }
-}
-
-// Dust particle burst when a marcher hits the ground
-function emitDustBurst(position: Vector3) {
-    const ps = new ParticleSystem("dust", 30, scene);
-    ps.createPointEmitter(new Vector3(-0.5, 0, -0.5), new Vector3(0.5, 0.3, 0.5));
-    ps.emitter = position.clone();
-    ps.emitter.y = 0.05;
-    ps.minSize = 0.05;
-    ps.maxSize = 0.2;
-    ps.minLifeTime = 0.3;
-    ps.maxLifeTime = 0.8;
-    ps.emitRate = 0; // manual burst only
-    ps.color1 = new Color4(0.6, 0.5, 0.35, 0.8);
-    ps.color2 = new Color4(0.5, 0.4, 0.3, 0.6);
-    ps.colorDead = new Color4(0.4, 0.35, 0.25, 0);
-    ps.gravity = new Vector3(0, -1, 0);
-    ps.blendMode = ParticleSystem.BLENDMODE_STANDARD;
-    ps.manualEmitCount = 30;
-    ps.targetStopDuration = 1.0;
-    ps.disposeOnStop = true;
-    ps.start();
-}
-
 
 
 // === Player Starting Position in Drill Formation ===
@@ -877,11 +781,6 @@ camera.setTarget(new Vector3(playerStartX, 1.8, playerStartZ - 5));
 // Position the player's VR body at the marcher location
 playerBody.setBodyPosition(new Vector3(playerStartX, 0, playerStartZ));
 
-// Initialize stumble state for each band member
-for (let i = 0; i < bandLegs.length; i++) {
-    stumbleStates.push(createStumbleState());
-}
-
 // Ground shadow discs under each marcher (per-marcher material for error colouring)
 const shadowMats: StandardMaterial[] = [];
 const shadowDiscs: AbstractMesh[] = [];
@@ -952,14 +851,13 @@ scoreMat.backFaceCulling = false;
 scoreHUD.material = scoreMat;
 scoreHUD.isVisible = false;
 let formationQuality = 100;   // 0-100 percentage
-let marchersKnockedDown = 0;
 let lastScoreText = "";
 
 function updateScoreHUD() {
     const grade = formationQuality >= 90 ? "A" : formationQuality >= 80 ? "B"
         : formationQuality >= 70 ? "C" : formationQuality >= 60 ? "D" : "F";
     const streakTxt = stepStreak > 2 ? ` 🔥${stepStreak}` : "";
-    const text = `${Math.round(formationQuality)}% ${grade}  KO:${marchersKnockedDown}${streakTxt}`;
+    const text = `${Math.round(formationQuality)}% ${grade}${streakTxt}`;
     if (text === lastScoreText) return; // avoid redrawing every frame
     lastScoreText = text;
     const ctx = scoreTex.getContext() as CanvasRenderingContext2D;
@@ -1196,7 +1094,6 @@ async function startGameplay() {
     beatIndicator.isVisible = true;
     scoreHUD.isVisible = true;
     formationQuality = 100;
-    marchersKnockedDown = 0;
     // Reset footstep scoring state
     lastScoredBeat = -1;
     stepStreak = 0;
@@ -1283,10 +1180,8 @@ function showResults() {
     ctx.fillStyle = "#ffffff";
     ctx.font = "32px Arial";
     ctx.fillText(`Formation: ${Math.round(formationQuality)}%`, 384, 240);
-    ctx.fillText(`Marchers Down: ${marchersKnockedDown}`, 384, 280);
-    ctx.fillText(`Steps: ${perfectSteps} perfect / ${goodSteps} good / ${missedSteps} miss (${stepPct}%)`, 384, 320);
-    const survived = bandLegs.length - marchersKnockedDown;
-    ctx.fillText(`Still Standing: ${survived} / ${bandLegs.length}`, 384, 360);
+    ctx.fillText(`Steps: ${perfectSteps} perfect / ${goodSteps} good / ${missedSteps} miss (${stepPct}%)`, 384, 280);
+    ctx.fillText(`Band Size: ${bandLegs.length}`, 384, 320);
     // Footer
     ctx.fillStyle = "#aaaaaa";
     ctx.font = "28px Arial";
@@ -1545,21 +1440,14 @@ engine.runRenderLoop(() => {
         // Initialize settled state tracking for hysteresis (prevent oscillation at settle zone boundary)
         let marchersSettledState: boolean[] = [];
 
-        bandLegs.forEach(({ legL, legR, anchor, plume, bodyParts }, index) => {
-            const st = stumbleStates[index];
-            const isStumbling = st.tilt > 0.01 || st.downTimer > 0;
-
+        bandLegs.forEach(({ anchor, plume, bodyParts }, index) => {
             const targetPos = drillPositions[index];
             const targetX = targetPos.x;
             const targetZ = targetPos.z;
 
             const isHalted = targetPos.style === MarchStyle.Halt;
 
-            if (isStumbling) {
-                // Fallen/stumbling: stop legs, freeze in place
-                legL.rotation.x = 0;
-                legR.rotation.x = 0;
-            } else if (isHalted) {
+            if (isHalted) {
                 // Halt: freeze position, play standing pose only
                 MarchingAnimationSystem.animateMarcher(marchPhase, bodyParts, true, 0, 0, MarchStyle.Halt);
             } else {
@@ -1653,8 +1541,7 @@ engine.runRenderLoop(() => {
             }
 
             // Face the drill-specified direction
-            // Only turn when not stumbling and not halted
-            if (!isStumbling && !isHalted) {
+            if (!isHalted) {
                 let facingDelta = targetPos.facing - anchor.rotation.y;
                 while (facingDelta > Math.PI) facingDelta -= Math.PI * 2;
                 while (facingDelta < -Math.PI) facingDelta += Math.PI * 2;
@@ -1743,214 +1630,11 @@ engine.runRenderLoop(() => {
         });
     }
 
-    // --- Player-to-marcher collision: stumble / fall ---
-    let obstaclePushX = 0;
-    let obstaclePushZ = 0;
-    let playerIsDown = false; // Track if player is stumbling/falling
-    
-    if (scene.activeCamera) {
-        const playerPos = scene.activeCamera.globalPosition;
-        const frameDt = engine.getDeltaTime() / 1000;
-        const BROAD_RADIUS = 5.0;
-        const broadRadiusSq = BROAD_RADIUS * BROAD_RADIUS;
-
-        // Get player's stumble state to check if they're down
-        const playerStumbleState = stumbleStates[playerMarcherIndex];
-        playerIsDown = playerStumbleState.tilt >= MAX_TILT * 0.8; // down when significantly tilted
-
-        bandLegs.forEach(({ anchor }, index) => {
-            const st = stumbleStates[index];
-            const isDown = st.tilt >= MAX_TILT * 0.95;
-
-            // Skip collision checks when player is stumbling/falling
-            if (playerIsDown && index !== playerMarcherIndex) {
-                return;
-            }
-
-            // Broad-phase: skip marchers far from player
-            const bx = playerPos.x - anchor.position.x;
-            const bz = playerPos.z - anchor.position.z;
-            const bDistSq = bx * bx + bz * bz;
-            if (bDistSq > broadRadiusSq) {
-                // Tick down timer and recover if far away
-                if (st.downTimer > 0) {
-                    st.downTimer = Math.max(0, st.downTimer - frameDt);
-                } else if (st.tilt > 0) {
-                    st.recovering = true;
-                    st.tilt = Math.max(0, st.tilt - STUMBLE_RECOVERY * frameDt);
-                }
-                if (st.tilt <= 0.001) {
-                    anchor.rotation.x = 0;
-                    anchor.rotation.z = 0;
-                }
-                return;
-            }
-
-            // Fallen marcher acts as obstacle: push player away
-            if (isDown && st.downTimer > 0) {
-                const obstDistSq = bx * bx + bz * bz;
-                if (obstDistSq < OBSTACLE_RADIUS * OBSTACLE_RADIUS && obstDistSq > 0.001) {
-                    const obstDist = Math.sqrt(obstDistSq);
-                    const pushStrength = (1 - obstDist / OBSTACLE_RADIUS) * OBSTACLE_PUSH * frameDt;
-                    obstaclePushX += (bx / obstDist) * pushStrength;
-                    obstaclePushZ += (bz / obstDist) * pushStrength;
-                }
-            }
-
-            // Narrow-phase: find closest body part to this marcher
-            const bodyParts = playerBody.getBodyPartPositions();
-            const ax = anchor.position.x;
-            const az = anchor.position.z;
-            let closestDistSq = Infinity;
-            let closestDx = 0;
-            let closestDz = 0;
-            for (const partPos of bodyParts) {
-                const dx = partPos.x - ax;
-                const dz = partPos.z - az;
-                const dSq = dx * dx + dz * dz;
-                if (dSq < closestDistSq) {
-                    closestDistSq = dSq;
-                    closestDx = dx;
-                    closestDz = dz;
-                }
-            }
-
-            if (closestDistSq < COLLISION_RADIUS * COLLISION_RADIUS && closestDistSq > 0.001) {
-                const dist = Math.sqrt(closestDistSq);
-                st.tiltDirX = -closestDx / dist;
-                st.tiltDirZ = -closestDz / dist;
-
-                const overlap = 1 - dist / COLLISION_RADIUS;
-                const impact = overlap * 3.0;
-                st.tilt = Math.min(MAX_TILT, st.tilt + impact * frameDt * 8);
-                st.recovering = false;
-                st.downTimer = 0; // reset while still being hit
-
-                // Out-of-tune sound on first stumble contact
-                if (!st.playedStumble && st.tilt > 0.3) {
-                    st.playedStumble = true;
-                    const row = bandLegs[index].row;
-                    playStumbleSound(row);
-                    formationQuality = Math.max(0, formationQuality - 2); // stumble penalty
-                    playerBody.pulseHaptics(0.4, 100); // light haptic bump
-                }
-
-                // Crash sound when fully fallen
-                if (st.tilt >= MAX_TILT * 0.95) {
-                    st.downTimer = DOWN_DURATION;
-                    if (!st.playedFall) {
-                        st.playedFall = true;
-                        playCrashSound(bandLegs[index].row);
-                        formationQuality = Math.max(0, formationQuality - 5); // fall penalty
-                        marchersKnockedDown++;
-                        emitDustBurst(anchor.position);
-                        playerBody.pulseHaptics(0.8, 200); // strong haptic crash
-                        scatterHat(anchor, st.tiltDirX, st.tiltDirZ);
-                    }
-                }
-            } else if (st.downTimer > 0) {
-                // Stay on the ground, count down
-                st.downTimer = Math.max(0, st.downTimer - frameDt);
-            } else if (st.tilt > 0) {
-                st.recovering = true;
-                st.tilt = Math.max(0, st.tilt - STUMBLE_RECOVERY * frameDt);
-                if (st.tilt <= 0.001) {
-                    // Fully recovered — allow sounds to play again on next collision
-                    st.playedStumble = false;
-                    st.playedFall = false;
-                }
-            }
-
-            if (st.tilt > 0.001) {
-                anchor.rotation.x = st.tilt * st.tiltDirZ;
-                anchor.rotation.z = -st.tilt * st.tiltDirX;
-            } else {
-                anchor.rotation.x = 0;
-                anchor.rotation.z = 0;
-            }
-        });
-
-        // Marcher-to-marcher domino collisions via spatial grid (O(n) instead of O(n²))
-        const MARCHER_COL_SQ = MARCHER_COLLISION_RADIUS * MARCHER_COLLISION_RADIUS;
-        const GRID_CELL = 2.0; // cell size >= MARCHER_COLLISION_RADIUS
-        const INV_CELL = 1 / GRID_CELL;
-        const grid = new Map<number, number[]>();
-
-        // Build grid — hash each marcher into a cell
-        for (let j = 0; j < bandLegs.length; j++) {
-            const p = bandLegs[j].anchor.position;
-            const cx = (p.x * INV_CELL) | 0;
-            const cz = (p.z * INV_CELL) | 0;
-            const key = cx * 73856093 + cz * 19349663; // spatial hash
-            const bucket = grid.get(key);
-            if (bucket) bucket.push(j); else grid.set(key, [j]);
-        }
-
-        // Only check stumbling/fallen marchers against their neighboring cells
-        for (let i = 0; i < bandLegs.length; i++) {
-            const si = stumbleStates[i];
-            if (si.tilt < 0.4 && si.downTimer <= 0) continue;
-
-            const ai = bandLegs[i].anchor.position;
-            const cx = (ai.x * INV_CELL) | 0;
-            const cz = (ai.z * INV_CELL) | 0;
-
-            // Check 3×3 neighborhood
-            for (let ox = -1; ox <= 1; ox++) {
-                for (let oz = -1; oz <= 1; oz++) {
-                    const key = (cx + ox) * 73856093 + (cz + oz) * 19349663;
-                    const bucket = grid.get(key);
-                    if (!bucket) continue;
-
-                    for (const j of bucket) {
-                        if (i === j) continue;
-                        const sj = stumbleStates[j];
-                        if (sj.tilt > 0.3 || sj.downTimer > 0) continue;
-
-                        const aj = bandLegs[j].anchor.position;
-                        const dx = aj.x - ai.x;
-                        const dz = aj.z - ai.z;
-                        const distSq = dx * dx + dz * dz;
-                        if (distSq >= MARCHER_COL_SQ || distSq < 0.001) continue;
-
-                        const dist = Math.sqrt(distSq);
-                        const overlap = 1 - dist / MARCHER_COLLISION_RADIUS;
-                        const transferFactor = (si.tilt / MAX_TILT) * overlap * 1.5;
-                        sj.tilt = Math.min(MAX_TILT, sj.tilt + transferFactor * frameDt * 6);
-                        sj.tiltDirX = dx / dist;
-                        sj.tiltDirZ = dz / dist;
-                        sj.recovering = false;
-
-                        if (!sj.playedStumble && sj.tilt > 0.3) {
-                            sj.playedStumble = true;
-                            playStumbleSound(bandLegs[j].row);
-                            formationQuality = Math.max(0, formationQuality - 2);
-                        }
-                        if (sj.tilt >= MAX_TILT * 0.95) {
-                            sj.downTimer = DOWN_DURATION;
-                            if (!sj.playedFall) {
-                                sj.playedFall = true;
-                                playCrashSound(bandLegs[j].row);
-                                formationQuality = Math.max(0, formationQuality - 5);
-                                marchersKnockedDown++;
-                                emitDustBurst(bandLegs[j].anchor.position);
-                                scatterHat(bandLegs[j].anchor, sj.tiltDirX, sj.tiltDirZ);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
     // Formation bonus: player marching with the band near a drill slot earns points
-    // Slowly recover formation quality when nobody is stumbling (0.5% per second)
+    // Slowly recover formation quality (0.5% per second)
     if (gameStartTime !== null) {
         const fDt = engine.getDeltaTime() / 1000;
-        const anyStumbling = stumbleStates.some(s => s.tilt > 0.1 || s.downTimer > 0);
-        if (!anyStumbling) {
-            formationQuality = Math.min(100, formationQuality + 0.5 * fDt);
-        }
+        formationQuality = Math.min(100, formationQuality + 0.5 * fDt);
 
         // Award formation bonus: if player is within 2m of any open drill slot
         // and roughly moving with the band, grant +1%/s
@@ -1982,11 +1666,6 @@ engine.runRenderLoop(() => {
         }
     }
 
-    // Update scattered hats (physics simulation)
-    if (scatteredHats.length > 0) {
-        updateScatteredHats(engine.getDeltaTime() / 1000);
-    }
-
     // Sync Web Audio API listener to camera for correct spatial orientation
     if (scene.activeCamera) {
         const camPos = scene.activeCamera.globalPosition;
@@ -1995,10 +1674,9 @@ engine.runRenderLoop(() => {
     }
 
     // Update spatial audio panners — weighted centroid of nearby marchers per instrument group
-    // Also count stumbling/down members per group for dynamic volume dropout
     if (scene.activeCamera && sfPanners.size > 0) {
         const listenerPos = scene.activeCamera.globalPosition;
-        updateSpatialAudio(listenerPos, bandLegs, stumbleStates);
+        updateSpatialAudio(listenerPos, bandLegs);
     }
 
     // Update player body with march animation and treadmill locomotion
@@ -2036,11 +1714,6 @@ engine.runRenderLoop(() => {
             if (Math.abs(turnY) > 0.0001 && "rotation" in scene.activeCamera) {
                 (scene.activeCamera as any).rotation.y += turnY;
             }
-        }
-        // Push player away from fallen obstacle marchers (only if player is not stumbling)
-        if (!freeFly && !playerIsDown && (Math.abs(obstaclePushX) > 0.001 || Math.abs(obstaclePushZ) > 0.001)) {
-            scene.activeCamera.position.x += obstaclePushX;
-            scene.activeCamera.position.z += obstaclePushZ;
         }
     }
 
