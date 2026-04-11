@@ -244,9 +244,10 @@ const drillShapes: DrillShape[] = [
     },
 
     // 6: Column/File — band compresses into a narrow deep column
-    (r, _c, _cols, rows, _startX, startZ) => {
-        const z = startZ + (r / (rows - 1)) * (rows - 1) * SPACING_Z;
-        return clampToFieldBounds(0, z);
+    (r, c, cols, rows, _startX, _startZ) => {
+        const colX = (c - (cols - 1) / 2) * 1.2; // narrow 1.2m column spacing
+        const z = 5 + (r / (rows - 1)) * 40;     // rows evenly from z=5 to z=45
+        return clampToFieldBounds(colX, z);
     },
 
     // 7: Echelon (Diagonal) — rows offset diagonally
@@ -260,8 +261,8 @@ const drillShapes: DrillShape[] = [
         const idx = r * cols + c;
         const total = rows * cols;
         const angle = (idx / total) * Math.PI * 2;
-        const radius = 14.0;
-        const cx = 0, cz = 24; // field center
+        const radius = 18.0; // 2π·18/75 ≈ 1.51m spacing
+        const cx = 0, cz = 24;
         return clampToFieldBounds(cx + Math.cos(angle) * radius, cz + Math.sin(angle) * radius);
     },
 
@@ -271,13 +272,13 @@ const drillShapes: DrillShape[] = [
         const total = rows * cols;
         const half = total / 2;
         const cx = 0, cz = 24;
-        const radius = 8.0;
+        const radius = 10.0; // 2π·10/37 ≈ 1.70m spacing
         if (idx < half) {
             const angle = (idx / half) * Math.PI * 2;
-            return clampToFieldBounds(cx + Math.cos(angle) * radius, cz - 9 + Math.sin(angle) * radius);
+            return clampToFieldBounds(cx + Math.cos(angle) * radius, cz - 11 + Math.sin(angle) * radius);
         } else {
             const angle = ((idx - half) / half) * Math.PI * 2;
-            return clampToFieldBounds(cx + Math.cos(angle) * radius, cz + 9 + Math.sin(angle) * radius);
+            return clampToFieldBounds(cx + Math.cos(angle) * radius, cz + 11 + Math.sin(angle) * radius);
         }
     },
 
@@ -286,9 +287,9 @@ const drillShapes: DrillShape[] = [
         const idx = r * cols + c;
         const total = rows * cols;
         const t = idx / total;
-        const maxTurns = 2.5;
+        const maxTurns = 1.5;  // fewer turns so inner ring is not cramped
         const angle = t * maxTurns * Math.PI * 2;
-        const radius = 2.0 + t * 13.0;
+        const radius = 9.0 + t * 13.0; // inner arc step ≈ 1.13m
         const cx = 0, cz = 24;
         return clampToFieldBounds(cx + Math.cos(angle) * radius, cz + Math.sin(angle) * radius);
     },
@@ -296,7 +297,7 @@ const drillShapes: DrillShape[] = [
     // 11: Starburst — radial lines emanating from center
     (r, c, cols, rows, _startX, _startZ) => {
         const rayAngle = (c / cols) * Math.PI * 2;
-        const dist = 3.0 + (r / (rows - 1)) * 12.0;
+        const dist = 4.0 + (r / (rows - 1)) * 18.0; // radial spacing 18/14 ≈ 1.29m
         const cx = 0, cz = 24;
         return clampToFieldBounds(cx + Math.cos(rayAngle) * dist, cz + Math.sin(rayAngle) * dist);
     },
@@ -311,42 +312,42 @@ const drillShapes: DrillShape[] = [
         return clampToFieldBounds(foldX, startZ);
     },
 
-    // 13: Box/Window — hollow rectangle, members on perimeter only
+    // 13: Box/Window — hollow rectangle, members evenly spaced along perimeter
     (r, c, cols, rows, _startX, _startZ) => {
         const idx = r * cols + c;
-        const perim = 2 * (cols + rows - 2);
-        const slot = idx % perim;
-        const hw = (cols - 1) * 2.5; // half-width
-        const hh = (rows - 1) * 1.5; // half-height
+        const total = rows * cols;
+        const hw = (cols - 1) * 2.5; // half-width  = 10
+        const hh = (rows - 1) * 1.5; // half-height = 21
         const cx = 0, cz = 24;
+        const fullPerim = (hw + hh) * 4; // 124m total perimeter
+        const walk = (idx / total) * fullPerim; // position along perimeter
+        const topLen = hw * 2;
+        const rightLen = hh * 2;
+        const bottomLen = hw * 2;
         let px: number, pz: number;
-        if (slot < cols) {
-            // top edge
-            px = cx - hw + (slot / (cols - 1)) * hw * 2;
+        if (walk < topLen) {
+            px = cx - hw + walk;
             pz = cz - hh;
-        } else if (slot < cols + rows - 1) {
-            // right edge
-            const s = slot - cols;
+        } else if (walk < topLen + rightLen) {
+            const s = walk - topLen;
             px = cx + hw;
-            pz = cz - hh + (s / (rows - 1)) * hh * 2;
-        } else if (slot < 2 * cols + rows - 2) {
-            // bottom edge
-            const s = slot - cols - (rows - 1);
-            px = cx + hw - (s / (cols - 1)) * hw * 2;
+            pz = cz - hh + s;
+        } else if (walk < topLen + rightLen + bottomLen) {
+            const s = walk - topLen - rightLen;
+            px = cx + hw - s;
             pz = cz + hh;
         } else {
-            // left edge
-            const s = slot - 2 * cols - (rows - 2);
+            const s = walk - topLen - rightLen - bottomLen;
             px = cx - hw;
-            pz = cz + hh - (s / (rows - 1)) * hh * 2;
+            pz = cz + hh - s;
         }
         return clampToFieldBounds(px, pz);
     },
 
-    // 14: Pass-through — odd rows shift right, even rows shift left
+    // 14: Breathe — alternate rows expand apart in Z (no path crossing)
     (_r, _c, _cols, _rows, startX, startZ) => {
-        const shift = (_r % 2 === 0) ? -6.0 : 6.0;
-        return clampToFieldBounds(startX + shift, startZ);
+        const zShift = (_r % 2 === 0) ? -3.0 : 3.0;
+        return clampToFieldBounds(startX, startZ + zShift);
     },
 
     // 15: Scatter — random-looking positions (deterministic from row/col)
@@ -367,8 +368,8 @@ const drillShapes: DrillShape[] = [
             const x = (c - (cols - 1) / 2) * 6.0;
             return clampToFieldBounds(x, startZ);
         }
-        // Upright: narrow center column
-        const x = (c - (cols - 1) / 2) * 1.0;
+        // Upright: columns spaced ≥ 2m apart
+        const x = (c - (cols - 1) / 2) * 2.0;
         return clampToFieldBounds(x, startZ);
     },
 
@@ -405,7 +406,7 @@ const drillSequence: { beat: number; shape: number; facing: number }[] = [
     { beat: 96,  shape: 2,  facing: Math.PI },           // Hold wedge, snap to audience
     { beat: 112, shape: 7,  facing: Math.PI * 0.75 },   // Echelon diagonal
     { beat: 128, shape: 12, facing: Math.PI },           // Gate/fold open
-    { beat: 144, shape: 14, facing: Math.PI },           // Pass-through
+    { beat: 144, shape: 14, facing: Math.PI },           // Breathe
 
     // === ACT 3: Curves (beats 144-223) ===
     { beat: 160, shape: 8,  facing: Math.PI },           // Circle
@@ -502,6 +503,68 @@ const drillTimeline = drillSequence.map((entry, i) => {
     const style = pickStyleForDistance(dist, beats);
     return { ...entry, style };
 });
+
+// === BUILD-TIME VALIDATION: ensure all formations maintain minimum spacing ===
+const MIN_MARCHER_DIST = 1.0; // metres
+{
+    const allPositions = (shape: number) => {
+        const pts: {x: number, z: number, r: number, c: number}[] = [];
+        for (let r = 0; r < BAND_ROWS; r++) {
+            for (let c = 0; c < BAND_COLS; c++) {
+                const sx = (c - BAND_COLS / 2 + 0.5) * SPACING_X;
+                const sz = BAND_START_Z + r * SPACING_Z;
+                const p = drillShapes[shape](r, c, BAND_COLS, BAND_ROWS, sx, sz);
+                pts.push({...p, r, c});
+            }
+        }
+        return pts;
+    };
+    // Check each shape endpoint
+    for (let s = 0; s < drillShapes.length; s++) {
+        const pts = allPositions(s);
+        let minD = Infinity;
+        let pairA = '', pairB = '';
+        for (let i = 0; i < pts.length; i++) {
+            for (let j = i + 1; j < pts.length; j++) {
+                const dx = pts[i].x - pts[j].x;
+                const dz = pts[i].z - pts[j].z;
+                const d = Math.sqrt(dx * dx + dz * dz);
+                if (d < minD) { minD = d; pairA = `(${pts[i].r},${pts[i].c})`; pairB = `(${pts[j].r},${pts[j].c})`; }
+            }
+        }
+        if (minD < MIN_MARCHER_DIST) {
+            console.warn(`⚠ Shape ${s} min distance ${minD.toFixed(2)}m between ${pairA} and ${pairB} (< ${MIN_MARCHER_DIST}m)`);
+        }
+    }
+    // Check transition midpoints (t = 0.5)
+    for (let t = 0; t < drillTimeline.length - 1; t++) {
+        const shapeA = drillTimeline[t].shape;
+        const shapeB = drillTimeline[t + 1].shape;
+        if (shapeA === shapeB) continue;
+        const midPts: {x: number, z: number}[] = [];
+        for (let r = 0; r < BAND_ROWS; r++) {
+            for (let c = 0; c < BAND_COLS; c++) {
+                const sx = (c - BAND_COLS / 2 + 0.5) * SPACING_X;
+                const sz = BAND_START_Z + r * SPACING_Z;
+                const a = drillShapes[shapeA](r, c, BAND_COLS, BAND_ROWS, sx, sz);
+                const b = drillShapes[shapeB](r, c, BAND_COLS, BAND_ROWS, sx, sz);
+                midPts.push({x: (a.x + b.x) / 2, z: (a.z + b.z) / 2});
+            }
+        }
+        let minD = Infinity;
+        for (let i = 0; i < midPts.length; i++) {
+            for (let j = i + 1; j < midPts.length; j++) {
+                const dx = midPts[i].x - midPts[j].x;
+                const dz = midPts[i].z - midPts[j].z;
+                const d = Math.sqrt(dx * dx + dz * dz);
+                if (d < minD) minD = d;
+            }
+        }
+        if (minD < MIN_MARCHER_DIST) {
+            console.warn(`⚠ Transition ${shapeA}→${shapeB} midpoint min distance: ${minD.toFixed(2)}m (< ${MIN_MARCHER_DIST}m)`);
+        }
+    }
+}
 
 function getDrillPosition(currentBeat: number, r: number, c: number, cols: number, rows: number, startX: number, startZ: number): {x: number, z: number, facing: number, style: MarchStyle} {
     // Loop entirely at 320 beats
@@ -1460,7 +1523,7 @@ engine.runRenderLoop(() => {
                 // Settled marchers in formation are *supposed* to be close, so the
                 // force is heavily dampened to prevent vibration from competing
                 // with the formation pull.
-                const collisionRadius = 0.5;                       // tighter than before
+                const collisionRadius = 1.0;                       // minimum separation distance
                 const collisionRadius2 = collisionRadius * collisionRadius;
                 let collisionX = 0;
                 let collisionZ = 0;
@@ -1475,14 +1538,14 @@ engine.runRenderLoop(() => {
                     
                     if (collisionDistSq < collisionRadius2 && collisionDistSq > 0.01) {
                         const collisionDist = Math.sqrt(collisionDistSq);
-                        const repelStrength = (1 - collisionDist / collisionRadius) * 0.3;
+                        const repelStrength = (1 - collisionDist / collisionRadius) * 0.6;
                         collisionX -= (cdx / collisionDist) * repelStrength;
                         collisionZ -= (cdz / collisionDist) * repelStrength;
                     }
                 }
                 
-                // Settled marchers barely react to neighbours (they belong close together)
-                const collisionScale = isSettled ? 0.1 : 1.0;
+                // Settled marchers lightly react; unsettled get full separation force
+                const collisionScale = isSettled ? 0.15 : 1.0;
                 avoidanceX += collisionX * collisionScale;
                 avoidanceZ += collisionZ * collisionScale;
                 
