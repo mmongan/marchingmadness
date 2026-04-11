@@ -437,9 +437,9 @@ export class MarchingAnimationSystem {
 
         // ─── ARM ANIMATION ─────────────────────────────────────────
         const armSwing = isSettled ? 0.12 : 0.08;
-        const elbowBend = style === MarchStyle.Halt ? 0.3
-            : style === MarchStyle.JazzRun ? 0.55
-            : isSettled ? 0.4 : 0.45;
+        const elbowBend = style === MarchStyle.Halt ? -0.3
+            : style === MarchStyle.JazzRun ? -0.55
+            : isSettled ? -0.4 : -0.45;
 
         // Lateral/halt styles: arms stay still; others counter-swing
         const noArmSwing = hasLateral || style === MarchStyle.Halt;
