@@ -935,10 +935,51 @@ if (autoMarchCheckbox) {
     autoMarchCheckbox.addEventListener("change", () => { autoMarch = autoMarchCheckbox.checked; });
 }
 // Toggle with 'M' key during gameplay
+// Free-fly mode: detach camera from marcher for bird's eye observation
+let freeFly = false;
+const flyHUD = document.getElementById("flyHUD");
+const savedCameraState = { x: 0, y: 1.8, z: 0, rotX: 0, rotY: 0, speed: 0.5 };
 window.addEventListener("keydown", (e) => {
     if (e.code === "KeyM" && !e.ctrlKey && !e.altKey) {
         autoMarch = !autoMarch;
         if (autoMarchCheckbox) autoMarchCheckbox.checked = autoMarch;
+    }
+    if (e.code === "KeyF" && !e.ctrlKey && !e.altKey) {
+        freeFly = !freeFly;
+        if (flyHUD) flyHUD.style.display = freeFly ? "block" : "none";
+        if (freeFly) {
+            // Save current camera state
+            savedCameraState.x = camera.position.x;
+            savedCameraState.y = camera.position.y;
+            savedCameraState.z = camera.position.z;
+            savedCameraState.rotX = camera.rotation.x;
+            savedCameraState.rotY = camera.rotation.y;
+            savedCameraState.speed = camera.speed;
+            // Set up fly camera: elevated, fast, vertical keys
+            camera.position.y = 40;
+            camera.rotation.x = Math.PI / 3; // look down
+            camera.speed = 3.0;
+            camera.keysUp = [87];    // W
+            camera.keysDown = [83];  // S
+            camera.keysLeft = [65];  // A
+            camera.keysRight = [68]; // D
+            camera.keysUpward = [69];   // E (rise)
+            camera.keysDownward = [81]; // Q (descend)
+        } else {
+            // Restore camera to marcher position
+            camera.position.x = savedCameraState.x;
+            camera.position.y = savedCameraState.y;
+            camera.position.z = savedCameraState.z;
+            camera.rotation.x = savedCameraState.rotX;
+            camera.rotation.y = savedCameraState.rotY;
+            camera.speed = savedCameraState.speed;
+            camera.keysUp = [];
+            camera.keysDown = [];
+            camera.keysLeft = [];
+            camera.keysRight = [];
+            camera.keysUpward = [];
+            camera.keysDownward = [];
+        }
     }
 });
 
@@ -1417,6 +1458,8 @@ engine.runRenderLoop(() => {
 
     // Marching Band Animation
     const currentRenderTime = gameStartTime !== null ? Tone.now() - gameStartTime : performance.now() / 1000;
+    const frameDelta = engine.getDeltaTime() / 1000; // seconds since last frame
+    const MAX_TURN_SPEED = 3.0; // rad/s — realistic marcher turn rate (~170°/s)
     const secondsPerBeat = 60 / BPM;
     // Calculate a phase angle where one full stride occurs every 2 beats
     const marchPhase = (currentRenderTime * Math.PI * 2) / (secondsPerBeat * 2);
@@ -1622,7 +1665,15 @@ engine.runRenderLoop(() => {
             // Face the drill-specified direction
             // Only turn when not stumbling and not halted
             if (!isStumbling && !isHalted) {
-                anchor.rotation.y = targetPos.facing;
+                let facingDelta = targetPos.facing - anchor.rotation.y;
+                while (facingDelta > Math.PI) facingDelta -= Math.PI * 2;
+                while (facingDelta < -Math.PI) facingDelta += Math.PI * 2;
+                const maxStep = MAX_TURN_SPEED * frameDelta;
+                if (Math.abs(facingDelta) <= maxStep) {
+                    anchor.rotation.y = targetPos.facing;
+                } else {
+                    anchor.rotation.y += Math.sign(facingDelta) * maxStep;
+                }
             }
 
             // Update ground shadow to follow marcher and tint by formation error
@@ -1967,14 +2018,25 @@ engine.runRenderLoop(() => {
         const beatPhase = (currentRenderTime % (secondsPerBeat * 2)) / (secondsPerBeat * 2) * Math.PI * 2; // 0-2π every 2 beats
         const { movement, turnY } = playerBody.update(scene.activeCamera, beatPhase, currentBeat, gameStartTime !== null, dt);
 
-        if (autoMarch && gameStartTime !== null) {
+        if (freeFly) {
+            // Free-fly: let FreeCamera built-in WASD/mouse handle everything
+            // No position override, no push, no march snap
+        } else if (autoMarch && gameStartTime !== null) {
             // Auto-march: snap camera to the player's drill target position
             const playerDrill = getDrillPosition(currentBeat, playerRow, playerCol, 5, 15, playerStartX, playerStartZ);
             scene.activeCamera.position.x = playerDrill.x;
             scene.activeCamera.position.z = playerDrill.z;
-            // Snap facing direction
+            // Smoothly turn toward facing direction at same rate as band
             if ("rotation" in scene.activeCamera) {
-                (scene.activeCamera as any).rotation.y = playerDrill.facing;
+                let facingDelta = playerDrill.facing - (scene.activeCamera as any).rotation.y;
+                while (facingDelta > Math.PI) facingDelta -= Math.PI * 2;
+                while (facingDelta < -Math.PI) facingDelta += Math.PI * 2;
+                const maxStep = MAX_TURN_SPEED * dt;
+                if (Math.abs(facingDelta) <= maxStep) {
+                    (scene.activeCamera as any).rotation.y = playerDrill.facing;
+                } else {
+                    (scene.activeCamera as any).rotation.y += Math.sign(facingDelta) * maxStep;
+                }
             }
         } else {
             // Manual control: apply treadmill locomotion to camera position and rotation
@@ -1986,7 +2048,7 @@ engine.runRenderLoop(() => {
             }
         }
         // Push player away from fallen obstacle marchers (only if player is not stumbling)
-        if (!playerIsDown && (Math.abs(obstaclePushX) > 0.001 || Math.abs(obstaclePushZ) > 0.001)) {
+        if (!freeFly && !playerIsDown && (Math.abs(obstaclePushX) > 0.001 || Math.abs(obstaclePushZ) > 0.001)) {
             scene.activeCamera.position.x += obstaclePushX;
             scene.activeCamera.position.z += obstaclePushZ;
         }
