@@ -209,58 +209,227 @@ function clampToFieldBounds(x: number, z: number): {x: number, z: number} {
 type DrillShape = (r: number, c: number, cols: number, rows: number, startX: number, startZ: number) => {x: number, z: number};
 
 const drillShapes: DrillShape[] = [
-    // 0: Original Block
+    // 0: Original Block — standard grid
     (_r, _c, _cols, _rows, startX, startZ) => 
         clampToFieldBounds(startX, startZ),
     
-    // 1: Expanded Block
+    // 1: Expanded Block — wider spacing
     (_r, _c, _cols, _rows, startX, startZ) => 
         clampToFieldBounds(startX * 2.0, startZ),
     
-    // 2: Wedge (Arrowhead) - Z shifts based on column distance from center
+    // 2: Wedge (Arrowhead) — Z shifts based on column distance from center
     (_r, c, cols, _rows, startX, startZ) => {
         const centerCol = (cols - 1) / 2;
         const distFromCenter = Math.abs(c - centerCol);
         return clampToFieldBounds(startX * 1.5, startZ - distFromCenter * 3.0);
     },
 
-    // 3: Diamond Bow - X stretches outward in the middle rows
+    // 3: Diamond Bow — X stretches outward in the middle rows
     (r, _c, _cols, rows, startX, startZ) => {
         const rowPhase = (r / (rows - 1)) * Math.PI;
-        // Multiplier ranges from 1.0 at ends to 2.2 in the middle
         const stretch = 1.0 + 1.2 * Math.sin(rowPhase);
         return clampToFieldBounds(startX * stretch, startZ);
     },
 
-    // 4: S-Curve Wave - Entire band slithers left and right down the field
+    // 4: S-Curve Wave — band slithers left/right down the field
     (_r, _c, _cols, _rows, startX, startZ) => {
         const waveShift = Math.sin(startZ / 5.0) * 3.0;
         return clampToFieldBounds(startX * 1.5 + waveShift, startZ);
-    }
+    },
+
+    // 5: Company Front — all rows compress into a single wide line
+    (_r, c, cols, _rows, _startX, startZ) => {
+        const x = (c - (cols - 1) / 2) * 4.0; // wide spacing across field
+        return clampToFieldBounds(x, startZ);
+    },
+
+    // 6: Column/File — band compresses into a narrow deep column
+    (r, _c, _cols, rows, _startX, startZ) => {
+        const z = startZ + (r / (rows - 1)) * (rows - 1) * SPACING_Z;
+        return clampToFieldBounds(0, z);
+    },
+
+    // 7: Echelon (Diagonal) — rows offset diagonally
+    (r, _c, _cols, rows, startX, startZ) => {
+        const diag = (r / (rows - 1)) * 12.0; // 12m diagonal spread
+        return clampToFieldBounds(startX + diag, startZ);
+    },
+
+    // 8: Circle — band forms a ring
+    (r, c, cols, rows, _startX, _startZ) => {
+        const idx = r * cols + c;
+        const total = rows * cols;
+        const angle = (idx / total) * Math.PI * 2;
+        const radius = 14.0;
+        const cx = 0, cz = 24; // field center
+        return clampToFieldBounds(cx + Math.cos(angle) * radius, cz + Math.sin(angle) * radius);
+    },
+
+    // 9: Figure-8 — two connected circles
+    (r, c, cols, rows, _startX, _startZ) => {
+        const idx = r * cols + c;
+        const total = rows * cols;
+        const half = total / 2;
+        const cx = 0, cz = 24;
+        const radius = 8.0;
+        if (idx < half) {
+            const angle = (idx / half) * Math.PI * 2;
+            return clampToFieldBounds(cx + Math.cos(angle) * radius, cz - 9 + Math.sin(angle) * radius);
+        } else {
+            const angle = ((idx - half) / half) * Math.PI * 2;
+            return clampToFieldBounds(cx + Math.cos(angle) * radius, cz + 9 + Math.sin(angle) * radius);
+        }
+    },
+
+    // 10: Spiral — Archimedean spiral outward from center
+    (r, c, cols, rows, _startX, _startZ) => {
+        const idx = r * cols + c;
+        const total = rows * cols;
+        const t = idx / total;
+        const maxTurns = 2.5;
+        const angle = t * maxTurns * Math.PI * 2;
+        const radius = 2.0 + t * 13.0;
+        const cx = 0, cz = 24;
+        return clampToFieldBounds(cx + Math.cos(angle) * radius, cz + Math.sin(angle) * radius);
+    },
+
+    // 11: Starburst — radial lines emanating from center
+    (r, c, cols, rows, _startX, _startZ) => {
+        const rayAngle = (c / cols) * Math.PI * 2;
+        const dist = 3.0 + (r / (rows - 1)) * 12.0;
+        const cx = 0, cz = 24;
+        return clampToFieldBounds(cx + Math.cos(rayAngle) * dist, cz + Math.sin(rayAngle) * dist);
+    },
+
+    // 12: Gate/Fold — band hinges open like double doors from center column
+    (r, c, cols, rows, startX, startZ) => {
+        const centerCol = (cols - 1) / 2;
+        const side = c < centerCol ? -1 : c > centerCol ? 1 : 0;
+        const distFromCenter = Math.abs(c - centerCol);
+        const foldAngle = distFromCenter * 0.3;
+        const foldX = startX + side * Math.sin(foldAngle) * (r / (rows - 1)) * 8.0;
+        return clampToFieldBounds(foldX, startZ);
+    },
+
+    // 13: Box/Window — hollow rectangle, members on perimeter only
+    (r, c, cols, rows, _startX, _startZ) => {
+        const idx = r * cols + c;
+        const perim = 2 * (cols + rows - 2);
+        const slot = idx % perim;
+        const hw = (cols - 1) * 2.5; // half-width
+        const hh = (rows - 1) * 1.5; // half-height
+        const cx = 0, cz = 24;
+        let px: number, pz: number;
+        if (slot < cols) {
+            // top edge
+            px = cx - hw + (slot / (cols - 1)) * hw * 2;
+            pz = cz - hh;
+        } else if (slot < cols + rows - 1) {
+            // right edge
+            const s = slot - cols;
+            px = cx + hw;
+            pz = cz - hh + (s / (rows - 1)) * hh * 2;
+        } else if (slot < 2 * cols + rows - 2) {
+            // bottom edge
+            const s = slot - cols - (rows - 1);
+            px = cx + hw - (s / (cols - 1)) * hw * 2;
+            pz = cz + hh;
+        } else {
+            // left edge
+            const s = slot - 2 * cols - (rows - 2);
+            px = cx - hw;
+            pz = cz + hh - (s / (rows - 1)) * hh * 2;
+        }
+        return clampToFieldBounds(px, pz);
+    },
+
+    // 14: Pass-through — odd rows shift right, even rows shift left
+    (_r, _c, _cols, _rows, startX, startZ) => {
+        const shift = (_r % 2 === 0) ? -6.0 : 6.0;
+        return clampToFieldBounds(startX + shift, startZ);
+    },
+
+    // 15: Scatter — random-looking positions (deterministic from row/col)
+    (r, c, cols, _rows, _startX, _startZ) => {
+        // Pseudo-random scatter using sine hashing
+        const seed = r * 7 + c * 13;
+        const px = Math.sin(seed * 1.37) * 20.0;
+        const pz = 6.0 + Math.abs(Math.cos(seed * 2.41)) * 34.0;
+        // Keep some column ordering so player can find their spot
+        const colBias = (c - (cols - 1) / 2) * 3.0;
+        return clampToFieldBounds(px + colBias, pz);
+    },
+
+    // 16: Goal Post (T-shape) — front row wide, rest in narrow column
+    (r, c, cols, _rows, _startX, startZ) => {
+        if (r === 0) {
+            // Cross-bar: spread wide
+            const x = (c - (cols - 1) / 2) * 6.0;
+            return clampToFieldBounds(x, startZ);
+        }
+        // Upright: narrow center column
+        const x = (c - (cols - 1) / 2) * 1.0;
+        return clampToFieldBounds(x, startZ);
+    },
+
+    // 17: Checkerboard — staggered offset every other member
+    (_r, _c, _cols, _rows, startX, startZ) => {
+        const offset = (_r + _c) % 2 === 0 ? 1.0 : -1.0;
+        return clampToFieldBounds(startX + offset, startZ + offset);
+    },
+
+    // 18: Pinwheel — rows rotate around center based on row index
+    (r, c, cols, rows, _startX, _startZ) => {
+        const cx = 0, cz = 24;
+        const colOffset = (c - (cols - 1) / 2) * SPACING_X;
+        const rowOffset = (r - (rows - 1) / 2) * SPACING_Z;
+        const rotAngle = (r / (rows - 1)) * Math.PI * 0.5; // 0–90° rotation
+        const rx = colOffset * Math.cos(rotAngle) - rowOffset * Math.sin(rotAngle);
+        const rz = colOffset * Math.sin(rotAngle) + rowOffset * Math.cos(rotAngle);
+        return clampToFieldBounds(cx + rx, cz + rz);
+    },
 ];
 
 const drillTimeline = [
-    { beat: 0, shape: 0, facing: Math.PI, style: MarchStyle.HighStep },       // face audience (toward camera)
-    { beat: 16, shape: 0, facing: Math.PI, style: MarchStyle.HighStep },
-    // Expand transition
-    { beat: 32, shape: 1, facing: Math.PI, style: MarchStyle.Glide },
-    { beat: 48, shape: 1, facing: Math.PI * 0.5, style: MarchStyle.Glide }, // face right sideline
-    // Wedge transition
-    { beat: 64, shape: 2, facing: 0, style: MarchStyle.HighStep },              // face away from audience
-    { beat: 80, shape: 2, facing: Math.PI, style: MarchStyle.HighStep },         // snap back to audience
-    // Diamond transition
-    { beat: 96, shape: 4, facing: Math.PI * 1.5, style: MarchStyle.Glide },  // face left sideline
-    { beat: 112, shape: 4, facing: Math.PI, style: MarchStyle.Glide },
-    // Rings transition
-    { beat: 128, shape: 3, facing: Math.PI, style: MarchStyle.HighStep },
-    { beat: 144, shape: 3, facing: Math.PI, style: MarchStyle.HighStep },
-    // Back to block transition
-    { beat: 160, shape: 0, facing: Math.PI, style: MarchStyle.HighStep }, 
+    // === ACT 1: Opening (beats 0-63) ===
+    { beat: 0,   shape: 0,  facing: Math.PI,       style: MarchStyle.Halt },         // Block, attention
+    { beat: 8,   shape: 0,  facing: Math.PI,       style: MarchStyle.MarkTime },     // Mark time in place
+    { beat: 16,  shape: 0,  facing: Math.PI,       style: MarchStyle.HighStep },     // Step off in block
+    { beat: 32,  shape: 1,  facing: Math.PI,       style: MarchStyle.Glide },        // Expand block
+    { beat: 48,  shape: 5,  facing: Math.PI,       style: MarchStyle.SideStep },     // Company front
+    { beat: 64,  shape: 5,  facing: Math.PI * 0.5, style: MarchStyle.SideStep },     // Turn right
+
+    // === ACT 2: Formations (beats 64-143) ===
+    { beat: 80,  shape: 2,  facing: 0,             style: MarchStyle.HighStep },     // Wedge, face away
+    { beat: 96,  shape: 2,  facing: Math.PI,       style: MarchStyle.BackMarch },    // Back-march to audience
+    { beat: 112, shape: 7,  facing: Math.PI * 0.75, style: MarchStyle.JazzRun },     // Echelon diagonal
+    { beat: 128, shape: 12, facing: Math.PI,       style: MarchStyle.Glide },        // Gate/fold open
+    { beat: 144, shape: 14, facing: Math.PI,       style: MarchStyle.HighStep },     // Pass-through
+
+    // === ACT 3: Curves (beats 144-223) ===
+    { beat: 160, shape: 8,  facing: Math.PI,       style: MarchStyle.DragStep },     // Circle
+    { beat: 176, shape: 9,  facing: Math.PI,       style: MarchStyle.Glide },        // Figure-8
+    { beat: 192, shape: 10, facing: Math.PI * 1.5, style: MarchStyle.CrabWalk },     // Spiral, face left
+    { beat: 208, shape: 4,  facing: Math.PI,       style: MarchStyle.Glide },        // S-Curve wave
+    { beat: 224, shape: 11, facing: Math.PI,       style: MarchStyle.JazzRun },      // Starburst
+
+    // === ACT 4: Showcase (beats 224-303) ===
+    { beat: 240, shape: 18, facing: Math.PI,       style: MarchStyle.Pivot },        // Pinwheel
+    { beat: 256, shape: 13, facing: Math.PI,       style: MarchStyle.HighStep },     // Box/window
+    { beat: 272, shape: 3,  facing: Math.PI,       style: MarchStyle.DragStep },     // Diamond bow
+    { beat: 288, shape: 15, facing: Math.PI,       style: MarchStyle.Scatter },      // Scatter
+    { beat: 296, shape: 16, facing: Math.PI,       style: MarchStyle.HighStep },     // Goal post
+
+    // === ACT 5: Finale (beats 304-319) ===
+    { beat: 304, shape: 17, facing: Math.PI,       style: MarchStyle.MarkTime },     // Checkerboard
+    { beat: 312, shape: 6,  facing: Math.PI,       style: MarchStyle.BackMarch },    // Column
+    { beat: 316, shape: 0,  facing: Math.PI,       style: MarchStyle.HighStep },     // Back to block
+    { beat: 320, shape: 0,  facing: Math.PI,       style: MarchStyle.Halt },         // Final halt
 ];
 
 function getDrillPosition(currentBeat: number, r: number, c: number, cols: number, rows: number, startX: number, startZ: number): {x: number, z: number, facing: number, style: MarchStyle} {
-    // Loop entirely at 160 beats
-    const maxBeat = 160;
+    // Loop entirely at 320 beats
+    const maxBeat = 320;
     let loopedBeat = currentBeat % maxBeat;
     
     // Find phase
@@ -1218,7 +1387,7 @@ engine.runRenderLoop(() => {
                 } else {
                     // OUT OF FORMATION: Catch up with longer strides and active avoidance
                     const baseRate = 0.04; // base stride length
-                    const maxCatchupRate = 0.18; // max stride when far from target
+                    const maxCatchupRate = 0.09; // max stride when far from target
                     moveAmount = gap > 0.05 
                         ? baseRate + (maxCatchupRate - baseRate) * Math.min(1.0, gap / 3.0)
                         : baseRate;

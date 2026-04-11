@@ -8,6 +8,22 @@ export enum MarchStyle {
     Glide = "Glide",
     /** Lateral side-step — legs cross/uncross while body moves sideways. */
     SideStep = "SideStep",
+    /** Marching in place — knees pump up/down, no forward travel. */
+    MarkTime = "MarkTime",
+    /** Walking backward — shorter stride, heel-toe roll. */
+    BackMarch = "BackMarch",
+    /** Exaggerated long strides with pointed toes for fast traversal. */
+    JazzRun = "JazzRun",
+    /** Grapevine crossover — body faces one way, legs cross over laterally. */
+    CrabWalk = "CrabWalk",
+    /** Attention/halt — legs together, no movement. */
+    Halt = "Halt",
+    /** Corps-style drag step — toe drags along ground before planting. */
+    DragStep = "DragStep",
+    /** Free-form scatter run — loose, asymmetric stride. */
+    Scatter = "Scatter",
+    /** Pivot/pinwheel — one foot planted, other steps in arc. */
+    Pivot = "Pivot",
 }
 
 /**
@@ -65,8 +81,16 @@ export interface BodyParts {
     ankleJointR?: TransformNode;
 }
 
+/** Unified leg-animation result: hip forward/back (x), hip lateral (z), knee bend, ankle flex. */
+interface LegResult {
+    hipX: number;
+    hipZ: number;
+    knee: number;
+    ankle: number;
+}
+
 /**
- * Marching-band high-step animation system.
+ * Marching-band animation system with multiple step styles.
  *
  * KEY PRINCIPLE: only TransformNode joints are rotated.
  * - hipJointL / hipJointR  → swing the ENTIRE leg forward / back
@@ -86,105 +110,239 @@ export class MarchingAnimationSystem {
      *
      * Returns { hip, knee, ankle } rotation.x values (radians).
      */
-    private static legPhase(t: number, hipMax: number, kneeMax: number): { hip: number; knee: number; ankle: number } {
-        // Smooth helper (Hermite interpolation)
-        const smoothstep = (a: number, b: number, x: number) => {
-            const s = Math.max(0, Math.min(1, (x - a) / (b - a)));
-            return s * s * (3 - 2 * s);
-        };
-
-        let hip = 0;
-        let knee = 0;
-        let ankle = 0;
-
-        if (t < 0.45) {
-            // STANCE — leg goes from slightly ahead (0) to slightly behind (0.45)
-            // small backward lean gives the "push-off" look
-            const stanceT = t / 0.45;                    // 0→1
-            hip = stanceT * 0.15 * hipMax;               // trails behind slightly
-            knee = 0;                                     // straight
-            ankle = 0;
-        } else if (t < 0.55) {
-            // LIFT — sharp upward snap
-            const liftT = smoothstep(0.45, 0.55, t);     // 0→1
-            hip = (0.15 - 1.15 * liftT) * hipMax;        // from +0.15 to -1.0 (forward)
-            knee = liftT * kneeMax;                       // bend fast
-            ankle = -liftT * 0.3;                         // toes up (dorsiflexion)
-        } else if (t < 0.75) {
-            // PEAK — hold the high-step
-            hip = -1.0 * hipMax;
-            knee = kneeMax;
-            ankle = -0.3;
-        } else {
-            // PLANT — bring foot down to ground
-            const plantT = smoothstep(0.75, 1.0, t);     // 0→1
-            hip = -1.0 * hipMax * (1 - plantT);           // returns to 0
-            knee = kneeMax * (1 - plantT);                // straightens
-            ankle = -0.3 * (1 - plantT);                  // toes level
-        }
-
-        return { hip, knee, ankle };
-    }
-
-    /**
-     * Glide-step leg phase — feet stay low, smooth sinusoidal swing.
-     * Produces a flowing, almost floating gait with minimal vertical lift.
-     */
-    private static glideLegPhase(t: number, hipMax: number): { hip: number; knee: number; ankle: number } {
-        // Simple sine-based pendulum swing — no sharp knee lift
-        const swing = Math.sin(t * Math.PI * 2);
-        const hip = -swing * hipMax * 0.5;           // gentle forward/back swing
-        const knee = Math.max(0, -swing) * 0.25;     // slight bend only on back-swing
-        const ankle = swing * 0.08;                   // subtle toe articulation
-        return { hip, knee, ankle };
-    }
-
-    /**
-     * Side-step leg phase — alternating lateral abduction/adduction.
-     * One leg steps out to the side, the other crosses to meet it.
-     * Uses hip rotation.z (abduction) and a slight knee bend on the crossing leg.
-     */
-    private static sideStepLegPhase(t: number, hipMax: number): { hipX: number; hipZ: number; knee: number; ankle: number } {
+    private static legPhase(t: number, hipMax: number, kneeMax: number): LegResult {
         const smoothstep = (a: number, b: number, x: number) => {
             const s = Math.max(0, Math.min(1, (x - a) / (b - a)));
             return s * s * (3 - 2 * s);
         };
 
         let hipX = 0;
-        let hipZ = 0;
         let knee = 0;
         let ankle = 0;
 
-        if (t < 0.25) {
-            // LIFT — leg abducts outward and lifts slightly
-            const liftT = smoothstep(0, 0.25, t);
-            hipZ = -liftT * hipMax * 0.4;       // abduct outward
-            hipX = -liftT * hipMax * 0.15;      // slight forward lift
-            knee = liftT * 0.3;                 // small bend to clear ground
-            ankle = -liftT * 0.1;
-        } else if (t < 0.5) {
-            // PLANT — leg comes down to new lateral position
-            const plantT = smoothstep(0.25, 0.5, t);
-            hipZ = -hipMax * 0.4 * (1 - plantT);  // returns toward center
-            hipX = -hipMax * 0.15 * (1 - plantT);
-            knee = 0.3 * (1 - plantT);            // straighten
-            ankle = -0.1 * (1 - plantT);
+        if (t < 0.45) {
+            const stanceT = t / 0.45;
+            hipX = stanceT * 0.15 * hipMax;
+            knee = 0;
+            ankle = 0;
+        } else if (t < 0.55) {
+            const liftT = smoothstep(0.45, 0.55, t);
+            hipX = (0.15 - 1.15 * liftT) * hipMax;
+            knee = liftT * kneeMax;
+            ankle = -liftT * 0.3;
         } else if (t < 0.75) {
-            // CROSS — leg adducts inward (crossing behind/in front)
-            const crossT = smoothstep(0.5, 0.75, t);
-            hipZ = crossT * hipMax * 0.25;         // adduct inward
-            hipX = -crossT * hipMax * 0.1;         // tiny lift
-            knee = crossT * 0.2;                   // slight bend
-            ankle = 0;
+            hipX = -1.0 * hipMax;
+            knee = kneeMax;
+            ankle = -0.3;
         } else {
-            // RETURN — back to neutral
-            const returnT = smoothstep(0.75, 1.0, t);
-            hipZ = hipMax * 0.25 * (1 - returnT);
-            hipX = -hipMax * 0.1 * (1 - returnT);
-            knee = 0.2 * (1 - returnT);
-            ankle = 0;
+            const plantT = smoothstep(0.75, 1.0, t);
+            hipX = -1.0 * hipMax * (1 - plantT);
+            knee = kneeMax * (1 - plantT);
+            ankle = -0.3 * (1 - plantT);
         }
 
+        return { hipX, hipZ: 0, knee, ankle };
+    }
+
+    /** Unified leg result: forward/back hip (x), lateral hip (z), knee, ankle. */
+    private static readonly ZERO_LEG: LegResult = { hipX: 0, hipZ: 0, knee: 0, ankle: 0 };
+
+    private static ss(a: number, b: number, x: number): number {
+        const s = Math.max(0, Math.min(1, (x - a) / (b - a)));
+        return s * s * (3 - 2 * s);
+    }
+
+    /** Glide — smooth sinusoidal swing, feet stay low. */
+    private static glideLeg(t: number, hipMax: number): LegResult {
+        const swing = Math.sin(t * Math.PI * 2);
+        return { hipX: -swing * hipMax * 0.5, hipZ: 0, knee: Math.max(0, -swing) * 0.25, ankle: swing * 0.08 };
+    }
+
+    /** SideStep — lateral abduction/adduction with crossover. */
+    private static sideStepLeg(t: number, hipMax: number): LegResult {
+        const ss = MarchingAnimationSystem.ss;
+        let hipX = 0, hipZ = 0, knee = 0, ankle = 0;
+        if (t < 0.25) {
+            const l = ss(0, 0.25, t);
+            hipZ = -l * hipMax * 0.4; hipX = -l * hipMax * 0.15; knee = l * 0.3; ankle = -l * 0.1;
+        } else if (t < 0.5) {
+            const p = ss(0.25, 0.5, t);
+            hipZ = -hipMax * 0.4 * (1 - p); hipX = -hipMax * 0.15 * (1 - p); knee = 0.3 * (1 - p); ankle = -0.1 * (1 - p);
+        } else if (t < 0.75) {
+            const c = ss(0.5, 0.75, t);
+            hipZ = c * hipMax * 0.25; hipX = -c * hipMax * 0.1; knee = c * 0.2;
+        } else {
+            const r = ss(0.75, 1.0, t);
+            hipZ = hipMax * 0.25 * (1 - r); hipX = -hipMax * 0.1 * (1 - r); knee = 0.2 * (1 - r);
+        }
+        return { hipX, hipZ, knee, ankle };
+    }
+
+    /** MarkTime — marching in place, knees pump vertically. */
+    private static markTimeLeg(t: number, hipMax: number, kneeMax: number): LegResult {
+        const ss = MarchingAnimationSystem.ss;
+        let hipX = 0, knee = 0, ankle = 0;
+        if (t < 0.4) {
+            // LIFT — knee comes up
+            const l = ss(0, 0.4, t);
+            hipX = -l * hipMax * 0.6;
+            knee = l * kneeMax * 0.7;
+            ankle = -l * 0.2;
+        } else if (t < 0.6) {
+            // HOLD — knee stays up
+            hipX = -hipMax * 0.6;
+            knee = kneeMax * 0.7;
+            ankle = -0.2;
+        } else {
+            // DOWN — foot returns to ground
+            const d = ss(0.6, 1.0, t);
+            hipX = -hipMax * 0.6 * (1 - d);
+            knee = kneeMax * 0.7 * (1 - d);
+            ankle = -0.2 * (1 - d);
+        }
+        return { hipX, hipZ: 0, knee, ankle };
+    }
+
+    /** BackMarch — reversed stride, shorter swing, heel-toe roll. */
+    private static backMarchLeg(t: number, hipMax: number): LegResult {
+        const ss = MarchingAnimationSystem.ss;
+        let hipX = 0, knee = 0, ankle = 0;
+        if (t < 0.5) {
+            // Reach back
+            const r = ss(0, 0.5, t);
+            hipX = r * hipMax * 0.4;        // hip extends backward
+            knee = r * 0.15;                // slight bend
+            ankle = r * 0.15;              // plantarflexion (toe push)
+        } else {
+            // Return forward
+            const f = ss(0.5, 1.0, t);
+            hipX = hipMax * 0.4 * (1 - f);
+            knee = 0.15 * (1 - f);
+            ankle = 0.15 * (1 - f);
+        }
+        return { hipX, hipZ: 0, knee, ankle };
+    }
+
+    /** JazzRun — exaggerated long strides, pointed toes, fast traversal. */
+    private static jazzRunLeg(t: number, hipMax: number, kneeMax: number): LegResult {
+        const ss = MarchingAnimationSystem.ss;
+        let hipX = 0, knee = 0, ankle = 0;
+        if (t < 0.3) {
+            // BIG PUSH — leg trails far behind
+            const p = ss(0, 0.3, t);
+            hipX = p * hipMax * 0.7;         // large backward extension
+            knee = 0;
+            ankle = p * 0.25;              // pointed toe
+        } else if (t < 0.5) {
+            // SWING THROUGH — fast forward snap
+            const s = ss(0.3, 0.5, t);
+            hipX = hipMax * (0.7 - 1.7 * s); // from +0.7 to -1.0 forward
+            knee = s * kneeMax * 0.6;
+            ankle = 0.25 * (1 - s) - s * 0.15;
+        } else if (t < 0.7) {
+            // EXTENDED REACH — leg stretches far forward
+            hipX = -hipMax * 1.0;
+            knee = kneeMax * 0.6 * (1 - ss(0.5, 0.7, t) * 0.5);
+            ankle = -0.15;
+        } else {
+            // PLANT — foot strikes ground
+            const pl = ss(0.7, 1.0, t);
+            hipX = -hipMax * 1.0 * (1 - pl);
+            knee = kneeMax * 0.3 * (1 - pl);
+            ankle = -0.15 * (1 - pl);
+        }
+        return { hipX, hipZ: 0, knee, ankle };
+    }
+
+    /** CrabWalk — grapevine crossover, stronger lateral motion than SideStep. */
+    private static crabWalkLeg(t: number, hipMax: number): LegResult {
+        const ss = MarchingAnimationSystem.ss;
+        let hipX = 0, hipZ = 0, knee = 0, ankle = 0;
+        if (t < 0.25) {
+            // CROSS OVER — leg swings across body
+            const c = ss(0, 0.25, t);
+            hipZ = c * hipMax * 0.5;          // strong adduction
+            hipX = -c * hipMax * 0.2;         // slight lift
+            knee = c * 0.35;
+            ankle = -c * 0.1;
+        } else if (t < 0.5) {
+            // PLANT crossed
+            const p = ss(0.25, 0.5, t);
+            hipZ = hipMax * 0.5 * (1 - p);
+            hipX = -hipMax * 0.2 * (1 - p);
+            knee = 0.35 * (1 - p);
+            ankle = -0.1 * (1 - p);
+        } else if (t < 0.75) {
+            // OPEN — leg abducts outward
+            const o = ss(0.5, 0.75, t);
+            hipZ = -o * hipMax * 0.45;
+            hipX = -o * hipMax * 0.15;
+            knee = o * 0.25;
+        } else {
+            // RETURN to center
+            const r = ss(0.75, 1.0, t);
+            hipZ = -hipMax * 0.45 * (1 - r);
+            hipX = -hipMax * 0.15 * (1 - r);
+            knee = 0.25 * (1 - r);
+        }
+        return { hipX, hipZ, knee, ankle };
+    }
+
+    /** DragStep — corps-style toe drag before planting. */
+    private static dragStepLeg(t: number, hipMax: number): LegResult {
+        const ss = MarchingAnimationSystem.ss;
+        let hipX = 0, knee = 0, ankle = 0;
+        if (t < 0.4) {
+            // DRAG — toe trails behind, barely off ground
+            const d = t / 0.4;
+            hipX = d * hipMax * 0.2;          // slight backward extension
+            knee = 0;
+            ankle = d * 0.2;                // pointed toe drags
+        } else if (t < 0.6) {
+            // SCOOP FORWARD — foot scoops forward along ground
+            const s = ss(0.4, 0.6, t);
+            hipX = hipMax * (0.2 - 0.7 * s);  // transitions from back to front
+            knee = s * 0.15;
+            ankle = 0.2 * (1 - s);
+        } else if (t < 0.8) {
+            // PLANT — heel strikes
+            const p = ss(0.6, 0.8, t);
+            hipX = -hipMax * 0.5 * (1 - p * 0.4);
+            knee = 0.15 * (1 - p);
+            ankle = -p * 0.1;
+        } else {
+            // SETTLE — weight transfers
+            const se = ss(0.8, 1.0, t);
+            hipX = -hipMax * 0.3 * (1 - se);
+            knee = 0;
+            ankle = -0.1 * (1 - se);
+        }
+        return { hipX, hipZ: 0, knee, ankle };
+    }
+
+    /** Scatter — loose, asymmetric running stride. */
+    private static scatterLeg(t: number, hipMax: number, kneeMax: number): LegResult {
+        // Asymmetric sine-based run — faster forward, slower return
+        const forward = Math.sin(t * Math.PI);                    // 0→1→0, fast
+        const backward = Math.sin((t + 0.5) % 1.0 * Math.PI);   // offset
+        const hipX = -(forward * 0.8 - backward * 0.3) * hipMax;
+        const knee = forward * kneeMax * 0.5;
+        const ankle = -forward * 0.2 + backward * 0.1;
+        return { hipX, hipZ: 0, knee, ankle };
+    }
+
+    /** Pivot — one foot planted, other arcs around. The "stepping" foot does the work. */
+    private static pivotLeg(t: number, hipMax: number, isPivotFoot: boolean): LegResult {
+        if (isPivotFoot) {
+            // Planted foot — stays still with slight bend
+            return { hipX: 0, hipZ: 0, knee: 0.05, ankle: 0 };
+        }
+        // Stepping foot — arcs in a circle
+        const angle = t * Math.PI * 2;
+        const hipX = -Math.sin(angle) * hipMax * 0.4;
+        const hipZ = -Math.cos(angle) * hipMax * 0.3;
+        const knee = Math.max(0, Math.sin(angle)) * 0.3;
+        const ankle = 0;
         return { hipX, hipZ, knee, ankle };
     }
 
@@ -196,115 +354,122 @@ export class MarchingAnimationSystem {
         swayAmplitude: number = 0,
         style: MarchStyle = MarchStyle.HighStep
     ): void {
-        // Normalise phase to 0-1 (one full stride)
         const phaseNorm = ((marchPhase / (Math.PI * 2)) % 1 + 1) % 1;
-
-        // Amplitude knobs
         const hipMax  = isSettled ? 0.50 : 0.35 + 0.20 * catchupFactor;
         const kneeMax = isSettled ? 1.20 : 0.90;
+        const Z = MarchingAnimationSystem.ZERO_LEG;
+        const M = MarchingAnimationSystem;
 
-        // ─── LEG ANIMATION ─────────────────────────────────────────
-        const noLeg = { hip: 0, knee: 0, ankle: 0 };
-        let legL = noLeg;
-        let legR = noLeg;
+        // ─── LEG DISPATCH ──────────────────────────────────────────
+        let legL: LegResult;
+        let legR: LegResult;
+        const hasLateral = style === MarchStyle.SideStep || style === MarchStyle.CrabWalk || style === MarchStyle.Pivot;
 
-        if (style === MarchStyle.SideStep) {
-            // Side-step uses dedicated lateral phase with hipX + hipZ
-            const sideL = MarchingAnimationSystem.sideStepLegPhase(phaseNorm, hipMax);
-            const sideR = MarchingAnimationSystem.sideStepLegPhase((phaseNorm + 0.5) % 1, hipMax);
-
-            if (bodyParts.hipJointL) {
-                bodyParts.hipJointL.rotation.x = sideL.hipX;
-                bodyParts.hipJointL.rotation.z = sideL.hipZ;
-            }
-            if (bodyParts.kneeJointL)  bodyParts.kneeJointL.rotation.x = sideL.knee;
-            if (bodyParts.ankleJointL) bodyParts.ankleJointL.rotation.x = sideL.ankle;
-
-            if (bodyParts.hipJointR) {
-                bodyParts.hipJointR.rotation.x = sideR.hipX;
-                bodyParts.hipJointR.rotation.z = sideR.hipZ;
-            }
-            if (bodyParts.kneeJointR)  bodyParts.kneeJointR.rotation.x = sideR.knee;
-            if (bodyParts.ankleJointR) bodyParts.ankleJointR.rotation.x = sideR.ankle;
-        } else {
-            if (style === MarchStyle.Glide) {
-                legL = MarchingAnimationSystem.glideLegPhase(phaseNorm, hipMax);
-                legR = MarchingAnimationSystem.glideLegPhase((phaseNorm + 0.5) % 1, hipMax);
-            } else {
-                legL = MarchingAnimationSystem.legPhase(phaseNorm, hipMax, kneeMax);
-                legR = MarchingAnimationSystem.legPhase((phaseNorm + 0.5) % 1, hipMax, kneeMax);
-            }
-
-            if (bodyParts.hipJointL) {
-                bodyParts.hipJointL.rotation.x = legL.hip;
-                bodyParts.hipJointL.rotation.z = 0;
-            }
-            if (bodyParts.kneeJointL) {
-                bodyParts.kneeJointL.rotation.x = legL.knee;
-            }
-            if (bodyParts.ankleJointL) {
-                bodyParts.ankleJointL.rotation.x = legL.ankle;
-            }
-
-            if (bodyParts.hipJointR) {
-                bodyParts.hipJointR.rotation.x = legR.hip;
-                bodyParts.hipJointR.rotation.z = 0;
-            }
-            if (bodyParts.kneeJointR) {
-                bodyParts.kneeJointR.rotation.x = legR.knee;
-            }
-            if (bodyParts.ankleJointR) {
-                bodyParts.ankleJointR.rotation.x = legR.ankle;
-            }
+        switch (style) {
+            case MarchStyle.Halt:
+                legL = Z; legR = Z; break;
+            case MarchStyle.Glide:
+                legL = M.glideLeg(phaseNorm, hipMax);
+                legR = M.glideLeg((phaseNorm + 0.5) % 1, hipMax); break;
+            case MarchStyle.SideStep:
+                legL = M.sideStepLeg(phaseNorm, hipMax);
+                legR = M.sideStepLeg((phaseNorm + 0.5) % 1, hipMax); break;
+            case MarchStyle.MarkTime:
+                legL = M.markTimeLeg(phaseNorm, hipMax, kneeMax);
+                legR = M.markTimeLeg((phaseNorm + 0.5) % 1, hipMax, kneeMax); break;
+            case MarchStyle.BackMarch:
+                legL = M.backMarchLeg(phaseNorm, hipMax);
+                legR = M.backMarchLeg((phaseNorm + 0.5) % 1, hipMax); break;
+            case MarchStyle.JazzRun:
+                legL = M.jazzRunLeg(phaseNorm, hipMax, kneeMax);
+                legR = M.jazzRunLeg((phaseNorm + 0.5) % 1, hipMax, kneeMax); break;
+            case MarchStyle.CrabWalk:
+                legL = M.crabWalkLeg(phaseNorm, hipMax);
+                legR = M.crabWalkLeg((phaseNorm + 0.5) % 1, hipMax); break;
+            case MarchStyle.DragStep:
+                legL = M.dragStepLeg(phaseNorm, hipMax);
+                legR = M.dragStepLeg((phaseNorm + 0.5) % 1, hipMax); break;
+            case MarchStyle.Scatter:
+                legL = M.scatterLeg(phaseNorm, hipMax, kneeMax);
+                legR = M.scatterLeg((phaseNorm + 0.5) % 1, hipMax, kneeMax); break;
+            case MarchStyle.Pivot:
+                legL = M.pivotLeg(phaseNorm, hipMax, true);   // left planted
+                legR = M.pivotLeg(phaseNorm, hipMax, false);  // right steps
+                break;
+            default: // HighStep
+                legL = M.legPhase(phaseNorm, hipMax, kneeMax);
+                legR = M.legPhase((phaseNorm + 0.5) % 1, hipMax, kneeMax); break;
         }
 
-        // ─── ARM ANIMATION ─────────────────────────────────────────
-        // Arms mostly hold instruments — subtle counter-swing to legs.
-        const armSwing = isSettled ? 0.12 : 0.08;
-        const elbowBend = isSettled ? 0.4 : 0.45;
+        // ─── APPLY LEG ROTATIONS ───────────────────────────────────
+        if (bodyParts.hipJointL) {
+            bodyParts.hipJointL.rotation.x = legL.hipX;
+            bodyParts.hipJointL.rotation.z = hasLateral ? legL.hipZ : 0;
+        }
+        if (bodyParts.kneeJointL)  bodyParts.kneeJointL.rotation.x = legL.knee;
+        if (bodyParts.ankleJointL) bodyParts.ankleJointL.rotation.x = legL.ankle;
 
-        // For side-step, arms don't counter-swing from hip forward/back;
-        // use a small lateral-phase value instead.
-        const armCounterL = style === MarchStyle.SideStep ? 0 : (legR?.hip ?? 0);
-        const armCounterR = style === MarchStyle.SideStep ? 0 : (legL?.hip ?? 0);
+        if (bodyParts.hipJointR) {
+            bodyParts.hipJointR.rotation.x = legR.hipX;
+            bodyParts.hipJointR.rotation.z = hasLateral ? legR.hipZ : 0;
+        }
+        if (bodyParts.kneeJointR)  bodyParts.kneeJointR.rotation.x = legR.knee;
+        if (bodyParts.ankleJointR) bodyParts.ankleJointR.rotation.x = legR.ankle;
+
+        // ─── ARM ANIMATION ─────────────────────────────────────────
+        const armSwing = isSettled ? 0.12 : 0.08;
+        const elbowBend = style === MarchStyle.Halt ? 0.3
+            : style === MarchStyle.JazzRun ? 0.55
+            : isSettled ? 0.4 : 0.45;
+
+        // Lateral/halt styles: arms stay still; others counter-swing
+        const noArmSwing = hasLateral || style === MarchStyle.Halt;
+        const armCounterL = noArmSwing ? 0 : legR.hipX;
+        const armCounterR = noArmSwing ? 0 : legL.hipX;
 
         if (bodyParts.shoulderJointL) {
             bodyParts.shoulderJointL.rotation.x = -armCounterL * armSwing / hipMax - 0.15;
         }
-        if (bodyParts.elbowJointL) {
-            bodyParts.elbowJointL.rotation.x = elbowBend;
-        }
-        if (bodyParts.wristJointL) {
-            bodyParts.wristJointL.rotation.x = 0;
-        }
+        if (bodyParts.elbowJointL) bodyParts.elbowJointL.rotation.x = elbowBend;
+        if (bodyParts.wristJointL) bodyParts.wristJointL.rotation.x = 0;
 
         if (bodyParts.shoulderJointR) {
             bodyParts.shoulderJointR.rotation.x = -armCounterR * armSwing / hipMax - 0.15;
         }
-        if (bodyParts.elbowJointR) {
-            bodyParts.elbowJointR.rotation.x = elbowBend;
-        }
-        if (bodyParts.wristJointR) {
-            bodyParts.wristJointR.rotation.x = 0;
-        }
+        if (bodyParts.elbowJointR) bodyParts.elbowJointR.rotation.x = elbowBend;
+        if (bodyParts.wristJointR) bodyParts.wristJointR.rotation.x = 0;
 
         // ─── TORSO / SPINE ─────────────────────────────────────────
-        // Vertical bounce peaks at each foot-strike (~phase 0 and 0.5).
-        // Two bounces per stride cycle.  Glide/SideStep have minimal bounce.
         if (bodyParts.torsoJoint) {
-            const strikePhase = phaseNorm * 2 * Math.PI * 2;   // 2 bounces per cycle
-            const bounceAmp = style === MarchStyle.HighStep ? 0.025
-                : style === MarchStyle.SideStep ? 0.01 : 0.006;
+            const strikePhase = phaseNorm * 2 * Math.PI * 2;
+            let bounceAmp: number;
+            switch (style) {
+                case MarchStyle.Halt:     bounceAmp = 0; break;
+                case MarchStyle.HighStep: bounceAmp = 0.025; break;
+                case MarchStyle.JazzRun:  bounceAmp = 0.03; break;
+                case MarchStyle.Scatter:  bounceAmp = 0.02; break;
+                case MarchStyle.MarkTime: bounceAmp = 0.02; break;
+                case MarchStyle.SideStep:
+                case MarchStyle.CrabWalk: bounceAmp = 0.01; break;
+                default:                  bounceAmp = 0.006; break;
+            }
             const bounce = Math.max(0, Math.sin(strikePhase)) * bounceAmp;
             bodyParts.torsoJoint.position.y = 1.12 + bounce;
         }
 
         if (bodyParts.spineJoint) {
-            const lateralSway = style === MarchStyle.SideStep
-                ? Math.sin(marchPhase) * 0.06   // noticeable lateral lean during side-step
-                : Math.sin(marchPhase) * swayAmplitude;
+            let lateralSway: number;
+            switch (style) {
+                case MarchStyle.SideStep:
+                case MarchStyle.CrabWalk: lateralSway = Math.sin(marchPhase) * 0.06; break;
+                case MarchStyle.Scatter:  lateralSway = Math.sin(marchPhase * 1.3) * 0.04; break;
+                case MarchStyle.Pivot:    lateralSway = Math.sin(marchPhase) * 0.03; break;
+                default:                  lateralSway = Math.sin(marchPhase) * swayAmplitude; break;
+            }
             bodyParts.spineJoint.rotation.z = lateralSway;
-            bodyParts.spineJoint.rotation.x = isSettled ? 0 : catchupFactor * 0.12;
+            bodyParts.spineJoint.rotation.x = style === MarchStyle.JazzRun ? -0.08
+                : style === MarchStyle.BackMarch ? 0.06
+                : isSettled ? 0 : catchupFactor * 0.12;
         }
 
         // ─── NECK & HEAD ───────────────────────────────────────────
