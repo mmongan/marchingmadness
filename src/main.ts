@@ -657,122 +657,124 @@ const cumulativePerm: number[][] = [];
 }
 
 // Precompute collision-free transition waypoints at fine intervals
-const WAYPOINT_COUNT = 19; // t = 0.05, 0.10, ..., 0.95  (every 5% of the transition)
-const WAYPOINT_T: number[] = [];
-for (let w = 1; w <= WAYPOINT_COUNT; w++) WAYPOINT_T.push(w / (WAYPOINT_COUNT + 1));
-
-const precomputedWaypoints: ({x: number, z: number}[][] | null)[] = [];
+// === PRECOMPUTED PER-BEAT FOOTSTEP POSITIONS ===
+// Each integer beat = one footstep landing position with collision avoidance.
+// Between beats, sub-beat interpolation with smoothstep gives natural stride dynamics.
+const MAX_BEAT = 320;
+const precomputedBeatPos: {x: number, z: number}[][] = new Array(MAX_BEAT);
 for (let i = 0; i < drillTimeline.length; i++) {
-    if (i === drillTimeline.length - 1) {
-        precomputedWaypoints.push(null);
-        continue;
-    }
-    const shapeA = drillTimeline[i].shape;
-    const shapeB = drillTimeline[i + 1].shape;
-    if (shapeA === shapeB) {
-        precomputedWaypoints.push(null);
-        continue;
-    }
+    const phase = drillTimeline[i];
     const permA = cumulativePerm[i];
-    const permB = cumulativePerm[i + 1];
-    const posAArr = permA.map(slot => precomputedShapePos[shapeA][slot]);
-    const posBArr = permB.map(slot => precomputedShapePos[shapeB][slot]);
-    const wps: {x: number, z: number}[][] = [];
+    const posAArr = permA.map(slot => ({
+        x: precomputedShapePos[phase.shape][slot].x,
+        z: precomputedShapePos[phase.shape][slot].z,
+    }));
 
-    // Build waypoints sequentially: each one interpolates between previous resolved
-    // position and the endpoint, then enforces spacing. This prevents discontinuous
-    // jumps between waypoints while maintaining separation at every step.
-    let prevPositions = posAArr; // start from shape A's resolved positions
-    for (let wIdx = 0; wIdx < WAYPOINT_T.length; wIdx++) {
-        const t = WAYPOINT_T[wIdx];
-        const smooth = t * t * (3 - 2 * t); // global smoothstep progress
-        // Compute how far along we are from prevPositions to posB
-        const prevT = wIdx === 0 ? 0 : WAYPOINT_T[wIdx - 1];
-        const prevSmooth = prevT * prevT * (3 - 2 * prevT);
-        const remainingProgress = (smooth - prevSmooth) / (1 - prevSmooth);
-
-        const midPts: {x: number, z: number}[] = [];
-        for (let m = 0; m < TOTAL_MARCHERS; m++) {
-            // Interpolate from previous resolved position toward final destination
-            midPts.push({
-                x: prevPositions[m].x + (posBArr[m].x - prevPositions[m].x) * remainingProgress,
-                z: prevPositions[m].z + (posBArr[m].z - prevPositions[m].z) * remainingProgress,
-            });
+    if (i === drillTimeline.length - 1) {
+        // Last phase — static for remaining beats until loop wraps
+        for (let b = phase.beat; b < MAX_BEAT; b++) {
+            precomputedBeatPos[b] = posAArr;
         }
-        const resolved = enforceMinSpacing(midPts, MIN_SPACING);
-        wps.push(resolved);
-        prevPositions = resolved;
+        break;
     }
-    precomputedWaypoints.push(wps);
+
+    const nextPhase = drillTimeline[i + 1];
+    const startBeat = phase.beat;
+    const endBeat = nextPhase.beat;
+    const numBeats = endBeat - startBeat;
+
+    // First beat of phase = shape A positions (already collision-free)
+    precomputedBeatPos[startBeat] = posAArr;
+
+    if (phase.shape === nextPhase.shape) {
+        // Same shape — all intermediate beats share the same positions
+        for (let b = startBeat + 1; b < endBeat; b++) {
+            precomputedBeatPos[b] = posAArr;
+        }
+    } else {
+        // Transition between different shapes — compute each beat sequentially.
+        // Each beat builds on the previous resolved positions to ensure smooth paths.
+        const permB = cumulativePerm[i + 1];
+        const posBArr = permB.map(slot => ({
+            x: precomputedShapePos[nextPhase.shape][slot].x,
+            z: precomputedShapePos[nextPhase.shape][slot].z,
+        }));
+
+        let prevPositions = posAArr;
+        for (let b = startBeat + 1; b < endBeat; b++) {
+            const globalProgress = (b - startBeat) / numBeats;
+            const prevProgress = (b - 1 - startBeat) / numBeats;
+            const remainingProgress = (globalProgress - prevProgress) / (1 - prevProgress);
+
+            const midPts: {x: number, z: number}[] = [];
+            for (let m = 0; m < TOTAL_MARCHERS; m++) {
+                midPts.push({
+                    x: prevPositions[m].x + (posBArr[m].x - prevPositions[m].x) * remainingProgress,
+                    z: prevPositions[m].z + (posBArr[m].z - prevPositions[m].z) * remainingProgress,
+                });
+            }
+            const resolved = enforceMinSpacing(midPts, MIN_SPACING);
+            precomputedBeatPos[b] = resolved;
+            prevPositions = resolved;
+        }
+    }
+}
+
+// Compute per-marcher animation style based on actual distance traveled each beat.
+// Moving marchers use the phase's style for visual uniformity; stationary marchers halt.
+const precomputedBeatStyle: MarchStyle[][] = new Array(MAX_BEAT);
+for (let beat = 0; beat < MAX_BEAT; beat++) {
+    const nextBeat = (beat + 1) % MAX_BEAT;
+    // Find phase for default style
+    let phaseIdx = 0;
+    while (phaseIdx < drillTimeline.length - 1 && drillTimeline[phaseIdx + 1].beat <= beat) phaseIdx++;
+    const phaseStyle = drillTimeline[phaseIdx].style;
+
+    const styles: MarchStyle[] = [];
+    for (let m = 0; m < TOTAL_MARCHERS; m++) {
+        const curr = precomputedBeatPos[beat][m];
+        const next = precomputedBeatPos[nextBeat][m];
+        const dx = next.x - curr.x;
+        const dz = next.z - curr.z;
+        const dist = Math.sqrt(dx * dx + dz * dz);
+
+        if (dist < 0.03) {
+            // Not moving — stand at attention
+            styles.push(MarchStyle.Halt);
+        } else if (phaseStyle === MarchStyle.Halt || phaseStyle === MarchStyle.MarkTime) {
+            // Phase says stationary but this marcher is actually moving (collision avoidance)
+            styles.push(MarchStyle.HighStep);
+        } else {
+            // Use the phase style for visual uniformity
+            styles.push(phaseStyle);
+        }
+    }
+    precomputedBeatStyle[beat] = styles;
 }
 
 function getDrillPosition(currentBeat: number, r: number, c: number, cols: number, _rows: number, _startX: number, _startZ: number): {x: number, z: number, facing: number, style: MarchStyle} {
-    const maxBeat = 320;
-    const loopedBeat = currentBeat % maxBeat;
+    const loopedBeat = currentBeat % MAX_BEAT;
     const marcherIdx = r * cols + c;
 
-    // Find phase
-    let currentIndex = 0;
-    while (currentIndex < drillTimeline.length - 1 && drillTimeline[currentIndex + 1].beat <= loopedBeat) {
-        currentIndex++;
-    }
+    const beatFloor = Math.floor(loopedBeat) % MAX_BEAT;
+    const beatCeil = (beatFloor + 1) % MAX_BEAT;
+    const frac = loopedBeat - Math.floor(loopedBeat);
 
-    const currentPhase = drillTimeline[currentIndex];
-    const slotA = cumulativePerm[currentIndex][marcherIdx];
+    // Smoothstep sub-beat interpolation: natural decel at footstep landing, accel at push-off
+    const t = frac * frac * (3 - 2 * frac);
 
-    if (currentIndex === drillTimeline.length - 1) {
-        const pos = precomputedShapePos[currentPhase.shape][slotA];
-        return { x: pos.x, z: pos.z, facing: currentPhase.facing, style: currentPhase.style };
-    }
+    const posA = precomputedBeatPos[beatFloor][marcherIdx];
+    const posB = precomputedBeatPos[beatCeil][marcherIdx];
 
-    const nextPhase = drillTimeline[currentIndex + 1];
-    const progress = (loopedBeat - currentPhase.beat) / (nextPhase.beat - currentPhase.beat);
-    const smoothProgress = progress * progress * (3 - 2 * progress);
-    const facing = currentPhase.facing;
-
-    const slotB = cumulativePerm[currentIndex + 1][marcherIdx];
-    const posA = precomputedShapePos[currentPhase.shape][slotA];
-    const posB = precomputedShapePos[nextPhase.shape][slotB];
-
-    const wps = precomputedWaypoints[currentIndex];
-    if (!wps) {
-        // Same shape or simple transition — linear interpolation (already separated at endpoints)
-        return {
-            x: posA.x + (posB.x - posA.x) * smoothProgress,
-            z: posA.z + (posB.z - posA.z) * smoothProgress,
-            facing,
-            style: currentPhase.style
-        };
-    }
-
-    // Piecewise interpolation through precomputed separated waypoints
-    // Control points: [posA, wp[0], wp[1], ..., wp[N-1], posB]
-    const numWps = wps.length;
-    const totalSegments = numWps + 1;
-    const sT: number[] = [0];
-    for (let w = 0; w < numWps; w++) sT.push((w + 1) / totalSegments);
-    sT.push(1.0);
-
-    const sP: {x: number, z: number}[] = [posA];
-    for (let w = 0; w < numWps; w++) sP.push(wps[w][marcherIdx]);
-    sP.push(posB);
-
-    // Find which segment contains smoothProgress
-    let seg = sT.length - 2;
-    for (let s = 0; s < sT.length - 1; s++) {
-        if (smoothProgress <= sT[s + 1]) {
-            seg = s;
-            break;
-        }
-    }
-
-    const localT = (smoothProgress - sT[seg]) / (sT[seg + 1] - sT[seg]);
+    // Find current phase for facing
+    let phaseIdx = 0;
+    while (phaseIdx < drillTimeline.length - 1 && drillTimeline[phaseIdx + 1].beat <= beatFloor) phaseIdx++;
 
     return {
-        x: sP[seg].x + (sP[seg + 1].x - sP[seg].x) * localT,
-        z: sP[seg].z + (sP[seg + 1].z - sP[seg].z) * localT,
-        facing,
-        style: currentPhase.style
+        x: posA.x + (posB.x - posA.x) * t,
+        z: posA.z + (posB.z - posA.z) * t,
+        facing: drillTimeline[phaseIdx].facing,
+        style: precomputedBeatStyle[beatFloor][marcherIdx]
     };
 }
 
