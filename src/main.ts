@@ -1691,10 +1691,13 @@ engine.runRenderLoop(() => {
             // Free-fly: let FreeCamera built-in WASD/mouse handle everything
             // No position override, no push, no march snap
         } else if (autoMarch && gameStartTime !== null) {
-            // Auto-march: snap position to drill target, let mouse control look direction
+            // Auto-march: snap position and facing to drill target
             const playerDrill = getDrillPosition(currentBeat, playerRow, playerCol, 5, 15, playerStartX, playerStartZ);
             scene.activeCamera.position.x = playerDrill.x;
             scene.activeCamera.position.z = playerDrill.z;
+            if ("rotation" in scene.activeCamera) {
+                (scene.activeCamera as any).rotation.y = playerDrill.facing;
+            }
         } else {
             // Manual control: apply treadmill locomotion to camera position and rotation
             if (movement.lengthSquared() > 0) {
