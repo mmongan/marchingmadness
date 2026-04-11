@@ -534,20 +534,24 @@ for (let i = 0; i < bandLegs.length; i++) {
     stumbleStates.push(createStumbleState());
 }
 
-// Ground shadow discs under each marcher
-const shadowMat = new StandardMaterial("shadowMat", scene);
-shadowMat.diffuseColor = new Color3(0, 0, 0);
-shadowMat.specularColor = new Color3(0, 0, 0);
-shadowMat.alpha = 0.35;
+// Ground shadow discs under each marcher (per-marcher material for error colouring)
+const shadowMats: StandardMaterial[] = [];
 const shadowDiscs: AbstractMesh[] = [];
 const baseShadow = MeshBuilder.CreateDisc("shadow_base", { radius: 0.5, tessellation: 16 }, scene);
 baseShadow.rotation.x = Math.PI / 2; // lay flat
-baseShadow.material = shadowMat;
 baseShadow.isPickable = false;
+baseShadow.isVisible = false; // template only
 for (let i = 0; i < bandLegs.length; i++) {
-    const disc = i === 0 ? baseShadow : baseShadow.createInstance(`shadow_${i}`);
+    const mat = new StandardMaterial(`shadowMat_${i}`, scene);
+    mat.diffuseColor = new Color3(0, 0, 0);
+    mat.specularColor = new Color3(0, 0, 0);
+    mat.alpha = 0.35;
+    shadowMats.push(mat);
+    const disc = baseShadow.clone(`shadow_${i}`);
+    disc.material = mat;
+    disc.isVisible = true;
     disc.position.set(bandLegs[i].anchor.position.x, 0.02, bandLegs[i].anchor.position.z);
-    shadowDiscs.push(disc as any);
+    shadowDiscs.push(disc);
 }
 // === PLAYER DRILL FOOTSTEP TARGETS ===
 // Constants imported from gameConstants
@@ -1329,11 +1333,24 @@ engine.runRenderLoop(() => {
                 anchor.rotation.y = Math.PI;
             }
 
-            // Update ground shadow to follow marcher
+            // Update ground shadow to follow marcher and tint by formation error
             const shadow = shadowDiscs[index];
             if (shadow) {
                 shadow.position.x = anchor.position.x;
                 shadow.position.z = anchor.position.z;
+                // Compute distance from correct position (gap already available above)
+                const sdx = targetX - anchor.position.x;
+                const sdz = targetZ - anchor.position.z;
+                const errorDist = Math.sqrt(sdx * sdx + sdz * sdz);
+                // 0m error → black (normal shadow), ≥3m error → fully red
+                const errorT = Math.min(1, errorDist / 3);
+                const sMat = shadowMats[index];
+                if (sMat) {
+                    sMat.diffuseColor.r = errorT;
+                    sMat.diffuseColor.g = 0;
+                    sMat.diffuseColor.b = 0;
+                    sMat.alpha = 0.35 + errorT * 0.35; // more opaque when red
+                }
             }
 
             // Update plume color based on health (green=100% → red=0%)
