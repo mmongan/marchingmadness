@@ -1556,15 +1556,10 @@ engine.runRenderLoop(() => {
                 MarchingAnimationSystem.animateMarcher(marchPhase, bodyParts, isSettled, catchupFactor, 0, targetPos.style);
             }
 
-            // Face the drill-specified direction (smoothly interpolated)
+            // Face the drill-specified direction
             // Only turn when not stumbling and not halted
             if (!isStumbling && !isHalted) {
-                const targetFacing = targetPos.facing;
-                // Shortest-arc interpolation toward target facing
-                let facingDelta = targetFacing - anchor.rotation.y;
-                while (facingDelta > Math.PI) facingDelta -= Math.PI * 2;
-                while (facingDelta < -Math.PI) facingDelta += Math.PI * 2;
-                anchor.rotation.y += facingDelta * 0.08;
+                anchor.rotation.y = targetPos.facing;
             }
 
             // Update ground shadow to follow marcher and tint by formation error
