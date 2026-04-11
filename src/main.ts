@@ -1296,7 +1296,7 @@ engine.runRenderLoop(() => {
 
             const targetPos = drillPositions[index];
             const targetX = targetPos.x;
-            const targetZ = targetPos.z - (currentRenderTime * FLY_SPEED);
+            const targetZ = targetPos.z;
 
             if (isStumbling) {
                 // Fallen/stumbling: stop legs, freeze in place
@@ -1403,7 +1403,7 @@ engine.runRenderLoop(() => {
                         const otherMember = bandLegs[j];
                         const otherDrill = getDrillPosition(currentBeat, otherMember.row, otherMember.col, 5, 15, otherMember.startX, otherMember.startZ);
                         const otherDrillX = otherDrill.x;
-                        const otherDrillZ = otherDrill.z - (currentRenderTime * FLY_SPEED);
+                        const otherDrillZ = otherDrill.z;
                         
                         const markerDistX = otherMember.anchor.position.x - otherDrillX;
                         const markerDistZ = otherMember.anchor.position.z - otherDrillZ;
@@ -1503,9 +1503,8 @@ engine.runRenderLoop(() => {
         if (thisBeat > lastScoredBeat && lastScoredBeat >= 0) {
             const drill = getDrillPosition(thisBeat, PLAYER_DRILL_ROW, PLAYER_DRILL_COL,
                 5, 15, PLAYER_START_X, PLAYER_START_Z);
-            const beatTimeSec2 = thisBeat * secondsPerBeat;
             const tgtX = drill.x;
-            const tgtZ = drill.z - beatTimeSec2 * FLY_SPEED;
+            const tgtZ = drill.z;
 
             const pPos = scene.activeCamera!.globalPosition;
             const ddx = pPos.x - tgtX;
