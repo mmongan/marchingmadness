@@ -26,6 +26,12 @@ scene.clearColor = new Color3(0.9, 0.9, 0.9).toColor4();
 const camera = new FreeCamera("camera1", new Vector3(0, 1.8, 0), scene);
 camera.setTarget(new Vector3(0, 1.8, 1));
 camera.attachControl(canvas, true);
+// Disable FreeCamera's built-in WASD/arrow keys — our firstPersonBody handles movement.
+// Keep mouse input so click-drag look works on desktop.
+camera.keysUp = [];
+camera.keysDown = [];
+camera.keysLeft = [];
+camera.keysRight = [];
 
 const light = new HemisphericLight("light", new Vector3(0, 1, 0), scene);
 light.intensity = 0.8;
@@ -889,7 +895,6 @@ const autoMarchCheckbox = document.getElementById("autoMarchCheck") as HTMLInput
 // Auto-march mode: camera follows drill position automatically
 let autoMarch = autoMarchCheckbox ? autoMarchCheckbox.checked : true;
 let lastDrillFacing = 0;   // track drill facing so we can detect phase changes
-let lookYawOffset = 0;      // mouse-look offset relative to drill facing
 if (autoMarchCheckbox) {
     autoMarchCheckbox.addEventListener("change", () => { autoMarch = autoMarchCheckbox.checked; });
 }
@@ -1072,7 +1077,6 @@ for (const buttonMesh of buttonMeshes) {
 
 // Shared game startup function (called by both HTML and 3D buttons)
 async function startGameplay() {
-    // Keep camera mouse look active; auto-march overrides position each frame
     await Tone.start();
     // Load real sampled instruments via SoundFont, routing through spatial PannerNodes
     await loadInstruments();
@@ -1114,7 +1118,7 @@ async function startGameplay() {
 }
 
 let gameStarting = false;
-scene.onPointerObservable.add(async (pointerInfo) => {
+const pointerObserver = scene.onPointerObservable.add(async (pointerInfo) => {
     if (pointerInfo.type !== PointerEventTypes.POINTERDOWN || !pointerInfo.pickInfo?.hit) return;
     const picked = pointerInfo.pickInfo.pickedMesh;
 
@@ -1133,6 +1137,8 @@ scene.onPointerObservable.add(async (pointerInfo) => {
     if (picked === startBtnMesh && !gameStarting) {
         gameStarting = true;
         await startGameplay();
+        // Remove this observer so pointer events go purely to the camera
+        if (pointerObserver) scene.onPointerObservable.remove(pointerObserver);
     }
 });
 
@@ -1691,22 +1697,14 @@ engine.runRenderLoop(() => {
             // Free-fly: let FreeCamera built-in WASD/mouse handle everything
             // No position override, no push, no march snap
         } else if (autoMarch && gameStartTime !== null) {
-            // Auto-march: snap position to drill target, allow mouse look around drill facing
+            // Auto-march: snap position to drill target, let FreeCamera handle mouse look
             const playerDrill = getDrillPosition(currentBeat, playerRow, playerCol, 5, 15, playerStartX, playerStartZ);
             scene.activeCamera.position.x = playerDrill.x;
             scene.activeCamera.position.z = playerDrill.z;
-            if ("rotation" in scene.activeCamera) {
-                const cam = scene.activeCamera as any;
-                // Detect drill facing change (phase transition) and absorb mouse offset
-                if (Math.abs(playerDrill.facing - lastDrillFacing) > 0.001) {
-                    lookYawOffset = 0;
-                    lastDrillFacing = playerDrill.facing;
-                }
-                // Accumulate mouse delta as offset: FreeCamera writes rotation.y each frame,
-                // so the offset is whatever the camera drifted from our last set value
-                const expectedY = lastDrillFacing + lookYawOffset;
-                lookYawOffset += (cam.rotation.y - expectedY);
-                cam.rotation.y = lastDrillFacing + lookYawOffset;
+            // Only snap facing on drill phase transitions so mouse look isn't overridden each frame
+            if ("rotation" in scene.activeCamera && Math.abs(playerDrill.facing - lastDrillFacing) > 0.001) {
+                (scene.activeCamera as any).rotation.y = playerDrill.facing;
+                lastDrillFacing = playerDrill.facing;
             }
         } else {
             // Manual control: apply treadmill locomotion to camera position and rotation

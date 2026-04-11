@@ -209,7 +209,7 @@ export class BandMemberFactory {
             this.baseHat, this.basePlume,
             this.baseSpatL, this.baseSpatR,
         ];
-        baseMeshes.forEach(m => m.isVisible = false);
+        baseMeshes.forEach(m => { m.isVisible = false; m.isPickable = false; });
     }
 
     public createMember(r: number, c: number, type: InstrumentType, xPos: number, zPos: number): BandMemberData {
@@ -221,6 +221,7 @@ export class BandMemberFactory {
         anchor.position.set(xPos, 0, zPos);
         anchor.rotation.y = Math.PI;
         anchor.isVisible = false;
+        anchor.isPickable = false;
 
         /**
          * JOINT-BASED SKELETAL HIERARCHY
