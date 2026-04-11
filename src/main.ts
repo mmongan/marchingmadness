@@ -896,6 +896,7 @@ if (autoMarchCheckbox) {
 let freeFly = false;
 const flyHUD = document.getElementById("flyHUD");
 const savedCameraState = { x: 0, y: 1.8, z: 0, rotX: 0, rotY: 0, speed: 0.5 };
+
 window.addEventListener("keydown", (e) => {
     if (e.code === "KeyM" && !e.ctrlKey && !e.altKey) {
         autoMarch = !autoMarch;
@@ -1690,22 +1691,10 @@ engine.runRenderLoop(() => {
             // Free-fly: let FreeCamera built-in WASD/mouse handle everything
             // No position override, no push, no march snap
         } else if (autoMarch && gameStartTime !== null) {
-            // Auto-march: snap camera to the player's drill target position
+            // Auto-march: snap position to drill target, let mouse control look direction
             const playerDrill = getDrillPosition(currentBeat, playerRow, playerCol, 5, 15, playerStartX, playerStartZ);
             scene.activeCamera.position.x = playerDrill.x;
             scene.activeCamera.position.z = playerDrill.z;
-            // Smoothly turn toward facing direction at same rate as band
-            if ("rotation" in scene.activeCamera) {
-                let facingDelta = playerDrill.facing - (scene.activeCamera as any).rotation.y;
-                while (facingDelta > Math.PI) facingDelta -= Math.PI * 2;
-                while (facingDelta < -Math.PI) facingDelta += Math.PI * 2;
-                const maxStep = MAX_TURN_SPEED * dt;
-                if (Math.abs(facingDelta) <= maxStep) {
-                    (scene.activeCamera as any).rotation.y = playerDrill.facing;
-                } else {
-                    (scene.activeCamera as any).rotation.y += Math.sign(facingDelta) * maxStep;
-                }
-            }
         } else {
             // Manual control: apply treadmill locomotion to camera position and rotation
             if (movement.lengthSquared() > 0) {
