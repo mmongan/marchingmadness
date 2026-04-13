@@ -1,32 +1,470 @@
-import { BandMemberFactory, InstrumentType, BandMemberData } from "./bandMemberFactory";
+﻿import { INSTRUMENT_PLUGINS } from "./instrumentFactory";
+import { createInstrumentPoseAnimations } from "./utils/instrumentPoseAnimations";
 import { FirstPersonBody } from "./firstPersonBody";
-import { startMetronomeAndMusic } from "./musicManager";
-import { MarchingAnimationSystem, MarchStyle, STYLE_VELOCITY } from "./marchingAnimationSystem";
+import { startMetronomeAndMusic, getActiveInstrumentsAtBeat } from "./musicManager";
+import { MarchingAnimationSystem, MarchStyle, MoonwalkPlugin, AnimationService } from "./marchingAnimationSystem";
+import { DRILL_SHAPE_PLUGINS } from "./drillShapes";
+
+
+
+
+
+/**
+ * Registers all built-in plugins for the Marching Madness simulation.
+ *
+ * This function ensures that all core plugin types are initialized and available:
+ *   - Instrument plugins (INSTRUMENT_PLUGINS)
+ *   - Drill shape plugins (DRILL_SHAPE_PLUGINS)
+ *   - Drill transition plugins (DRILL_TRANSITION_PLUGINS)
+ *   - Marching animation plugins (MarchingAnimationPlugin)
+ *   - Band generator plugins (BandGeneratorPlugin)
+ *
+ * Most plugin arrays are imported and used directly by consumers, but animation plugins
+ * must be registered with the AnimationService. This function should be called once at startup.
+ */
+function registerAllBuiltInPlugins() {
+    // Register all instrument plugins (if registration is needed)
+    // INSTRUMENT_PLUGINS is imported and used directly by consumers.
+
+    // Register all drill shape plugins (if registration is needed)
+    // DRILL_SHAPE_PLUGINS is imported and used directly by consumers.
+
+    // Register all drill transition plugins (if registration is needed)
+    // DRILL_TRANSITION_PLUGINS is imported and used directly by consumers.
+
+    // Register all marching animation plugins
+    // Register built-in march cycle animations for all standard styles
+    // These are not plugins, but core animation logic for each style
+    AnimationService.registerLegAnimations(
+        MarchStyle.HighStep,
+        (t: number, hipMax: number) => ({
+            hipX: Math.sin(t * Math.PI * 2) * hipMax,
+            hipZ: 0,
+            knee: 1.2 * Math.abs(Math.sin(t * Math.PI * 2)),
+            ankle: -0.1 * Math.cos(t * Math.PI * 2)
+        }),
+        (t: number, hipMax: number) => {
+            const tp = (t + 0.5) % 1;
+            return {
+                hipX: Math.sin(tp * Math.PI * 2) * hipMax,
+                hipZ: 0,
+                knee: 1.2 * Math.abs(Math.sin(tp * Math.PI * 2)),
+                ankle: -0.1 * Math.cos(tp * Math.PI * 2)
+            };
+        }
+    );
+    AnimationService.registerLegAnimations(
+        MarchStyle.Glide,
+        (t: number, hipMax: number) => ({
+            hipX: Math.sin(t * Math.PI * 2) * hipMax * 0.7,
+            hipZ: 0,
+            knee: 0.5 + 0.3 * Math.abs(Math.sin(t * Math.PI * 2)),
+            ankle: -0.05 * Math.cos(t * Math.PI * 2)
+        }),
+        (t: number, hipMax: number) => {
+            const tp = (t + 0.5) % 1;
+            return {
+                hipX: Math.sin(tp * Math.PI * 2) * hipMax * 0.7,
+                hipZ: 0,
+                knee: 0.5 + 0.3 * Math.abs(Math.sin(tp * Math.PI * 2)),
+                ankle: -0.05 * Math.cos(tp * Math.PI * 2)
+            };
+        }
+    );
+    AnimationService.registerLegAnimations(
+        MarchStyle.MarkTime,
+        (t: number) => ({
+            hipX: 0,
+            hipZ: 0,
+            knee: 1.0 * Math.abs(Math.sin(t * Math.PI * 2)),
+            ankle: 0
+        }),
+        (t: number) => {
+            const tp = (t + 0.5) % 1;
+            return {
+                hipX: 0,
+                hipZ: 0,
+                knee: 1.0 * Math.abs(Math.sin(tp * Math.PI * 2)),
+                ankle: 0
+            };
+        }
+    );
+    AnimationService.registerLegAnimations(
+        MarchStyle.BackMarch,
+        (t: number, hipMax: number) => ({
+            hipX: -Math.sin(t * Math.PI * 2) * hipMax * 0.7,
+            hipZ: 0,
+            knee: 0.7 + 0.2 * Math.abs(Math.sin(t * Math.PI * 2)),
+            ankle: 0.05 * Math.cos(t * Math.PI * 2)
+        }),
+        (t: number, hipMax: number) => {
+            const tp = (t + 0.5) % 1;
+            return {
+                hipX: -Math.sin(tp * Math.PI * 2) * hipMax * 0.7,
+                hipZ: 0,
+                knee: 0.7 + 0.2 * Math.abs(Math.sin(tp * Math.PI * 2)),
+                ankle: 0.05 * Math.cos(tp * Math.PI * 2)
+            };
+        }
+    );
+    AnimationService.registerLegAnimations(
+        MarchStyle.JazzRun,
+        (t: number, hipMax: number) => ({
+            hipX: Math.sin(t * Math.PI * 2) * hipMax * 1.2,
+            hipZ: 0,
+            knee: 0.7 + 0.3 * Math.abs(Math.sin(t * Math.PI * 2)),
+            ankle: -0.15 * Math.cos(t * Math.PI * 2)
+        }),
+        (t: number, hipMax: number) => {
+            const tp = (t + 0.5) % 1;
+            return {
+                hipX: Math.sin(tp * Math.PI * 2) * hipMax * 1.2,
+                hipZ: 0,
+                knee: 0.7 + 0.3 * Math.abs(Math.sin(tp * Math.PI * 2)),
+                ankle: -0.15 * Math.cos(tp * Math.PI * 2)
+            };
+        }
+    );
+    AnimationService.registerLegAnimations(
+        MarchStyle.SideStep,
+        (t: number, hipMax: number) => ({
+            hipX: 0,
+            hipZ: Math.sin(t * Math.PI * 2) * hipMax * 0.7,
+            knee: 0.7 + 0.2 * Math.abs(Math.sin(t * Math.PI * 2)),
+            ankle: 0
+        }),
+        (t: number, hipMax: number) => {
+            const tp = (t + 0.5) % 1;
+            return {
+                hipX: 0,
+                hipZ: Math.sin(tp * Math.PI * 2) * hipMax * 0.7,
+                knee: 0.7 + 0.2 * Math.abs(Math.sin(tp * Math.PI * 2)),
+                ankle: 0
+            };
+        }
+    );
+    AnimationService.registerLegAnimations(
+        MarchStyle.CrabWalk,
+        (t: number, hipMax: number) => ({
+            hipX: 0,
+            hipZ: Math.sin(t * Math.PI * 2) * hipMax * 0.7,
+            knee: 0.7 + 0.2 * Math.abs(Math.sin(t * Math.PI * 2)),
+            ankle: 0
+        }),
+        (t: number, hipMax: number) => {
+            const tp = (t + 0.5) % 1;
+            return {
+                hipX: 0,
+                hipZ: Math.sin(tp * Math.PI * 2) * hipMax * 0.7,
+                knee: 0.7 + 0.2 * Math.abs(Math.sin(tp * Math.PI * 2)),
+                ankle: 0
+            };
+        }
+    );
+    AnimationService.registerLegAnimations(
+        MarchStyle.Halt,
+        () => ({ hipX: 0, hipZ: 0, knee: 0, ankle: 0 }),
+        () => ({ hipX: 0, hipZ: 0, knee: 0, ankle: 0 })
+    );
+    AnimationService.registerLegAnimations(
+        MarchStyle.DragStep,
+        (t: number, hipMax: number) => ({
+            hipX: Math.sin(t * Math.PI * 2) * hipMax * 0.5,
+            hipZ: 0,
+            knee: 0.6 + 0.2 * Math.abs(Math.sin(t * Math.PI * 2)),
+            ankle: -0.2 * Math.abs(Math.sin(t * Math.PI * 2))
+        }),
+        (t: number, hipMax: number) => {
+            const tp = (t + 0.5) % 1;
+            return {
+                hipX: Math.sin(tp * Math.PI * 2) * hipMax * 0.5,
+                hipZ: 0,
+                knee: 0.6 + 0.2 * Math.abs(Math.sin(tp * Math.PI * 2)),
+                ankle: -0.2 * Math.abs(Math.sin(tp * Math.PI * 2))
+            };
+        }
+    );
+    AnimationService.registerLegAnimations(
+        MarchStyle.Scatter,
+        (t: number, hipMax: number) => ({
+            hipX: Math.sin(t * Math.PI * 2 + Math.random()) * hipMax,
+            hipZ: Math.cos(t * Math.PI * 2 + Math.random()) * hipMax * 0.5,
+            knee: 0.7 + 0.5 * Math.abs(Math.sin(t * Math.PI * 2)),
+            ankle: 0
+        }),
+        (t: number, hipMax: number) => {
+            const tp = (t + 0.5) % 1;
+            return {
+                hipX: Math.sin(tp * Math.PI * 2 + Math.random()) * hipMax,
+                hipZ: Math.cos(tp * Math.PI * 2 + Math.random()) * hipMax * 0.5,
+                knee: 0.7 + 0.5 * Math.abs(Math.sin(tp * Math.PI * 2)),
+                ankle: 0
+            };
+        }
+    );
+    AnimationService.registerLegAnimations(
+        MarchStyle.Pivot,
+        (t: number, hipMax: number) => ({
+            hipX: Math.sin(t * Math.PI * 2) * hipMax * 0.3,
+            hipZ: 0,
+            knee: 0.5 + 0.2 * Math.abs(Math.sin(t * Math.PI * 2)),
+            ankle: 0
+        }),
+        (t: number, hipMax: number) => {
+            const tp = (t + 0.5) % 1;
+            return {
+                hipX: Math.sin(tp * Math.PI * 2) * hipMax * 0.3,
+                hipZ: 0,
+                knee: 0.5 + 0.2 * Math.abs(Math.sin(tp * Math.PI * 2)),
+                ankle: 0
+            };
+        }
+    );
+    AnimationService.registerLegAnimations(
+        MarchStyle.RollStep,
+        (t: number, hipMax: number) => ({
+            hipX: Math.sin(t * Math.PI * 2) * hipMax * 0.8,
+            hipZ: 0,
+            knee: 0.8 + 0.2 * Math.abs(Math.sin(t * Math.PI * 2)),
+            ankle: -0.1 * Math.cos(t * Math.PI * 2)
+        }),
+        (t: number, hipMax: number) => {
+            const tp = (t + 0.5) % 1;
+            return {
+                hipX: Math.sin(tp * Math.PI * 2) * hipMax * 0.8,
+                hipZ: 0,
+                knee: 0.8 + 0.2 * Math.abs(Math.sin(tp * Math.PI * 2)),
+                ankle: -0.1 * Math.cos(tp * Math.PI * 2)
+            };
+        }
+    );
+    AnimationService.registerLegAnimations(
+        MarchStyle.Chasse,
+        (t: number, hipMax: number) => ({
+            hipX: 0,
+            hipZ: Math.sin(t * Math.PI * 2) * hipMax * 0.5,
+            knee: 0.7 + 0.2 * Math.abs(Math.sin(t * Math.PI * 2)),
+            ankle: 0
+        }),
+        (t: number, hipMax: number) => {
+            const tp = (t + 0.5) % 1;
+            return {
+                hipX: 0,
+                hipZ: Math.sin(tp * Math.PI * 2) * hipMax * 0.5,
+                knee: 0.7 + 0.2 * Math.abs(Math.sin(tp * Math.PI * 2)),
+                ankle: 0
+            };
+        }
+    );
+    AnimationService.registerLegAnimations(
+        MarchStyle.BoxStep,
+        (t: number, hipMax: number) => ({
+            hipX: Math.sin(t * Math.PI * 2) * hipMax * 0.3,
+            hipZ: Math.cos(t * Math.PI * 2) * hipMax * 0.3,
+            knee: 0.6 + 0.2 * Math.abs(Math.sin(t * Math.PI * 2)),
+            ankle: 0
+        }),
+        (t: number, hipMax: number) => {
+            const tp = (t + 0.5) % 1;
+            return {
+                hipX: Math.sin(tp * Math.PI * 2) * hipMax * 0.3,
+                hipZ: Math.cos(tp * Math.PI * 2) * hipMax * 0.3,
+                knee: 0.6 + 0.2 * Math.abs(Math.sin(tp * Math.PI * 2)),
+                ankle: 0
+            };
+        }
+    );
+    AnimationService.registerLegAnimations(
+        MarchStyle.Flank,
+        (t: number, hipMax: number) => ({
+            hipX: Math.sin(t * Math.PI * 2) * hipMax * 0.7,
+            hipZ: 0,
+            knee: 0.7 + 0.2 * Math.abs(Math.sin(t * Math.PI * 2)),
+            ankle: 0
+        }),
+        (t: number, hipMax: number) => {
+            const tp = (t + 0.5) % 1;
+            return {
+                hipX: Math.sin(tp * Math.PI * 2) * hipMax * 0.7,
+                hipZ: 0,
+                knee: 0.7 + 0.2 * Math.abs(Math.sin(tp * Math.PI * 2)),
+                ankle: 0
+            };
+        }
+    );
+    AnimationService.registerLegAnimations(
+        MarchStyle.SkipPrance,
+        (t: number, hipMax: number) => ({
+            hipX: Math.sin(t * Math.PI * 2) * hipMax * 1.1,
+            hipZ: 0,
+            knee: 1.0 + 0.3 * Math.abs(Math.sin(t * Math.PI * 2)),
+            ankle: 0
+        }),
+        (t: number, hipMax: number) => {
+            const tp = (t + 0.5) % 1;
+            return {
+                hipX: Math.sin(tp * Math.PI * 2) * hipMax * 1.1,
+                hipZ: 0,
+                knee: 1.0 + 0.3 * Math.abs(Math.sin(tp * Math.PI * 2)),
+                ankle: 0
+            };
+        }
+    );
+    AnimationService.registerLegAnimations(
+        MarchStyle.DragTurn,
+        (t: number, hipMax: number) => ({
+            hipX: Math.sin(t * Math.PI * 2) * hipMax * 0.3,
+            hipZ: 0,
+            knee: 0.5 + 0.2 * Math.abs(Math.sin(t * Math.PI * 2)),
+            ankle: 0
+        }),
+        (t: number, hipMax: number) => {
+            const tp = (t + 0.5) % 1;
+            return {
+                hipX: Math.sin(tp * Math.PI * 2) * hipMax * 0.3,
+                hipZ: 0,
+                knee: 0.5 + 0.2 * Math.abs(Math.sin(tp * Math.PI * 2)),
+                ankle: 0
+            };
+        }
+    );
+    AnimationService.registerLegAnimations(
+        MarchStyle.StopHit,
+        (t: number, hipMax: number) => ({
+            hipX: Math.sin(t * Math.PI * 2) * hipMax * 0.5,
+            hipZ: 0,
+            knee: 0.7 + 0.2 * Math.abs(Math.sin(t * Math.PI * 2)),
+            ankle: 0
+        }),
+        (t: number, hipMax: number) => {
+            const tp = (t + 0.5) % 1;
+            return {
+                hipX: Math.sin(tp * Math.PI * 2) * hipMax * 0.5,
+                hipZ: 0,
+                knee: 0.7 + 0.2 * Math.abs(Math.sin(tp * Math.PI * 2)),
+                ankle: 0
+            };
+        }
+    );
+    AnimationService.registerLegAnimations(
+        MarchStyle.TrueCrab,
+        (t: number, hipMax: number) => ({
+            hipX: 0,
+            hipZ: Math.sin(t * Math.PI * 2) * hipMax * 0.7,
+            knee: 0.7 + 0.2 * Math.abs(Math.sin(t * Math.PI * 2)),
+            ankle: 0
+        }),
+        (t: number, hipMax: number) => {
+            const tp = (t + 0.5) % 1;
+            return {
+                hipX: 0,
+                hipZ: Math.sin(tp * Math.PI * 2) * hipMax * 0.7,
+                knee: 0.7 + 0.2 * Math.abs(Math.sin(tp * Math.PI * 2)),
+                ankle: 0
+            };
+        }
+    );
+    AnimationService.registerLegAnimations(
+        MarchStyle.ObliqueLeft,
+        (t: number, hipMax: number) => ({
+            hipX: Math.sin(t * Math.PI * 2) * hipMax * 0.5,
+            hipZ: Math.sin(t * Math.PI * 2) * hipMax * 0.2,
+            knee: 0.7 + 0.2 * Math.abs(Math.sin(t * Math.PI * 2)),
+            ankle: 0
+        }),
+        (t: number, hipMax: number) => {
+            const tp = (t + 0.5) % 1;
+            return {
+                hipX: Math.sin(tp * Math.PI * 2) * hipMax * 0.5,
+                hipZ: Math.sin(tp * Math.PI * 2) * hipMax * 0.2,
+                knee: 0.7 + 0.2 * Math.abs(Math.sin(tp * Math.PI * 2)),
+                ankle: 0
+            };
+        }
+    );
+    AnimationService.registerLegAnimations(
+        MarchStyle.ObliqueRight,
+        (t: number, hipMax: number) => ({
+            hipX: Math.sin(t * Math.PI * 2) * hipMax * 0.5,
+            hipZ: -Math.sin(t * Math.PI * 2) * hipMax * 0.2,
+            knee: 0.7 + 0.2 * Math.abs(Math.sin(t * Math.PI * 2)),
+            ankle: 0
+        }),
+        (t: number, hipMax: number) => {
+            const tp = (t + 0.5) % 1;
+            return {
+                hipX: Math.sin(tp * Math.PI * 2) * hipMax * 0.5,
+                hipZ: -Math.sin(tp * Math.PI * 2) * hipMax * 0.2,
+                knee: 0.7 + 0.2 * Math.abs(Math.sin(tp * Math.PI * 2)),
+                ankle: 0
+            };
+        }
+    );
+
+    // Register plugin-based animation(s)
+    const animationPlugins = [
+        new MoonwalkPlugin(),
+        // Add other MarchingAnimationPlugin instances here as needed
+    ];
+    for (const plugin of animationPlugins) {
+        plugin.register(AnimationService);
+    }
+    // Ensure static animations for all MarchStyle values
+    AnimationService.ensureDefaultAnimations();
+}
+
+// Call the initialization function at startup
+registerAllBuiltInPlugins();
 import { sfPanners, loadInstruments, updateAudioListener, updateSpatialAudio } from "./audioSystem";
+import { pickStyleForDistance, enforceMinSpacing, composePerms, computeSlotAssignment } from "./drillHelpers";
 import { 
     BPM, WHOLE_NOTE_DURATION, FLY_SPEED,
     PLAYER_DRILL_ROW, PLAYER_DRILL_COL, PLAYER_START_X, PLAYER_START_Z, 
     STEP_HIT_PERFECT, STEP_HIT_GOOD,
     BAND_ROWS, BAND_COLS, SPACING_X, SPACING_Z, BAND_START_Z,
-    FIELD_MIN_X, FIELD_MAX_X, FIELD_MIN_Z, FIELD_MAX_Z, MAX_DRILL_START_Z
-} from "./gameConstants";
+} from "./marchConstants";
+
+import { computeRawPositions, maxShapeDistance } from "./drillGenerator";
+import { buildBand, replaceWithPlayerMarcher } from "./bandGenerator";
 import { Engine, Scene, FreeCamera, Vector3, HemisphericLight, MeshBuilder, StandardMaterial, DynamicTexture, Color3, Texture, CubeTexture, PointerEventTypes, AbstractMesh, Mesh } from "@babylonjs/core";
 import "@babylonjs/loaders/glTF";
 import { OpenSheetMusicDisplay } from "opensheetmusicdisplay";
 import * as Tone from "tone";
 
-// Real sampled instrument voices - definitions now in gameConstants.ts
+// Drill shapes, transitions, and generation are imported from extracted modules
 const canvas = document.getElementById("renderCanvas") as HTMLCanvasElement;
 const engine = new Engine(canvas, true, { audioEngine: false });
 
 // Create the scene
+
 const scene = new Scene(engine);
 scene.clearColor = new Color3(0.9, 0.9, 0.9).toColor4();
+
+// === Initialize reusable instrument pose animations ===
+const instrumentPoseAnimations = createInstrumentPoseAnimations(scene);
+
+// Helper to assign AnimationGroups to a band member's instrument joint
+import type { BandMemberData } from "./bandMemberFactory";
+import type { AnimationGroup, TargetedAnimation } from "@babylonjs/core";
+
+function assignInstrumentPoseAnimationsToMember(member: BandMemberData) {
+    if (!member.instrumentType || !member.bodyParts.instrumentJoint) return;
+    const anims = instrumentPoseAnimations[member.instrumentType];
+    if (!anims) return;
+    // Clone AnimationGroups and retarget to this member's instrumentJoint
+    const restToPlay: AnimationGroup = anims.restToPlay.clone(`${member.instrumentType}_restToPlay_${member.row}_${member.col}`);
+    const playToRest: AnimationGroup = anims.playToRest.clone(`${member.instrumentType}_playToRest_${member.row}_${member.col}`);
+    // Retarget all animations to the actual instrumentJoint
+    restToPlay.targetedAnimations.forEach((ta: TargetedAnimation) => { ta.target = member.bodyParts.instrumentJoint; });
+    playToRest.targetedAnimations.forEach((ta: TargetedAnimation) => { ta.target = member.bodyParts.instrumentJoint; });
+    member.instrumentRestToPlayAnim = restToPlay;
+    member.instrumentPlayToRestAnim = playToRest;
+}
 
 const camera = new FreeCamera("camera1", new Vector3(0, 1.8, 0), scene);
 camera.setTarget(new Vector3(0, 1.8, 1));
 camera.attachControl(canvas, true);
-// Disable FreeCamera's built-in WASD/arrow keys — our firstPersonBody handles movement.
+// Disable FreeCamera's built-in WASD/arrow keys â€” our firstPersonBody handles movement.
 // Keep mouse input so click-drag look works on desktop.
 camera.keysUp = [];
 camera.keysDown = [];
@@ -42,7 +480,7 @@ const playerBody = new FirstPersonBody(scene);
 // Enable WebXR/VR with graceful device detection
 scene.createDefaultXRExperienceAsync({
     inputOptions: {
-        // Don't force a profile — let the browser report the real controller
+        // Don't force a profile â€” let the browser report the real controller
     }
 }).then((xr) => {
     // If the device doesn't supply a real-world vertical tracking offset (3DoF/Emulators),
@@ -203,200 +641,9 @@ buildFootballField(scene);
 
 
 // Helper to clamp a position to field bounds
-function clampToFieldBounds(x: number, z: number): {x: number, z: number} {
-    return {
-        x: Math.max(FIELD_MIN_X, Math.min(FIELD_MAX_X, x)),
-        z: Math.max(FIELD_MIN_Z, Math.min(FIELD_MAX_Z, z))
-    };
-}
 
-type DrillShape = (r: number, c: number, cols: number, rows: number, startX: number, startZ: number) => {x: number, z: number};
-
-const drillShapes: DrillShape[] = [
-    // 0: Original Block — standard grid
-    (_r, _c, _cols, _rows, startX, startZ) => 
-        clampToFieldBounds(startX, startZ),
-    
-    // 1: Expanded Block — wider spacing
-    (_r, _c, _cols, _rows, startX, startZ) => 
-        clampToFieldBounds(startX * 2.0, startZ),
-    
-    // 2: Wedge (Arrowhead) — Z shifts based on column distance from center
-    (_r, c, cols, _rows, startX, startZ) => {
-        const centerCol = (cols - 1) / 2;
-        const distFromCenter = Math.abs(c - centerCol);
-        return clampToFieldBounds(startX * 1.5, startZ - distFromCenter * 3.0);
-    },
-
-    // 3: Diamond Bow — X stretches outward in the middle rows
-    (r, _c, _cols, rows, startX, startZ) => {
-        const rowPhase = (r / (rows - 1)) * Math.PI;
-        const stretch = 1.0 + 1.2 * Math.sin(rowPhase);
-        return clampToFieldBounds(startX * stretch, startZ);
-    },
-
-    // 4: S-Curve Wave — band slithers left/right down the field
-    (_r, _c, _cols, _rows, startX, startZ) => {
-        const waveShift = Math.sin(startZ / 5.0) * 3.0;
-        return clampToFieldBounds(startX * 1.5 + waveShift, startZ);
-    },
-
-    // 5: Company Front — all rows compress into a single wide line
-    (_r, c, cols, _rows, _startX, startZ) => {
-        const x = (c - (cols - 1) / 2) * 4.0; // wide spacing across field
-        return clampToFieldBounds(x, startZ);
-    },
-
-    // 6: Column/File — band compresses into a narrow deep column
-    (r, c, cols, rows, _startX, _startZ) => {
-        const colX = (c - (cols - 1) / 2) * 1.2; // narrow 1.2m column spacing
-        const z = 5 + (r / (rows - 1)) * 40;     // rows evenly from z=5 to z=45
-        return clampToFieldBounds(colX, z);
-    },
-
-    // 7: Echelon (Diagonal) — rows offset diagonally
-    (r, _c, _cols, rows, startX, startZ) => {
-        const diag = (r / (rows - 1)) * 12.0; // 12m diagonal spread
-        return clampToFieldBounds(startX + diag, startZ);
-    },
-
-    // 8: Circle — band forms a ring
-    (r, c, cols, rows, _startX, _startZ) => {
-        const idx = r * cols + c;
-        const total = rows * cols;
-        const angle = (idx / total) * Math.PI * 2;
-        const radius = 18.0; // 2π·18/75 ≈ 1.51m spacing
-        const cx = 0, cz = 24;
-        return clampToFieldBounds(cx + Math.cos(angle) * radius, cz + Math.sin(angle) * radius);
-    },
-
-    // 9: Figure-8 — two connected circles
-    (r, c, cols, rows, _startX, _startZ) => {
-        const idx = r * cols + c;
-        const total = rows * cols;
-        const half = total / 2;
-        const cx = 0, cz = 24;
-        const radius = 10.0; // 2π·10/37 ≈ 1.70m spacing
-        if (idx < half) {
-            const angle = (idx / half) * Math.PI * 2;
-            return clampToFieldBounds(cx + Math.cos(angle) * radius, cz - 11 + Math.sin(angle) * radius);
-        } else {
-            const angle = ((idx - half) / half) * Math.PI * 2;
-            return clampToFieldBounds(cx + Math.cos(angle) * radius, cz + 11 + Math.sin(angle) * radius);
-        }
-    },
-
-    // 10: Spiral — Archimedean spiral outward from center
-    (r, c, cols, rows, _startX, _startZ) => {
-        const idx = r * cols + c;
-        const total = rows * cols;
-        const t = idx / total;
-        const maxTurns = 1.5;  // fewer turns so inner ring is not cramped
-        const angle = t * maxTurns * Math.PI * 2;
-        const radius = 9.0 + t * 13.0; // inner arc step ≈ 1.13m
-        const cx = 0, cz = 24;
-        return clampToFieldBounds(cx + Math.cos(angle) * radius, cz + Math.sin(angle) * radius);
-    },
-
-    // 11: Starburst — radial lines emanating from center
-    (r, c, cols, rows, _startX, _startZ) => {
-        const rayAngle = (c / cols) * Math.PI * 2;
-        const dist = 4.0 + (r / (rows - 1)) * 18.0; // radial spacing 18/14 ≈ 1.29m
-        const cx = 0, cz = 24;
-        return clampToFieldBounds(cx + Math.cos(rayAngle) * dist, cz + Math.sin(rayAngle) * dist);
-    },
-
-    // 12: Gate/Fold — band hinges open like double doors from center column
-    (r, c, cols, rows, startX, startZ) => {
-        const centerCol = (cols - 1) / 2;
-        const side = c < centerCol ? -1 : c > centerCol ? 1 : 0;
-        const distFromCenter = Math.abs(c - centerCol);
-        const foldAngle = distFromCenter * 0.3;
-        const foldX = startX + side * Math.sin(foldAngle) * (r / (rows - 1)) * 8.0;
-        return clampToFieldBounds(foldX, startZ);
-    },
-
-    // 13: Box/Window — hollow rectangle, members evenly spaced along perimeter
-    (r, c, cols, rows, _startX, _startZ) => {
-        const idx = r * cols + c;
-        const total = rows * cols;
-        const hw = (cols - 1) * 2.5; // half-width  = 10
-        const hh = (rows - 1) * 1.5; // half-height = 21
-        const cx = 0, cz = 24;
-        const fullPerim = (hw + hh) * 4; // 124m total perimeter
-        const walk = (idx / total) * fullPerim; // position along perimeter
-        const topLen = hw * 2;
-        const rightLen = hh * 2;
-        const bottomLen = hw * 2;
-        let px: number, pz: number;
-        if (walk < topLen) {
-            px = cx - hw + walk;
-            pz = cz - hh;
-        } else if (walk < topLen + rightLen) {
-            const s = walk - topLen;
-            px = cx + hw;
-            pz = cz - hh + s;
-        } else if (walk < topLen + rightLen + bottomLen) {
-            const s = walk - topLen - rightLen;
-            px = cx + hw - s;
-            pz = cz + hh;
-        } else {
-            const s = walk - topLen - rightLen - bottomLen;
-            px = cx - hw;
-            pz = cz + hh - s;
-        }
-        return clampToFieldBounds(px, pz);
-    },
-
-    // 14: Breathe — alternate rows shift laterally (X, not Z — avoids row overlap)
-    (_r, _c, _cols, _rows, startX, startZ) => {
-        const xShift = (_r % 2 === 0) ? -2.5 : 2.5;
-        return clampToFieldBounds(startX + xShift, startZ);
-    },
-
-    // 15: Scatter — random-looking positions (deterministic from row/col)
-    (r, c, cols, _rows, _startX, _startZ) => {
-        // Pseudo-random scatter using sine hashing
-        const seed = r * 7 + c * 13;
-        const px = Math.sin(seed * 1.37) * 20.0;
-        const pz = 6.0 + Math.abs(Math.cos(seed * 2.41)) * 34.0;
-        // Keep some column ordering so player can find their spot
-        const colBias = (c - (cols - 1) / 2) * 3.0;
-        return clampToFieldBounds(px + colBias, pz);
-    },
-
-    // 16: Goal Post (T-shape) — front row wide, rest in narrow column
-    (r, c, cols, _rows, _startX, startZ) => {
-        if (r === 0) {
-            // Cross-bar: spread wide
-            const x = (c - (cols - 1) / 2) * 6.0;
-            return clampToFieldBounds(x, startZ);
-        }
-        // Upright: columns spaced ≥ 2m apart
-        const x = (c - (cols - 1) / 2) * 2.0;
-        return clampToFieldBounds(x, startZ);
-    },
-
-    // 17: Checkerboard — staggered offset every other member
-    (_r, _c, _cols, _rows, startX, startZ) => {
-        const offset = (_r + _c) % 2 === 0 ? 1.0 : -1.0;
-        return clampToFieldBounds(startX + offset, startZ + offset);
-    },
-
-    // 18: Pinwheel — rows rotate around center based on row index
-    (r, c, cols, rows, _startX, _startZ) => {
-        const cx = 0, cz = 24;
-        const colOffset = (c - (cols - 1) / 2) * SPACING_X;
-        const rowOffset = (r - (rows - 1) / 2) * SPACING_Z;
-        const rotAngle = (r / (rows - 1)) * Math.PI * 0.5; // 0–90° rotation
-        const rx = colOffset * Math.cos(rotAngle) - rowOffset * Math.sin(rotAngle);
-        const rz = colOffset * Math.sin(rotAngle) + rowOffset * Math.cos(rotAngle);
-        return clampToFieldBounds(cx + rx, cz + rz);
-    },
-];
-
-// Drill sequence: shape + facing per phase. Style is auto-selected from distance.
-const drillSequence: { beat: number; shape: number; facing: number }[] = [
+// Drill sequence: shape + facing per phase. Optional style for explicit step type.
+const drillSequence: { beat: number; shape: number; facing: number; style?: MarchStyle }[] = [
     // === ACT 1: Opening (beats 0-63) ===
     { beat: 0,   shape: 0,  facing: Math.PI },          // Block, attention
     { beat: 8,   shape: 0,  facing: Math.PI },          // Hold block (mark time)
@@ -433,201 +680,32 @@ const drillSequence: { beat: number; shape: number; facing: number }[] = [
     { beat: 320, shape: 0,  facing: Math.PI },           // Final halt
 ];
 
-/**
- * Compute the worst-case (maximum) distance any single marcher must travel
- * between two drill shapes, sampling every grid position.
- */
-function maxShapeDistance(shapeA: number, shapeB: number): number {
-    let maxDist = 0;
-    for (let r = 0; r < BAND_ROWS; r++) {
-        for (let c = 0; c < BAND_COLS; c++) {
-            const sx = (c - BAND_COLS / 2 + 0.5) * SPACING_X;
-            const sz = BAND_START_Z + r * SPACING_Z;
-            const a = drillShapes[shapeA](r, c, BAND_COLS, BAND_ROWS, sx, sz);
-            const b = drillShapes[shapeB](r, c, BAND_COLS, BAND_ROWS, sx, sz);
-            const dx = b.x - a.x;
-            const dz = b.z - a.z;
-            const d = Math.sqrt(dx * dx + dz * dz);
-            if (d > maxDist) maxDist = d;
-        }
-    }
-    return maxDist;
-}
-
-/**
- * Pick the best MarchStyle whose velocity range can cover the required
- * distance in the given number of beats.  Prefers slower, more visually
- * interesting styles when the distance allows.
- */
-function pickStyleForDistance(distance: number, beats: number): MarchStyle {
-    // Required velocity: meters-per-beat needed
-    const needed = beats > 0 ? distance / beats : 0;
-
-    // Stationary — no shape change
-    if (distance < 0.5) {
-        // Alternate between Halt and MarkTime for variety
-        return needed < 0.01 ? MarchStyle.Halt : MarchStyle.MarkTime;
-    }
-
-    // Preference order: slowest/most-visual first, fastest last
-    const preference: MarchStyle[] = [
-        MarchStyle.DragStep,
-        MarchStyle.SideStep,
-        MarchStyle.CrabWalk,
-        MarchStyle.Pivot,
-        MarchStyle.BackMarch,
-        MarchStyle.Glide,
-        MarchStyle.HighStep,
-        MarchStyle.JazzRun,
-        MarchStyle.Scatter,
-    ];
-
-    for (const style of preference) {
-        const v = STYLE_VELOCITY[style];
-        // Style can handle this transition if needed speed is within its range
-        if (needed >= v.min && needed <= v.max) {
-            return style;
-        }
-    }
-
-    // If nothing fits perfectly, use the fastest available
-    return needed > 0.8 ? MarchStyle.Scatter : MarchStyle.HighStep;
-}
-
 // Build the final timeline by computing distances and selecting styles.
 // Each entry's style governs movement FROM this entry TO the next one.
 const drillTimeline = drillSequence.map((entry, i) => {
     if (i === drillSequence.length - 1) {
         // Last entry: nowhere to go, halt
-        return { ...entry, style: MarchStyle.Halt };
+        return { ...entry, style: entry.style ?? MarchStyle.Halt };
     }
     const next = drillSequence[i + 1];
     const beats = next.beat - entry.beat;
     const dist = maxShapeDistance(entry.shape, next.shape);
-    const style = pickStyleForDistance(dist, beats);
+    // Use explicit style if provided, otherwise pick automatically
+    const style = entry.style ?? pickStyleForDistance(dist, beats);
     return { ...entry, style };
 });
 
 // === PRECOMPUTED COLLISION-FREE DRILL POSITIONS ===
-const MIN_SPACING = 1.0; // metres — minimum distance between any two marchers
+const MIN_SPACING = 1.0; // metres â€” minimum distance between any two marchers
 const TOTAL_MARCHERS = BAND_ROWS * BAND_COLS;
 
-/**
- * Iterative relaxation: push positions apart until all pairs are >= minDist.
- * Returns a new array (does not mutate input).
- */
-function enforceMinSpacing(
-    positions: {x: number, z: number}[],
-    minDist: number
-): {x: number, z: number}[] {
-    const out = positions.map(p => ({x: p.x, z: p.z}));
-    const minDist2 = minDist * minDist;
-    for (let pass = 0; pass < 50; pass++) {
-        let moved = false;
-        for (let i = 0; i < out.length; i++) {
-            for (let j = i + 1; j < out.length; j++) {
-                const dx = out[j].x - out[i].x;
-                const dz = out[j].z - out[i].z;
-                const d2 = dx * dx + dz * dz;
-                if (d2 < minDist2) {
-                    if (d2 < 0.0001) {
-                        // Coincident — push apart deterministically
-                        const angle = i * 2.654 + j * 1.337;
-                        const half = minDist * 0.51;
-                        out[i].x -= Math.cos(angle) * half;
-                        out[i].z -= Math.sin(angle) * half;
-                        out[j].x += Math.cos(angle) * half;
-                        out[j].z += Math.sin(angle) * half;
-                    } else {
-                        const d = Math.sqrt(d2);
-                        const overlap = (minDist - d) / 2;
-                        const nx = dx / d;
-                        const nz = dz / d;
-                        out[i].x -= nx * overlap;
-                        out[i].z -= nz * overlap;
-                        out[j].x += nx * overlap;
-                        out[j].z += nz * overlap;
-                    }
-                    moved = true;
-                }
-            }
-        }
-        if (!moved) break;
-    }
-    // Clamp to field bounds
-    for (const p of out) {
-        p.x = Math.max(FIELD_MIN_X, Math.min(FIELD_MAX_X, p.x));
-        p.z = Math.max(FIELD_MIN_Z, Math.min(FIELD_MAX_Z, p.z));
-    }
-    return out;
-}
-
-/** Compute raw (unseparated) positions for all marchers in a given shape */
-function computeRawPositions(shapeIdx: number): {x: number, z: number}[] {
-    const pts: {x: number, z: number}[] = [];
-    for (let r = 0; r < BAND_ROWS; r++) {
-        for (let c = 0; c < BAND_COLS; c++) {
-            const sx = (c - BAND_COLS / 2 + 0.5) * SPACING_X;
-            const sz = BAND_START_Z + r * SPACING_Z;
-            pts.push(drillShapes[shapeIdx](r, c, BAND_COLS, BAND_ROWS, sx, sz));
-        }
-    }
-    return pts;
-}
-
-// Precompute collision-free positions for every drill shape
 const precomputedShapePos: {x: number, z: number}[][] = [];
-for (let s = 0; s < drillShapes.length; s++) {
+for (let s = 0; s < DRILL_SHAPE_PLUGINS.length; s++) {
     precomputedShapePos[s] = enforceMinSpacing(computeRawPositions(s), MIN_SPACING);
 }
 
-/**
- * Greedy nearest-neighbor slot assignment: for each source position, assign
- * the closest available destination slot. This minimises total path length
- * and virtually eliminates path crossings compared to identity assignment.
- * Returns a permutation array where perm[srcIdx] = dstIdx.
- */
-function computeSlotAssignment(
-    srcPositions: {x: number, z: number}[],
-    dstPositions: {x: number, z: number}[]
-): number[] {
-    const n = srcPositions.length;
-    const perm = new Array<number>(n);
-    const taken = new Uint8Array(n); // 0 = available
-
-    // Build sorted list of (distance², srcIdx, dstIdx)
-    const edges: {d2: number, s: number, d: number}[] = [];
-    for (let s = 0; s < n; s++) {
-        for (let d = 0; d < n; d++) {
-            const dx = dstPositions[d].x - srcPositions[s].x;
-            const dz = dstPositions[d].z - srcPositions[s].z;
-            edges.push({ d2: dx * dx + dz * dz, s, d });
-        }
-    }
-    edges.sort((a, b) => a.d2 - b.d2);
-
-    const srcAssigned = new Uint8Array(n);
-    let assigned = 0;
-    for (let e = 0; e < edges.length && assigned < n; e++) {
-        const { s, d } = edges[e];
-        if (srcAssigned[s] || taken[d]) continue;
-        perm[s] = d;
-        srcAssigned[s] = 1;
-        taken[d] = 1;
-        assigned++;
-    }
-    return perm;
-}
-
-/**
- * Compose two permutations: result[i] = b[a[i]]
- */
-function composePerms(a: number[], b: number[]): number[] {
-    return a.map(ai => b[ai]);
-}
-
 // === Build per-transition slot assignments ===
-// cumulativePerm[i] maps original marcher index → slot in shape i's precomputedShapePos.
+// cumulativePerm[i] maps original marcher index â†’ slot in shape i's precomputedShapePos.
 // This ensures each marcher follows a short, non-crossing path between shapes.
 const cumulativePerm: number[][] = [];
 {
@@ -641,7 +719,7 @@ const cumulativePerm: number[][] = [];
         const prevPerm = cumulativePerm[i];
 
         if (shapeA === shapeB) {
-            // No transition — keep same slot assignment
+            // No transition â€” keep same slot assignment
             cumulativePerm.push([...prevPerm]);
         } else {
             // Get actual positions of marchers in shape A (after previous permutation)
@@ -650,87 +728,127 @@ const cumulativePerm: number[][] = [];
 
             // Find optimal assignment from current positions to next shape slots
             const localPerm = computeSlotAssignment(srcPos, dstPos);
-            // Compose: new cumulative perm maps marcher → slot in shape B
+            // Compose: new cumulative perm maps marcher â†’ slot in shape B
             cumulativePerm.push(composePerms(prevPerm, localPerm));
         }
     }
 }
 
-// Precompute collision-free transition waypoints at fine intervals
-// === PRECOMPUTED PER-BEAT FOOTSTEP POSITIONS ===
-// Each integer beat = one footstep landing position with collision avoidance.
-// Between beats, sub-beat interpolation with smoothstep gives natural stride dynamics.
+// === PRECOMPUTED PER-BEAT FOOTSTEP POSITIONS WITH TRANSITION SCHEDULING ===
 const MAX_BEAT = 320;
 const precomputedBeatPos: {x: number, z: number}[][] = new Array(MAX_BEAT);
-for (let i = 0; i < drillTimeline.length; i++) {
+// For each transition, store a per-marcher offset (delay in beats)
+const transitionOffsets: number[][] = [];
+for (let i = 0; i < drillTimeline.length - 1; i++) {
     const phase = drillTimeline[i];
+    const nextPhase = drillTimeline[i + 1];
     const permA = cumulativePerm[i];
+    const permB = cumulativePerm[i + 1];
     const posAArr = permA.map(slot => ({
         x: precomputedShapePos[phase.shape][slot].x,
         z: precomputedShapePos[phase.shape][slot].z,
     }));
-
-    if (i === drillTimeline.length - 1) {
-        // Last phase — static for remaining beats until loop wraps
-        for (let b = phase.beat; b < MAX_BEAT; b++) {
-            precomputedBeatPos[b] = posAArr;
-        }
-        break;
-    }
-
-    const nextPhase = drillTimeline[i + 1];
+    const posBArr = permB.map(slot => ({
+        x: precomputedShapePos[nextPhase.shape][slot].x,
+        z: precomputedShapePos[nextPhase.shape][slot].z,
+    }));
     const startBeat = phase.beat;
     const endBeat = nextPhase.beat;
     const numBeats = endBeat - startBeat;
 
-    // First beat of phase = shape A positions (already collision-free)
-    precomputedBeatPos[startBeat] = posAArr;
-
-    if (phase.shape === nextPhase.shape) {
-        // Same shape — all intermediate beats share the same positions
-        for (let b = startBeat + 1; b < endBeat; b++) {
-            precomputedBeatPos[b] = posAArr;
-        }
-    } else {
-        // Transition between different shapes — compute each beat sequentially.
-        // Each beat builds on the previous resolved positions to ensure smooth paths.
-        const permB = cumulativePerm[i + 1];
-        const posBArr = permB.map(slot => ({
-            x: precomputedShapePos[nextPhase.shape][slot].x,
-            z: precomputedShapePos[nextPhase.shape][slot].z,
-        }));
-
-        let prevPositions = posAArr;
-        for (let b = startBeat + 1; b < endBeat; b++) {
-            const globalProgress = (b - startBeat) / numBeats;
-            const prevProgress = (b - 1 - startBeat) / numBeats;
-            const remainingProgress = (globalProgress - prevProgress) / (1 - prevProgress);
-
-            const midPts: {x: number, z: number}[] = [];
-            for (let m = 0; m < TOTAL_MARCHERS; m++) {
-                midPts.push({
-                    x: prevPositions[m].x + (posBArr[m].x - prevPositions[m].x) * remainingProgress,
-                    z: prevPositions[m].z + (posBArr[m].z - prevPositions[m].z) * remainingProgress,
-                });
+    // --- Transition scheduling: stagger start times to avoid path crossing ---
+    // For each marcher, assign a delay (in beats) if their path crosses another's
+    const offsets = new Array(TOTAL_MARCHERS).fill(0);
+    // Naive O(n^2) check: if two marchers' straight-line paths cross, stagger one
+    for (let m1 = 0; m1 < TOTAL_MARCHERS; m1++) {
+        for (let m2 = m1 + 1; m2 < TOTAL_MARCHERS; m2++) {
+            // Check if line segments (A->B for m1 and m2) cross
+            const a1 = posAArr[m1], a2 = posBArr[m1];
+            const b1 = posAArr[m2], b2 = posBArr[m2];
+            // Helper: cross product sign
+            function ccw(p1: {x: number, z: number}, p2: {x: number, z: number}, p3: {x: number, z: number}) {
+                return (p3.z - p1.z) * (p2.x - p1.x) > (p2.z - p1.z) * (p3.x - p1.x);
             }
-            const resolved = enforceMinSpacing(midPts, MIN_SPACING);
-            precomputedBeatPos[b] = resolved;
-            prevPositions = resolved;
+            const cross = (ccw(a1, b1, b2) !== ccw(a2, b1, b2)) && (ccw(a1, a2, b1) !== ccw(a1, a2, b2));
+            // Also check if paths come within MIN_SPACING/2 at any midpoint
+            let close = false;
+            for (let t = 0.1; t < 1.0; t += 0.2) {
+                const p1 = { x: a1.x + (a2.x - a1.x) * t, z: a1.z + (a2.z - a1.z) * t };
+                const p2 = { x: b1.x + (b2.x - b1.x) * t, z: b1.z + (b2.z - b1.z) * t };
+                const dx = p1.x - p2.x, dz = p1.z - p2.z;
+                if (dx * dx + dz * dz < (MIN_SPACING * 0.5) ** 2) close = true;
+            }
+            if (cross || close) {
+                // Stagger m2 by 1 beat after m1 (if not already staggered more)
+                if (offsets[m2] <= offsets[m1]) offsets[m2] = offsets[m1] + 1;
+            }
         }
     }
+    transitionOffsets.push(offsets);
+
+    // --- Per-beat position calculation with offsets ---
+    for (let b = startBeat; b < endBeat; b++) {
+        const beatPos: {x: number, z: number}[] = [];
+        for (let m = 0; m < TOTAL_MARCHERS; m++) {
+            const offset = offsets[m];
+            const localBeat = b - startBeat;
+            let pos;
+            if (localBeat < offset) {
+                // Wait at start
+                pos = posAArr[m];
+            } else if (localBeat >= numBeats - offset) {
+                // Arrived at end
+                pos = posBArr[m];
+            } else {
+                // Interpolate between start and end
+                const t = (localBeat - offset) / (numBeats - 2 * offset);
+                pos = {
+                    x: posAArr[m].x + (posBArr[m].x - posAArr[m].x) * t,
+                    z: posAArr[m].z + (posBArr[m].z - posAArr[m].z) * t,
+                };
+            }
+            beatPos.push(pos);
+        }
+        precomputedBeatPos[b] = beatPos;
+    }
+}
+// Last phase: static for remaining beats
+const lastPhase = drillTimeline[drillTimeline.length - 1];
+const lastPerm = cumulativePerm[cumulativePerm.length - 1];
+const lastPosArr = lastPerm.map(slot => ({
+    x: precomputedShapePos[lastPhase.shape][slot].x,
+    z: precomputedShapePos[lastPhase.shape][slot].z,
+}));
+for (let b = lastPhase.beat; b < MAX_BEAT; b++) {
+    precomputedBeatPos[b] = lastPosArr;
 }
 
-// Compute per-marcher animation style based on actual distance traveled each beat.
-// Moving marchers use the phase's style for visual uniformity; stationary marchers halt.
-const precomputedBeatStyle: MarchStyle[][] = new Array(MAX_BEAT);
+// Compute per-marcher animation style based on actual movement direction, facing, and distance.
+// Each marcher gets a context-aware style per beat.
+import { pickStyleForMovement } from "./drillHelpers";
+// Store all drill chart info for each marcher at each beat
+import { getSlotInstrument, getSlotPartName, getSlotSfIndex, getSlotTranspose } from "./bandGenerator";
+type BeatStepInfo = {
+    style: MarchStyle,
+    phaseIdx: number,
+    instrument: string,
+    partName: string,
+    section: string,
+    label: string,
+    sfIndex: number | null,
+    transpose: number,
+    // Add more fields as needed (e.g., specialInstructions)
+};
+const precomputedBeatStep: BeatStepInfo[][] = new Array(MAX_BEAT);
 for (let beat = 0; beat < MAX_BEAT; beat++) {
     const nextBeat = (beat + 1) % MAX_BEAT;
-    // Find phase for default style
+    // Find phase for facing and beats
     let phaseIdx = 0;
     while (phaseIdx < drillTimeline.length - 1 && drillTimeline[phaseIdx + 1].beat <= beat) phaseIdx++;
-    const phaseStyle = drillTimeline[phaseIdx].style;
+    const phase = drillTimeline[phaseIdx];
+    const facing = phase.facing;
 
-    const styles: MarchStyle[] = [];
+    const stepInfos: BeatStepInfo[] = [];
     for (let m = 0; m < TOTAL_MARCHERS; m++) {
         const curr = precomputedBeatPos[beat][m];
         const next = precomputedBeatPos[nextBeat][m];
@@ -738,21 +856,39 @@ for (let beat = 0; beat < MAX_BEAT; beat++) {
         const dz = next.z - curr.z;
         const dist = Math.sqrt(dx * dx + dz * dz);
 
+        // Row/col for marcher m
+        const row = Math.floor(m / BAND_COLS);
+        const col = m % BAND_COLS;
+        const instrument = getSlotInstrument(row, col);
+        const partName = getSlotPartName(row, col);
+        // Section is the instrument name without trailing numbers (e.g., "Trumpet I" → "Trumpet")
+        const section = instrument.replace(/\d+$/, "");
+        const label = String.fromCharCode(65 + row) + (col + 1);
+        const sfIndex = getSlotSfIndex(row, col);
+        const transpose = getSlotTranspose(row, col);
+
+        // Use pickStyleForMovement for each marcher, factoring facing and movement direction
+        let style: MarchStyle;
         if (dist < 0.03) {
-            // Not moving — stand at attention
-            styles.push(MarchStyle.Halt);
-        } else if (phaseStyle === MarchStyle.Halt || phaseStyle === MarchStyle.MarkTime) {
-            // Phase says stationary but this marcher is actually moving (collision avoidance)
-            styles.push(MarchStyle.HighStep);
+            style = MarchStyle.Halt;
         } else {
-            // Use the phase style for visual uniformity
-            styles.push(phaseStyle);
+            style = pickStyleForMovement(dx, dz, facing, dist, 1);
         }
+        stepInfos.push({
+            style,
+            phaseIdx,
+            instrument,
+            partName,
+            section,
+            label,
+            sfIndex,
+            transpose
+        });
     }
-    precomputedBeatStyle[beat] = styles;
+    precomputedBeatStep[beat] = stepInfos;
 }
 
-function getDrillPosition(currentBeat: number, r: number, c: number, cols: number, _rows: number, _startX: number, _startZ: number): {x: number, z: number, facing: number, style: MarchStyle} {
+function getDrillPosition(currentBeat: number, r: number, c: number, cols: number, _rows: number, _startX: number, _startZ: number): {x: number, z: number, facing: number, style: MarchStyle, phaseIdx: number} {
     const loopedBeat = currentBeat % MAX_BEAT;
     const marcherIdx = r * cols + c;
 
@@ -766,15 +902,15 @@ function getDrillPosition(currentBeat: number, r: number, c: number, cols: numbe
     const posA = precomputedBeatPos[beatFloor][marcherIdx];
     const posB = precomputedBeatPos[beatCeil][marcherIdx];
 
-    // Find current phase for facing
-    let phaseIdx = 0;
-    while (phaseIdx < drillTimeline.length - 1 && drillTimeline[phaseIdx + 1].beat <= beatFloor) phaseIdx++;
+    // Use precomputed phaseIdx and style
+    const { style, phaseIdx } = precomputedBeatStep[beatFloor][marcherIdx];
 
     return {
         x: posA.x + (posB.x - posA.x) * t,
         z: posA.z + (posB.z - posA.z) * t,
         facing: drillTimeline[phaseIdx].facing,
-        style: precomputedBeatStyle[beatFloor][marcherIdx]
+        style,
+        phaseIdx
     };
 }
 
@@ -790,104 +926,18 @@ const playerCol = randomMemberIndex % BAND_COLS;
 const playerStartX = (playerCol - BAND_COLS / 2 + 0.5) * SPACING_X;
 const playerStartZ = BAND_START_Z + playerRow * SPACING_Z;
 
-// Create a 100-member marching band in a 10x10 formation
-function buildMarchingBand(scene: Scene) {
-    const factory = new BandMemberFactory(scene);
+// Build the full marching band via the band generator
+bandLegs.push(...buildBand(scene));
 
-    const rows = 15;
-    const cols = 5;
-    const spacingX = 2.0; // 2 meters between columns
-    const spacingZ = 2.0; // 2 meters between rows
-    // Start position clamped to keep back row on field: startZ ≤ MAX_DRILL_START_Z (19.8m with 1m safety margin)
-    const startZ = Math.min(BAND_START_Z, MAX_DRILL_START_Z); // 15m is well within bounds
-
-    for (let r = 0; r < rows; r++) {
-        for (let c = 0; c < cols; c++) {
-            const isFlute = (r === 1);
-            const isClarinet = (r === 2);
-            const isSaxophone = (r === 3);
-            const isMellophone = (r === 4);
-            const isTrumpet = (r === 5 || r === 6);
-            const isTrombone = (r === 7);
-            const isEuphonium = (r === 8);
-            const isSousaphone = (r === 9);
-            const isGlockenspiel = (r === 10);
-            const isSnareDrum = (r === 11);
-            const isTomTom = (r === 12);
-            const isBassDrum = (r === 13);
-            const isCymbals = (r === 14);
-
-            let type: InstrumentType = "DrumMajor";
-            if (isFlute) type = "Flute";
-            else if (isClarinet) type = "Clarinet";
-            else if (isSaxophone) type = "Saxophone";
-            else if (isTomTom) type = "TomTom";
-            else if (isSnareDrum) type = "SnareDrum";
-            else if (isBassDrum) type = "BassDrum";
-            else if (isCymbals) type = "Cymbals";
-            else if (isTrumpet) type = "Trumpet";
-            else if (isMellophone) type = "Mellophone";
-            else if (isEuphonium) type = "Euphonium";
-            else if (isTrombone) type = "Trombone";
-            else if (isSousaphone) type = "Sousaphone";
-            else if (isGlockenspiel) type = "Glockenspiel";
-
-            const xPos = (c - cols / 2 + 0.5) * spacingX;
-            const zPos = startZ + r * spacingZ;
-
-            const memberData = factory.createMember(r, c, type, xPos, zPos);
-            bandLegs.push(memberData);
-        }
-    }
+// Assign instrument pose AnimationGroups to each band member
+for (const member of bandLegs) {
+    assignInstrumentPoseAnimationsToMember(member);
 }
-buildMarchingBand(scene);
 
 // Create player marcher at the assigned position and replace the standard marcher there
-const factory = new BandMemberFactory(scene);
-const playerMarcherIndex = playerRow * BAND_COLS + playerCol;
+const playerMarcher = replaceWithPlayerMarcher(scene, bandLegs, playerRow, playerCol, playerStartX, playerStartZ);
 
-// Get the instrument type for this row
-let playerInstrument: InstrumentType = "DrumMajor";
-if (playerRow === 1) playerInstrument = "Flute";
-else if (playerRow === 2) playerInstrument = "Clarinet";
-else if (playerRow === 3) playerInstrument = "Saxophone";
-else if (playerRow === 4) playerInstrument = "Mellophone";
-else if (playerRow === 5 || playerRow === 6) playerInstrument = "Trumpet";
-else if (playerRow === 7) playerInstrument = "Trombone";
-else if (playerRow === 8) playerInstrument = "Euphonium";
-else if (playerRow === 9) playerInstrument = "Sousaphone";
-else if (playerRow === 10) playerInstrument = "Glockenspiel";
-else if (playerRow === 11) playerInstrument = "SnareDrum";
-else if (playerRow === 12) playerInstrument = "TomTom";
-else if (playerRow === 13) playerInstrument = "BassDrum";
-else if (playerRow === 14) playerInstrument = "Cymbals";
-
-// Dispose the standard marcher at this position
-const existingMarcher = bandLegs[playerMarcherIndex];
-const existingChildren = existingMarcher.anchor.getChildMeshes(true);
-for (const child of existingChildren) {
-    // Only dispose unique materials (like label textures), not shared materials
-    if (child.name.includes("label")) {
-        if (child.material) {
-            if (child.material instanceof StandardMaterial) {
-                if (child.material.diffuseTexture) child.material.diffuseTexture.dispose();
-            }
-            child.material.dispose();
-        }
-    }
-    child.dispose();
-}
-existingMarcher.anchor.dispose();
-
-// Create player marcher with distinct appearance (lighter color to stand out)
-const playerMarcher = factory.createMember(playerRow, playerCol, playerInstrument, playerStartX, playerStartZ);
-
-// Replace the standard marcher with the player marcher
-bandLegs[playerMarcherIndex] = playerMarcher;
-
-// Hide the simple FirstPersonBody visuals — the player marcher's full skeleton
-// (created above) is animated by MarchingAnimationSystem alongside all other marchers.
-// playerBody still handles VR controller tracking and locomotion computation.
+// Hide the simple FirstPersonBody visuals
 playerBody.hideVisuals();
 
 // Initialize camera to player's starting drill position
@@ -949,7 +999,7 @@ beatMat.disableLighting = true;
 beatIndicator.material = beatMat;
 beatIndicator.isVisible = false;
 
-// Formation Quality HUD — wrist-mounted display on right arm of player marcher
+// Formation Quality HUD â€” wrist-mounted display on right arm of player marcher
 const scoreHUD = MeshBuilder.CreatePlane("scoreHUD", { width: 0.18, height: 0.06 }, scene);
 const playerForearmR = playerMarcher.bodyParts.forearmR;
 scoreHUD.parent = playerForearmR ?? playerBody.getRightArm();
@@ -971,7 +1021,7 @@ let lastScoreText = "";
 function updateScoreHUD() {
     const grade = formationQuality >= 90 ? "A" : formationQuality >= 80 ? "B"
         : formationQuality >= 70 ? "C" : formationQuality >= 60 ? "D" : "F";
-    const streakTxt = stepStreak > 2 ? ` 🔥${stepStreak}` : "";
+    const streakTxt = stepStreak > 2 ? ` ðŸ”¥${stepStreak}` : "";
     const text = `${Math.round(formationQuality)}% ${grade}${streakTxt}`;
     if (text === lastScoreText) return; // avoid redrawing every frame
     lastScoreText = text;
@@ -1251,60 +1301,8 @@ const pointerObserver = scene.onPointerObservable.add(async (pointerInfo) => {
     }
 });
 
-// Results screen — shown when the song finishes
 let gameOver = false;
 let totalSongDuration = 0; // seconds, computed after OSMD loads
-const resultsMesh = MeshBuilder.CreatePlane("resultsMesh", { width: 3, height: 2 }, scene);
-resultsMesh.position = new Vector3(0, 1.6, 2.5);
-resultsMesh.isVisible = false;
-resultsMesh.isPickable = false;
-const resultsTex = new DynamicTexture("resultsTex", { width: 768, height: 512 }, scene, false);
-const resultsMat = new StandardMaterial("resultsMat", scene);
-resultsMat.diffuseTexture = resultsTex;
-resultsMat.emissiveColor = new Color3(1, 1, 1);
-resultsMat.backFaceCulling = false;
-resultsMesh.material = resultsMat;
-
-function showResults() {
-    if (gameOver) return;
-    gameOver = true;
-    Tone.Transport.stop();
-    beatIndicator.isVisible = false;
-    scoreHUD.isVisible = false;
-    resultsMesh.isVisible = true;
-
-    const grade = formationQuality >= 90 ? "A" : formationQuality >= 80 ? "B"
-        : formationQuality >= 70 ? "C" : formationQuality >= 60 ? "D" : "F";
-    const stepPct = totalStepsScored > 0 ? Math.round(((perfectSteps + goodSteps) / totalStepsScored) * 100) : 0;
-    const ctx = resultsTex.getContext() as CanvasRenderingContext2D;
-    ctx.clearRect(0, 0, 768, 512);
-    // Background
-    ctx.fillStyle = "rgba(0,0,0,0.85)";
-    ctx.roundRect(8, 8, 752, 496, 20);
-    ctx.fill();
-    // Title
-    ctx.fillStyle = "#FFD700";
-    ctx.font = "bold 56px Arial";
-    ctx.textAlign = "center";
-    ctx.fillText("PERFORMANCE REVIEW", 384, 65);
-    // Grade
-    const gradeColor = formationQuality >= 80 ? "#44ff44" : formationQuality >= 60 ? "#ffcc00" : "#ff4444";
-    ctx.fillStyle = gradeColor;
-    ctx.font = "bold 100px Arial";
-    ctx.fillText(grade, 384, 180);
-    // Stats
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "32px Arial";
-    ctx.fillText(`Formation: ${Math.round(formationQuality)}%`, 384, 240);
-    ctx.fillText(`Steps: ${perfectSteps} perfect / ${goodSteps} good / ${missedSteps} miss (${stepPct}%)`, 384, 280);
-    ctx.fillText(`Band Size: ${bandLegs.length}`, 384, 320);
-    // Footer
-    ctx.fillStyle = "#aaaaaa";
-    ctx.font = "28px Arial";
-    ctx.fillText("Reload to play again", 384, 470);
-    resultsTex.update();
-}
-
 let osmdContainer: HTMLDivElement | null = null;
 let osmd: OpenSheetMusicDisplay | null = null;
 let measureCount = 0;
@@ -1529,7 +1527,7 @@ engine.runRenderLoop(() => {
     // Marching Band Animation
     const currentRenderTime = gameStartTime !== null ? Tone.now() - gameStartTime : performance.now() / 1000;
     const frameDelta = engine.getDeltaTime() / 1000; // seconds since last frame
-    const MAX_TURN_SPEED = 3.0; // rad/s — realistic marcher turn rate (~170°/s)
+    const MAX_TURN_SPEED = 3.0; // rad/s â€” realistic marcher turn rate (~170Â°/s)
     const secondsPerBeat = 60 / BPM;
     // Calculate a phase angle where one full stride occurs every 2 beats
     const marchPhase = (currentRenderTime * Math.PI * 2) / (secondsPerBeat * 2);
@@ -1569,10 +1567,12 @@ engine.runRenderLoop(() => {
             anchor.position.x = targetX;
             anchor.position.z = targetZ;
 
+            // Stagger each marcher by a unique phase offset in radians
+            const marcherPhase = (marchPhase + (index / bandLegs.length) * Math.PI * 2) % (Math.PI * 2);
             if (isHalted) {
-                MarchingAnimationSystem.animateMarcher(marchPhase, bodyParts, true, 0, 0, MarchStyle.Halt);
+                MarchingAnimationSystem.animateMarcher(marcherPhase, bodyParts, true, 0, 0, MarchStyle.Halt);
             } else {
-                MarchingAnimationSystem.animateMarcher(marchPhase, bodyParts, false, 0, 0, targetPos.style);
+                MarchingAnimationSystem.animateMarcher(marcherPhase, bodyParts, false, 0, 0, targetPos.style);
             }
 
             // Face the drill-specified direction
@@ -1595,7 +1595,7 @@ engine.runRenderLoop(() => {
                 shadow.position.z = anchor.position.z;
             }
 
-            // Update plume color based on health (green=100% → red=0%)
+            // Update plume color based on health (green=100% â†’ red=0%)
             const health = bandLegs[index].health;
             const healthPercent = health / 100;
             let r = 0, g = 0, b = 0;
@@ -1612,6 +1612,79 @@ engine.runRenderLoop(() => {
             
             (plume.material as StandardMaterial).diffuseColor = new Color3(r, g, b);
         });
+
+        // Visual feedback: pulse instrument meshes for sections currently playing
+        const activeSfIndices = getActiveInstrumentsAtBeat(currentBeat);
+        for (let m = 0; m < bandLegs.length; m++) {
+            const member = bandLegs[m];
+            if (!member.instrumentMesh) continue;
+            const sfIdx = getSlotSfIndex(member.row, member.col);
+            const isPlaying = sfIdx != null && activeSfIndices.has(sfIdx);
+            // Animate instrument mesh scaling for visual feedback
+            if (isPlaying) {
+                const pulse = 1.0 + 0.08 * Math.sin(marchPhase * 4);
+                member.instrumentMesh.scaling.setAll(pulse);
+            } else {
+                member.instrumentMesh.scaling.setAll(1.0);
+            }
+
+            // === Synchronized instrument pose animation ===
+            // Use a shared t parameter for both arms and instrument
+            if (!member._poseTransition) member._poseTransition = { t: isPlaying ? 1 : 0, target: isPlaying ? 1 : 0, speed: 3.0 };
+            // If play/rest state changed, set new target
+            if (isPlaying !== member._prevIsPlaying) {
+                member._poseTransition.target = isPlaying ? 1 : 0;
+            }
+            // Smoothly animate t toward target
+            const poseSpeed = member._poseTransition.speed; // units per second
+            if (member._poseTransition.t !== member._poseTransition.target) {
+                const delta = poseSpeed * frameDelta;
+                if (Math.abs(member._poseTransition.t - member._poseTransition.target) <= delta) {
+                    member._poseTransition.t = member._poseTransition.target;
+                } else {
+                    member._poseTransition.t += (member._poseTransition.target > member._poseTransition.t ? delta : -delta);
+                }
+            }
+            // Clamp t
+            member._poseTransition.t = Math.max(0, Math.min(1, member._poseTransition.t));
+            // Set instrument AnimationGroup to correct frame
+            if (member.bodyParts && member.bodyParts.instrumentJoint && member.instrumentRestToPlayAnim && member.instrumentPlayToRestAnim) {
+                const t = member._poseTransition.t;
+                // Pick which AnimationGroup to use based on direction
+                const animGroup = (member._poseTransition.target === 1) ? member.instrumentRestToPlayAnim : member.instrumentPlayToRestAnim;
+                animGroup.stop(); // Ensure not playing
+                animGroup.goToFrame(t * 30); // 30 = total frames in animation
+            }
+            member._prevIsPlaying = isPlaying;
+
+            // --- Apply instrument-specific arm pose if available (still direct for now) ---
+            const plugin = INSTRUMENT_PLUGINS.find(p => p.type === member.instrumentType);
+            if (plugin) {
+                const armPose = isPlaying ? plugin.playArmPose : plugin.restArmPose;
+                if (typeof armPose.shoulderLx === "number") {
+                    if (member.bodyParts.shoulderJointL) {
+                        member.bodyParts.shoulderJointL.rotation.x = armPose.shoulderLx;
+                        member.bodyParts.shoulderJointL.rotation.z = armPose.shoulderLz;
+                    }
+                    if (member.bodyParts.elbowJointL) {
+                        member.bodyParts.elbowJointL.rotation.x = armPose.elbowLx;
+                    }
+                    if (member.bodyParts.wristJointL) {
+                        member.bodyParts.wristJointL.rotation.x = armPose.wristLx;
+                    }
+                    if (member.bodyParts.shoulderJointR) {
+                        member.bodyParts.shoulderJointR.rotation.x = armPose.shoulderRx;
+                        member.bodyParts.shoulderJointR.rotation.z = armPose.shoulderRz;
+                    }
+                    if (member.bodyParts.elbowJointR) {
+                        member.bodyParts.elbowJointR.rotation.x = armPose.elbowRx;
+                    }
+                    if (member.bodyParts.wristJointR) {
+                        member.bodyParts.wristJointR.rotation.x = armPose.wristRx;
+                    }
+                }
+            }
+        }
 
         // === FOOTSTEP SCORING (on each new beat) ===
         const thisBeat = Math.floor(currentBeat);
@@ -1683,7 +1756,10 @@ engine.runRenderLoop(() => {
             const elapsed = Tone.now() - gameStartTime;
             // Song end: all scheduled measures played + 2-beat grace period
             if (elapsed > totalSongDuration + 2 * WHOLE_NOTE_DURATION + 2) {
-                showResults();
+                gameOver = true;
+                Tone.Transport.stop();
+                beatIndicator.isVisible = false;
+                scoreHUD.isVisible = false;
             }
         }
     }
@@ -1695,7 +1771,7 @@ engine.runRenderLoop(() => {
         updateAudioListener(camPos, camFwd);
     }
 
-    // Update spatial audio panners — weighted centroid of nearby marchers per instrument group
+    // Update spatial audio panners â€” weighted centroid of nearby marchers per instrument group
     if (scene.activeCamera && sfPanners.size > 0) {
         const listenerPos = scene.activeCamera.globalPosition;
         updateSpatialAudio(listenerPos, bandLegs);
@@ -1705,7 +1781,7 @@ engine.runRenderLoop(() => {
     if (scene.activeCamera) {
         const dt = engine.getDeltaTime() / 1000;
         const secondsPerBeat = 60 / BPM;
-        const beatPhase = (currentRenderTime % (secondsPerBeat * 2)) / (secondsPerBeat * 2) * Math.PI * 2; // 0-2π every 2 beats
+        const beatPhase = (currentRenderTime % (secondsPerBeat * 2)) / (secondsPerBeat * 2) * Math.PI * 2; // 0-2Ï€ every 2 beats
         const { movement, turnY } = playerBody.update(scene.activeCamera, beatPhase, currentBeat, gameStartTime !== null, dt);
 
         if (freeFly) {
@@ -1738,7 +1814,7 @@ engine.runRenderLoop(() => {
     }
 
     // Continuously poll to ensure the queue processes upcoming measures during gameplay
-    checkAndGenerateMeasures();
+    // checkAndGenerateMeasures(); // Removed: OSMD render+getImageData per frame caused 82ms violations
 
     if (gameStartTime !== null) {
         const currentTime = Tone.now() - gameStartTime;
